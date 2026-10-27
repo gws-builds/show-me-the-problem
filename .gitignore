@@ -1,0 +1,4 @@
+node_modules
+.env
+*.spend.json
+spend.json

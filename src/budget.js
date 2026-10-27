@@ -1,0 +1,51 @@
+// Spend guard for the $150 Meta Model API credit. Meta offers only an email
+// alert, and billing lags about an hour, so the cap lives here: every model
+// call is priced from its reported usage before the next one may start.
+// At READ_ONLY_USD the public demo replays recorded runs; at HARD_STOP_USD
+// nothing calls the API at all.
+import fs from 'node:fs';
+
+// List prices, dev.meta.ai/models, read 2026-10-27 (USD).
+export const PRICES = {
+  'muse-spark-1.3': { inPerM: 1.25, cachedInPerM: 0.15, outPerM: 4.25 },
+  'sam-3.1': { perImage: 2.5 / 1000 },
+  'muse-image-1.0': { perImage: 0.01 },
+};
+export const READ_ONLY_USD = 80;
+export const HARD_STOP_USD = 100;
+export const PER_RUN_USD = 0.1;
+
+export class BudgetExceeded extends Error {
+  constructor(message, code) { super(message); this.code = code; }
+}
+
+/** Cost of one call from its usage report. Unknown models are refused, never guessed as free. */
+export function costOf(model, usage = {}) {
+  const p = PRICES[model];
+  if (!p) throw new BudgetExceeded(`No price on file for ${model}`, 'UNPRICED');
+  if (p.perImage) return (usage.images ?? 1) * p.perImage;
+  const cached = usage.input_tokens_details?.cached_tokens ?? 0;
+  const input = Math.max(0, (usage.input_tokens ?? 0) - cached);
+  return (input * p.inPerM + cached * p.cachedInPerM + (usage.output_tokens ?? 0) * p.outPerM) / 1e6;
+}
+
+export function createLedger(file) {
+  const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { spentUsd: 0, calls: 0 }; } };
+  const save = (s) => { fs.writeFileSync(`${file}.tmp`, JSON.stringify(s)); fs.renameSync(`${file}.tmp`, file); };
+  return {
+    state: load,
+    mode() { const s = load().spentUsd; return s >= HARD_STOP_USD ? 'stopped' : s >= READ_ONLY_USD ? 'read-only' : 'live'; },
+    /** Call before every API request. `live` false = a public visitor, who is cut off earlier. */
+    assertCanSpend({ live = true, runSpentUsd = 0 } = {}) {
+      const m = this.mode();
+      if (m === 'stopped') throw new BudgetExceeded('Credit budget reached; no more model calls.', 'HARD_STOP');
+      if (!live && m === 'read-only') throw new BudgetExceeded('Demo is in replay mode to protect the credit.', 'READ_ONLY');
+      if (runSpentUsd >= PER_RUN_USD) throw new BudgetExceeded('This run reached its spending limit.', 'RUN_CAP');
+    },
+    record(model, usage) {
+      const s = load(); const usd = costOf(model, usage);
+      s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6; s.calls += 1; save(s);
+      return usd;
+    },
+  };
+}

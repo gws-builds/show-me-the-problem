@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
+import { costOf, createLedger, BudgetExceeded } from '../src/budget.js';
+
+const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'stb-')), 'spend.json');
+
+test('prices Spark calls from usage, cached tokens at the cached rate', () => {
+  const usd = costOf('muse-spark-1.3', { input_tokens: 1_000_000, input_tokens_details: { cached_tokens: 500_000 }, output_tokens: 100_000 });
+  assert.equal(Math.round(usd * 1e4) / 1e4, Math.round((0.625 + 0.075 + 0.425) * 1e4) / 1e4);
+});
+test('unknown models are refused, not treated as free', () => {
+  assert.throws(() => costOf('mystery-model', {}), BudgetExceeded);
+});
+test('read-only cuts off public visitors at $80, hard stop cuts everyone at $100', () => {
+  const f = tmp(); const l = createLedger(f);
+  fs.writeFileSync(f, JSON.stringify({ spentUsd: 80, calls: 1 }));
+  assert.throws(() => l.assertCanSpend({ live: false }), /replay/);
+  l.assertCanSpend({ live: true });
+  fs.writeFileSync(f, JSON.stringify({ spentUsd: 100, calls: 1 }));
+  assert.throws(() => l.assertCanSpend({ live: true }), /budget reached/);
+});
+test('a single run cannot pass its cap', () => {
+  const l = createLedger(tmp());
+  assert.throws(() => l.assertCanSpend({ runSpentUsd: 0.1 }), /run reached/);
+});
+test('spend survives a restart', () => {
+  const f = tmp();
+  createLedger(f).record('sam-3.1', { images: 2 });
+  assert.equal(createLedger(f).state().spentUsd, 0.005);
+});

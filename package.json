@@ -1,0 +1,8 @@
+{
+  "name": "snap-to-booked",
+  "version": "0.1.0",
+  "description": "A trustworthy job-intake agent for trades: photo in, verified quote or escalation out, booked after the owner approves. Built for the Meta Global AI Developer Hackathon (Oct 26 - Nov 4, 2026).",
+  "type": "module",
+  "license": "MIT",
+  "scripts": { "test": "node --test test/*.test.js" }
+}
