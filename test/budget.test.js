@@ -22,7 +22,7 @@ test('read-only cuts off public visitors at $80, hard stop cuts everyone at $100
 });
 test('a single run cannot pass its cap', () => {
   const l = createLedger(tmp());
-  assert.throws(() => l.assertCanSpend({ runSpentUsd: 0.1 }), /run reached/);
+  assert.throws(() => l.assertCanSpend({ runSpentUsd: 0.25 }), /run reached/);
 });
 test('spend survives a restart', () => {
   const f = tmp();

@@ -10,10 +10,12 @@ export const PRICES = {
   'muse-spark-1.3': { inPerM: 1.25, cachedInPerM: 0.15, outPerM: 4.25 },
   'sam-3.1': { perImage: 2.5 / 1000 },
   'muse-image-1.0': { perImage: 0.01 },
+  'muse-voice-transcribe-1.0': { perHour: 0.18 },
 };
 export const READ_ONLY_USD = 80;
 export const HARD_STOP_USD = 100;
-export const PER_RUN_USD = 0.1;
+// A live call tracks frames at 1 fps (v3, red team pass 1b): $0.25 per call.
+export const PER_RUN_USD = 0.25;
 
 export class BudgetExceeded extends Error {
   constructor(message, code) { super(message); this.code = code; }
@@ -24,6 +26,7 @@ export function costOf(model, usage = {}) {
   const p = PRICES[model];
   if (!p) throw new BudgetExceeded(`No price on file for ${model}`, 'UNPRICED');
   if (p.perImage) return (usage.images ?? 1) * p.perImage;
+  if (p.perHour) return ((usage.seconds ?? 0) / 3600) * p.perHour;
   const cached = usage.input_tokens_details?.cached_tokens ?? 0;
   const input = Math.max(0, (usage.input_tokens ?? 0) - cached);
   return (input * p.inPerM + cached * p.cachedInPerM + (usage.output_tokens ?? 0) * p.outPerM) / 1e6;
