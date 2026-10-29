@@ -4,7 +4,7 @@
 // Every step is logged for the Agent Console, with its cost.
 import { DEFINITIONS, runTool } from './tools.js';
 
-export const MAX_STEPS = 4; // tool steps per caller turn
+export const MAX_STEPS = 6; // tool steps per caller turn
 export const MAX_TURNS = 12; // caller turns per call
 
 export const INSTRUCTIONS = `You run job intake for a home-services business on a live call. The caller is pointing their phone camera at a problem.

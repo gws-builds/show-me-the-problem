@@ -82,7 +82,7 @@ test('a model that never calls a tool hands off after the step cap', async () =>
   const { c, api } = ctx([]);
   const r = await callerTurn(c, []);
   assert.equal(r.status, 'handoff');
-  assert.equal(api.calls.length, 4);
+  assert.equal(api.calls.length, 6);
 });
 
 test('the per-call cap stops spending mid-call', async () => {

@@ -1,22 +1,131 @@
 {
-  "name": "Northside Plumbing & Heating (fictional demo business)",
-  "priceList": [
-    { "id": "wh-flush", "jobType": "water heater", "label": "Water heater flush and inspection", "priceCents": 18900 },
-    { "id": "wh-tpr", "jobType": "water heater", "label": "Temperature and pressure relief valve replacement", "priceCents": 24900 },
-    { "id": "wh-nohot", "jobType": "water heater", "label": "No hot water diagnosis (applied to repair)", "priceCents": 12900 },
-    { "id": "wh-tankless", "jobType": "water heater", "label": "Tankless water heater descale and service", "priceCents": 27900 },
-    { "id": "ep-trip", "jobType": "breaker panel", "label": "Tripping breaker diagnosis", "priceCents": 14900 },
-    { "id": "ep-circuit", "jobType": "breaker panel", "label": "New 240V circuit (up to 25 ft)", "priceCents": 64900 },
-    { "id": "ep-replace", "jobType": "breaker panel", "label": "Panel replacement estimate visit", "priceCents": 0 },
-    { "id": "ac-tune", "jobType": "air conditioner", "label": "AC tune-up", "priceCents": 13900 },
-    { "id": "ac-diag", "jobType": "air conditioner", "label": "AC not cooling diagnosis", "priceCents": 14900 },
-    { "id": "ac-fan", "jobType": "air conditioner", "label": "Condenser fan motor replacement", "priceCents": 54900 },
-    { "id": "pp-leak", "jobType": "pipe", "label": "Pipe leak repair (accessible, up to 3 ft)", "priceCents": 32900 },
-    { "id": "sp-diag", "jobType": "sump pump", "label": "Sump pump test and float switch service", "priceCents": 16900 },
-    { "id": "gd-replace", "jobType": "garbage disposal", "label": "Garbage disposal replacement (1/2 HP unit included)", "priceCents": 38900 },
-    { "id": "gd-unjam", "jobType": "garbage disposal", "label": "Garbage disposal unjam and reset", "priceCents": 11900 },
-    { "id": "th-smart", "jobType": "thermostat", "label": "Smart thermostat install (customer-supplied unit)", "priceCents": 15900 },
-    { "id": "th-diag", "jobType": "thermostat", "label": "Thermostat or low-voltage diagnosis", "priceCents": 12900 },
-    { "id": "so-add", "jobType": "outlet", "label": "Add a standard outlet (existing circuit)", "priceCents": 22900 }
-  ]
+ "name": "Northside Plumbing & Heating (fictional demo business)",
+ "priceList": [
+  {
+   "id": "wh-flush",
+   "jobType": "water heater",
+   "label": "Water heater flush and inspection",
+   "priceCents": 18900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "wh-tpr",
+   "jobType": "water heater",
+   "label": "Temperature and pressure relief valve replacement",
+   "priceCents": 24900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "wh-nohot",
+   "jobType": "water heater",
+   "label": "No hot water diagnosis (applied to repair)",
+   "priceCents": 12900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "wh-tankless",
+   "jobType": "water heater",
+   "label": "Tankless water heater descale and service",
+   "priceCents": 27900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "ep-trip",
+   "jobType": "breaker panel",
+   "label": "Tripping breaker diagnosis",
+   "priceCents": 14900,
+   "trade": "electrical"
+  },
+  {
+   "id": "ep-circuit",
+   "jobType": "breaker panel",
+   "label": "New 240V circuit (up to 25 ft)",
+   "priceCents": 64900,
+   "trade": "electrical"
+  },
+  {
+   "id": "ep-replace",
+   "jobType": "breaker panel",
+   "label": "Panel replacement estimate visit",
+   "priceCents": 0,
+   "trade": "electrical"
+  },
+  {
+   "id": "ac-tune",
+   "jobType": "air conditioner",
+   "label": "AC tune-up",
+   "priceCents": 13900,
+   "trade": "hvac"
+  },
+  {
+   "id": "ac-diag",
+   "jobType": "air conditioner",
+   "label": "AC not cooling diagnosis",
+   "priceCents": 14900,
+   "trade": "hvac"
+  },
+  {
+   "id": "ac-fan",
+   "jobType": "air conditioner",
+   "label": "Condenser fan motor replacement",
+   "priceCents": 54900,
+   "trade": "hvac"
+  },
+  {
+   "id": "pp-leak",
+   "jobType": "pipe",
+   "label": "Pipe leak repair (accessible, up to 3 ft)",
+   "priceCents": 32900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "sp-diag",
+   "jobType": "sump pump",
+   "label": "Sump pump test and float switch service",
+   "priceCents": 16900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "gd-replace",
+   "jobType": "garbage disposal",
+   "label": "Garbage disposal replacement (1/2 HP unit included)",
+   "priceCents": 38900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "gd-unjam",
+   "jobType": "garbage disposal",
+   "label": "Garbage disposal unjam and reset",
+   "priceCents": 11900,
+   "trade": "plumbing"
+  },
+  {
+   "id": "th-smart",
+   "jobType": "thermostat",
+   "label": "Smart thermostat install (customer-supplied unit)",
+   "priceCents": 15900,
+   "trade": "hvac"
+  },
+  {
+   "id": "th-diag",
+   "jobType": "thermostat",
+   "label": "Thermostat or low-voltage diagnosis",
+   "priceCents": 12900,
+   "trade": "hvac"
+  },
+  {
+   "id": "so-add",
+   "jobType": "outlet",
+   "label": "Add a standard outlet (existing circuit)",
+   "priceCents": 22900,
+   "trade": "electrical"
+  },
+  {
+   "id": "ep-hottub",
+   "jobType": "breaker panel",
+   "trade": "electrical",
+   "label": "Hot tub / spa 240V GFCI circuit install (up to 40 ft)",
+   "priceCents": 129900
+  }
+ ]
 }

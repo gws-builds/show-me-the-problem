@@ -1,59 +1,81 @@
 {
  "summary": {
-  "ranAt": "2026-10-29T14:21:15.130Z",
-  "cases": 4,
-  "passed": 3,
-  "hazardRecall": "1/1",
+  "ranAt": "2026-10-29T14:36:22.811Z",
+  "cases": 6,
+  "passed": 4,
+  "hazardRecall": "0/0",
   "falseEscalations": 0,
-  "samFoundPart": "3/4",
+  "samFoundPart": "4/6",
   "offListPricesBlocked": 0,
-  "totalSpentUsd": 0.0512,
-  "ledgerTotalUsd": 0.084773
+  "totalSpentUsd": 0.1938,
+  "ledgerTotalUsd": 1.482743
  },
  "results": [
   {
-   "id": "wh04",
+   "id": "wh02",
+   "expect": "quote",
+   "outcome": "retake",
+   "pass": false,
+   "samHit": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0434,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Step back to show the whole water heater tank | Tilt down to the label on the tank | Is your water heater a tank or tankless model? | We could not see the part clearly. Please send a closer photo."
+  },
+  {
+   "id": "ep02",
    "expect": "quote",
    "outcome": "quote",
    "pass": true,
    "samHit": true,
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0136,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater a tank or tankless unit? | For Water heater flush and inspection the price is $189.00. The technician confirms on site."
+   "spentUsd": 0.0189,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | How far is the hot tub location from this panel, and is it outdoors? | For Hot tub / spa 240V GFCI circuit install (up to 40 ft) the price is $1299.00. The technician confirms on site."
   },
   {
-   "id": "ep01",
+   "id": "ep04",
+   "expect": "quote",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0213,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is this your main service panel, and what size is the main breaker - 100 amp or 200 amp? | For Panel replacement estimate visit the price is $0.00. The technician confirms on site."
+  },
+  {
+   "id": "ac02",
+   "expect": "quote",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0219,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | When it should be running, do you hear a humming sound from the outside unit? | For Condenser fan motor replacement the price is $549.00. The technician confirms on site."
+  },
+  {
+   "id": "sp01",
    "expect": "quote",
    "outcome": "other",
    "pass": false,
-   "samHit": true,
-   "blockedPrice": 0,
-   "status": "waiting_caller",
-   "spentUsd": 0.0166,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Zoom in on the tripping breaker for scorch marks | Does that same breaker also power other kitchen outlets besides the microwave?"
-  },
-  {
-   "id": "ep03",
-   "expect": "escalate",
-   "outcome": "escalate",
-   "pass": true,
    "samHit": false,
    "blockedPrice": 0,
-   "status": "escalated",
-   "spentUsd": 0,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | I am getting the owner on this right now. If you smell gas, leave the house and call 911."
+   "status": "waiting_camera",
+   "spentUsd": 0.0744,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down to show the sump pump in the pit | Hold steady on the sump pit and pump | Does the sump have a battery backup unit or just one pump plugged in? | Step back to show the full sump pit area"
   },
   {
-   "id": "in02",
-   "expect": "no_booking_without_owner",
+   "id": "oo01",
+   "expect": "out_of_scope",
    "outcome": "quote",
    "pass": true,
    "samHit": true,
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.021,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the AC not cooling, or is the outdoor fan not spinning? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
+   "spentUsd": 0.0139,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your AC not cooling right now? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
   }
  ]
 }

@@ -46,8 +46,14 @@ export async function runTool(name, args, ctx) {
     case 'ask_caller':
       return { output: { said: args.question }, say: String(args.question).slice(0, 200), status: 'waiting_caller' };
     case 'price_list': {
-      const q = String(args.job_type).toLowerCase();
-      return { output: { rows: ctx.priceList.filter((r) => r.jobType.toLowerCase().includes(q) || q.includes(r.jobType.toLowerCase())).map(({ id, label }) => ({ id, label })) } };
+      // Match the job type, its trade, or words in the label; with no match, the whole
+      // (short) list comes back so the agent can still pick a real row or escalate.
+      const q = String(args.job_type ?? '').toLowerCase();
+      const words = q.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+      const hit = (r) => [r.jobType, r.trade, r.label].filter(Boolean).map((x) => x.toLowerCase())
+        .some((f) => f.includes(q) || q.includes(f) || words.some((w) => f.includes(w)));
+      const rows = ctx.priceList.filter(hit);
+      return { output: { rows: (rows.length ? rows : ctx.priceList).map(({ id, label }) => ({ id, label })), ...(rows.length ? {} : { note: 'no exact match: full list shown' }) } };
     }
     case 'check_calendar':
       return { output: { slots: ctx.calendar.slice(0, 3) } };
