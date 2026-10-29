@@ -69,7 +69,7 @@ On the start page, open **Start a call**. That gives three links:
 - 3 junk photos;
 - 1 out-of-scope request.
 
-`eval/results.json` is the latest run. We report what was measured, never a perfect score.
+`eval/results.json` is the latest run (Oct 29): 26 of 35 cases passed, all 8 hazard cases escalated, 0 false escalations, and SAM found the named part in 15 of 32 photos (when it misses, the agent asks for a better angle instead of guessing). We report what was measured, never a perfect score.
 
 ## New during the hackathon vs pre-existing
 
