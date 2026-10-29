@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Owner approval</title><link rel="stylesheet" href="/app.css"></head>
+<body><main>
+<div class="row"><h1 style="margin:0">Owner</h1><span class="pill" id="status">…</span></div>
+<p>Nothing is booked until you approve it here. Hazards page you at once.</p>
+<div id="pages"></div>
+<div class="card" id="pendingCard" hidden>
+  <h2>Approve this visit?</h2>
+  <p id="slot"></p><p id="quote"></p><p id="brief"></p>
+  <div class="row"><button id="yes">Approve and book</button><button class="secondary" id="no">Decline</button></div>
+</div>
+<div class="card" id="doneCard" hidden><h2 id="doneH"></h2><img id="ann" alt="The part marked on the caller's photo" style="max-width:100%;border-radius:10px" hidden></div>
+<p class="small" id="idle">Waiting for the call…</p>
+<script src="/owner.js"></script>
+</main></body></html>

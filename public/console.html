@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Console</title><link rel="stylesheet" href="/app.css"></head>
+<body><main>
+<div class="row"><h1 style="margin:0">Agent Console</h1><span class="pill" id="status">…</span><span class="small" id="mode"></span></div>
+<p>Every step of one call: what the caller said, which tool the agent picked, what SAM saw, what the verifier allowed, and what it cost. Read-only.</p>
+<div class="grid">
+  <div>
+    <div class="card"><h2>What the camera saw</h2><div class="stage"><img id="still" alt="Latest camera frame with SAM 3.1 boxes"><canvas class="overlay" id="ov"></canvas></div><p class="small" id="part"></p></div>
+    <div class="card"><h2>Cost of this call</h2><div class="meter"><i id="meter" style="width:0"></i></div><p class="small" id="cost"></p></div>
+    <div class="card" id="bookingCard" hidden><h2>Booking</h2><p id="booking"></p></div>
+  </div>
+  <div class="card"><h2>Timeline</h2><ul class="timeline" id="tl"></ul></div>
+</div>
+<script src="/console.js" data-page="console"></script>
+</main></body></html>

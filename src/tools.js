@@ -34,9 +34,12 @@ export async function runTool(name, args, ctx) {
     case 'find_part': {
       const frame = session.latestFrame();
       if (!frame) return { output: { error: 'no camera frame yet' }, say: 'Can you open the camera link I texted you?' };
-      const boxes = await ctx.client.segment(frame.dataUrl, String(args.part).slice(0, 60));
-      session.setBoxes(args.part, boxes, frame.at);
-      return { output: { part: args.part, boxes: boxes.map(({ ordinal, x1, y1, x2, y2, width, height }) => ({ ordinal, x1, y1, x2, y2, width, height })) } };
+      const part = String(args.part ?? '').slice(0, 60);
+      // SAM 3.1 sometimes answers an identical request with no boxes, so an empty result gets one retry.
+      let boxes = await ctx.client.segment(frame.dataUrl, part);
+      if (!boxes.length) boxes = await ctx.client.segment(frame.dataUrl, part);
+      session.setBoxes(part, boxes, frame.at);
+      return { output: { part, boxes: boxes.map(({ ordinal, x1, y1, x2, y2, width, height, score }) => ({ ordinal, x1, y1, x2, y2, width, height, score })) } };
     }
     case 'direct_camera':
       return { output: { said: args.instruction }, say: String(args.instruction).slice(0, 200), status: 'waiting_camera' };
@@ -61,7 +64,7 @@ export async function runTool(name, args, ctx) {
     }
     case 'escalate':
       await ctx.notifyOwner?.({ urgent: true, reason: args.reason, transcript: session.callerText() });
-      return { output: { escalated: true }, say: 'I am getting the owner on this right now. If you smell gas, leave the house and call 911.', status: 'escalated' };
+      return { output: { escalated: true }, say: 'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.', status: 'escalated' };
     case 'request_booking': {
       if (hazardIn(session.callerText())) return { output: { refused: 'hazard on this call' }, say: 'The owner is calling you about this now. No visit is booked until they do.', status: 'escalated' };
       const slot = ctx.calendar.find((s) => s.id === args.slot_id);

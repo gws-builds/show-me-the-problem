@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Show Me the Problem</title><link rel="stylesheet" href="/app.css"></head>
+<body><main>
+<span class="pill">Meta Global AI Developer Hackathon entry</span>
+<h1>Show me the problem</h1>
+<p>A homeowner calls a plumbing or electrical business and points their phone at what is broken. An agent built on Meta's models sees the part, asks the one question that changes the price, quotes only from the owner's price list, escalates hazards, and books the visit after the owner taps approve.</p>
+<div class="card">
+  <h2>Try it</h2>
+  <p>Open this page on a phone with a camera, or on a laptop with a webcam. Point it at a water heater, a breaker panel, an AC unit, a thermostat, a disposal or a leaking pipe.</p>
+  <div class="row"><button id="start">Start a call</button><span id="err" class="small"></span></div>
+  <p class="small">Uses SAM 3.1 (sees and tracks the part), Muse Voice Transcribe (hears you), Muse Spark 1.3 (decides, with tools) and Muse Image (marks the part on the booked visit). Every price passes a verifier written in code. The business and its price list are fictional.</p>
+</div>
+<div class="card" id="links" hidden>
+  <h2>Your call is open</h2>
+  <p><a id="camLink" href="#">Open the camera</a>: the caller's side.</p>
+  <p><a id="ownerLink" href="#" target="_blank" rel="noopener">Owner's approval page</a>: approve or decline the booking.</p>
+  <p><a id="consoleLink" href="#" target="_blank" rel="noopener">Agent Console</a>: every step, tool call, verifier check and cost, live.</p>
+</div>
+<script src="/console.js" data-page="index"></script>
+</main></body></html>

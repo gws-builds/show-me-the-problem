@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Show Me the Problem: call</title><link rel="stylesheet" href="/app.css"></head>
+<body><main>
+<div class="row"><strong>Northside Plumbing &amp; Heating</strong><span class="pill" id="status">connecting</span><span class="small">demo business</span></div>
+<div class="card consent" id="consent">
+  <p>This call uses your camera and microphone so the office can see the problem. Frames and audio are used for this call only: they are not stored after it ends. Don't point the camera at people or house numbers.</p>
+  <button id="go">Turn on camera and microphone</button> <span id="err" class="small"></span>
+</div>
+<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas></div>
+<div class="card">
+  <div class="agent-line" id="line" aria-live="polite">…</div>
+  <button class="talk" id="talk" disabled>Tap to talk</button>
+  <form class="row" id="typed" style="margin-top:10px"><input type="text" id="t" maxlength="300" placeholder="Or type here" autocomplete="off"><button class="secondary" type="submit">Send</button></form>
+  <p class="small" id="heard"></p>
+</div>
+<script src="/camera.js"></script>
+</main></body></html>

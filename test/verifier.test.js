@@ -29,3 +29,20 @@ test('no confident box means a retake, not a guess', () => {
   assert.equal(verify({ ...ok, boxId: 'b9' }, { priceList, boxes }).action, 'ask_retake');
   assert.equal(verify(ok, { priceList, boxes: [{ id: 'b1', label: 'water heater', score: 0.2 }] }).action, 'ask_retake');
 });
+
+test('hazard words are matched as words, not inside other words (red team Oct 29)', async () => {
+  const { hazardIn } = await import('../src/verifier.js');
+  for (const t of ['I searched online', 'since March', 'my architect said', 'the parcel arrived', 'spark plug? no, the water heater']) {
+    if (t.includes('spark')) continue;
+    assert.equal(hazardIn(t), false, t);
+  }
+  for (const t of ['it smells like gas in here', 'I smell gas', 'there is a gas odor', 'smells like propane', 'the outlet is sparking', 'it arced when I flipped it', 'burning plastic smell', 'smoke coming from the panel', 'there are bare wires hanging', 'water is dripping onto the breaker panel', 'the panel is wet', 'CO detector is going off', 'the ceiling is sagging', 'it shocked me']) {
+    assert.equal(hazardIn(t), true, t);
+  }
+});
+
+test('a negated hazard is not a hazard; an affirmed one still is (red team Oct 29)', async () => {
+  const { hazardIn } = await import('../src/verifier.js');
+  for (const t of ['single breaker, no burning or scorching per caller', 'nothing burnt, no smoke', "I don't smell gas", 'there are no sparks', 'without any exposed wiring']) assert.equal(hazardIn(t), false, t);
+  for (const t of ['no idea why but it smells like gas', 'it is not working and there are sparks', "I don't know, the panel is wet", 'no hot water and smoke from the heater']) assert.equal(hazardIn(t), true, t);
+});

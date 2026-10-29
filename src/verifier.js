@@ -3,17 +3,35 @@
 // from the owner's own list, equipment claims must point at a SAM box, and
 // any hazard sign ends the quote and escalates to the owner.
 
+// Word boundaries matter: a bare /arc/ escalated "search" and "March" (red team, Oct 29).
 const HAZARDS = [
-  /gas (smell|leak)|smell(s|ing)? (of )?gas|rotten egg/i,
-  /spark|arc(ing)?|scorch|burn(t|ed|ing) (smell|mark)|melt(ed|ing)/i,
-  /exposed (wire|wiring)|live wire|bare wire/i,
-  /water (on|near|in) (the )?(panel|breaker|outlet)/i,
-  /carbon monoxide|co alarm|ceiling (sag|bulg)|structural/i,
+  /\bgas\b.{0,20}\b(smell|leak|odou?r|hiss)|\bsmell\w*\b.{0,15}\b(gas|propane)\b|\brotten eggs?\b|\bpropane\b.{0,20}\b(smell|leak)/i,
+  /\bspark(s|ing|ed)?\b|\barc(s|ing|ed)?\b|\bscorch\w*|\bburn(t|ed|ing)?\b.{0,12}\b(smell|mark|plastic|wire|outlet)|\bmelt(ed|ing)?\b|\bsmok(e|ing)\b|\bflames?\b|\bon fire\b|\bfire\b.{0,10}\b(in|from|behind)\b/i,
+  /\b(exposed|live|bare|loose|hanging)\b.{0,6}\bwir(e|es|ing)\b|\b(got |getting )?(shocked|electrocuted)\b|\bshock(s|ed)? me\b/i,
+  /\bwater\b.{0,25}\b(panel|breaker|outlet|socket|wiring|electrical)\b|\b(panel|breaker|outlet)\b.{0,20}\b(wet|water|flood)/i,
+  /\bcarbon monoxide\b|\b(co|carbon) (alarm|detector)\b.{0,15}\b(going off|beep|sound|alarm)|\bceiling\b.{0,12}\b(sag|bulg|collaps)|\bstructural\b|\bcollaps(e|ed|ing)\b/i,
 ];
 
-/** True when the caller's words, the model's notes or the photo text show a hazard. */
+// "No burning or scorching" is the absence of a hazard. A match counts unless a
+// negation sits earlier in the same clause (red team Oct 29: the model's own note
+// "no burning or scorching per caller" escalated a plain tripping breaker).
+const NEGATED = /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|hasn'?t|can'?t|cannot)\b/i;
+const CLAUSE = /[.!?;,]|\b(but|and|so|though|although|yet|because|now|then|except)\b/gi;
+const lastClause = (s) => s.split(CLAUSE).filter((x) => x !== undefined).pop() ?? '';
+
+function hazardInOne(text) {
+  const t = String(text);
+  for (const re of HAZARDS) {
+    for (const m of t.matchAll(new RegExp(re.source, 'gi'))) {
+      if (!NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index)))) return true;
+    }
+  }
+  return false;
+}
+
+/** True when the caller's words, the model's notes or the photo text show a hazard that is not negated. */
 export function hazardIn(...texts) {
-  return texts.filter(Boolean).some((t) => HAZARDS.some((re) => re.test(String(t))));
+  return texts.filter(Boolean).some(hazardInOne);
 }
 
 /**

@@ -3,3 +3,5 @@ node_modules
 *.spend.json
 spend.json
 .data/
+eval/photos/*.jpg
+eval/frames/*.jpg

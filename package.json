@@ -1,8 +1,15 @@
 {
   "name": "snap-to-booked",
   "version": "0.1.0",
-  "description": "A trustworthy job-intake agent for trades: photo in, verified quote or escalation out, booked after the owner approves. Built for the Meta Global AI Developer Hackathon (Oct 26 - Nov 4, 2026).",
+  "description": "Show Me the Problem: a live call that sees. Meta SAM 3.1 + Muse Spark 1.3 + Muse Voice Transcribe + Muse Image job-intake agent for trades, with a code verifier and owner approval. Meta Global AI Developer Hackathon 2026.",
   "type": "module",
   "license": "MIT",
-  "scripts": { "test": "node --test test/*.test.js" }
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node src/server.mjs",
+    "eval": "node eval/run.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
