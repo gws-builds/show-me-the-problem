@@ -1,0 +1,33 @@
+{
+ "id": "commercial", "title": "Commercial mechanical and electrical equipment (rooftop units, plant rooms, switchgear)", "room": "commercial", "primary": true,
+ "match": ["rooftop unit", "rtu", "roof unit", "packaged unit", "air handler", "ahu", "chiller", "plant room", "mechanical room", "switchgear", "switchboard", "transformer", "commercial boiler", "boiler plant", "facility", "building manager", "office building", "warehouse", "restaurant", "three phase", "3 phase"],
+ "parts": [
+  {"id": "rooftop_unit", "label": "Rooftop unit", "sam": "rooftop unit", "looks": "A large sheet-metal box on a curb on a flat roof, with condenser coils and fans on top or one side, an access panel row, and ducts going down through the roof.", "normal": "Panels closed and fastened, coils clean, no standing water or oil around the curb.", "abnormal": "Missing or loose access panels, crushed or blocked coils, oil stains (a possible refrigerant leak), rust-through of the base."},
+  {"id": "air_handler", "label": "Air handler", "sam": "air handler", "looks": "A long cabinet with duct connections at both ends, filter doors, and pipes or refrigerant lines going to a coil inside.", "normal": "Doors latched, dry drain pan area, no rust streaks.", "abnormal": "Water on the floor below it, rust streaks from the drain pan, doors missing."},
+  {"id": "commercial_boiler", "label": "Commercial boiler", "sam": "boiler", "looks": "A large steel or cast-iron boiler on a pad, with insulated pipes, a burner assembly on the front, gauges, and a breeching (flue) leaving the top or back.", "normal": "Jacket closed, gauges readable, dry floor, insulation intact.", "abnormal": "Water or scale on the floor, soot around the burner, damaged insulation, a breeching joint visibly open."},
+  {"id": "insulated_pipes", "label": "Insulated pipes", "sam": "pipe", "looks": "Large pipes wrapped in white, silver or orange insulation, with valves and flanges between them.", "normal": "Insulation whole and dry.", "abnormal": "Wet or stained insulation, drips at flanges, crust at valve stems."},
+  {"id": "switchgear", "label": "Switchgear", "sam": "switchgear", "looks": "A row of tall grey or beige steel cabinets with meters, breaker handles or doors, and labels, in an electrical room.", "normal": "All doors closed and latched, labels on, no smell or sound reported, clear space in front.", "abnormal": "A door open with parts showing, scorch marks on a door or vent, water on or above the gear, items stored in front of it."},
+  {"id": "disconnect_switch", "label": "Disconnect switch", "sam": "switch box", "looks": "A grey box with a large external handle near a unit or on a wall, sometimes with a lock hasp.", "normal": "Cover closed, handle and label visible.", "abnormal": "Cover missing or hanging open, rust-through, scorch around the handle."},
+  {"id": "transformer", "label": "Transformer", "sam": "transformer", "looks": "A large steel cabinet or box with cooling fins or vents, often humming, on a pad or a wall bracket.", "normal": "Closed, vents clear.", "abnormal": "Oil stains below it, scorch at vents, vents blocked by stored items."},
+  {"id": "gauge", "label": "Gauge", "sam": "gauge", "looks": "A round dial showing pressure or temperature on a pipe, boiler or chiller.", "normal": "Readable face.", "abnormal": "Only judge with the dial face readable and the normal range known for that system."}
+ ],
+ "faults": [
+  {"name": "Refrigerant leak suspected", "evidence": "Oily residue on refrigerant lines or coil joints, or the caller's report of the unit running without cooling. A technician with gauges confirms; a camera cannot."},
+  {"name": "Condensate drain problem", "evidence": "Water on the roof or floor under the unit, rust streaks from the drain pan area."},
+  {"name": "Damaged insulation", "evidence": "Visibly torn, wet or missing pipe insulation."}
+ ],
+ "hazards": [
+  {"id": "open_live_gear", "label": "Switchgear or electrical cabinet open with live parts showing", "category": "wiring", "escalate": true, "threshold": "A door or cover visibly open on switchgear, a panelboard, a transformer or a disconnect with bus bars, terminals or bare conductors showing. Labels and closed doors are not a hazard."},
+  {"id": "gear_scorch", "label": "Scorch at electrical gear", "category": "scorch", "escalate": true, "threshold": "Black scorch or melted marks on switchgear, a transformer, a disconnect or a breaker. Dust or dull paint is not scorch."},
+  {"id": "water_on_gear", "label": "Water on or above electrical gear", "category": "water_electric", "escalate": true, "threshold": "Standing water, active drips or a wet floor touching switchgear or a transformer, or water dripping onto it from above."},
+  {"id": "breeching_gap", "label": "Boiler flue (breeching) open", "category": "combustion", "escalate": true, "threshold": "A clearly visible gap, separated joint or hole in the flue or breeching of a fuel-fired boiler or rooftop heating section."},
+  {"id": "storage_in_plant", "label": "Combustibles stored in a plant room or in front of gear", "category": "flammables", "escalate": false, "threshold": "Boxes, paper, fuel or paint cans stored against a boiler or burner, or blocking the space in front of electrical gear."}
+ ],
+ "may": ["Show the equipment from where they stand.", "Read a nameplate or gauge from a safe distance.", "Tell building staff before going on a roof."],
+ "must_not": ["Open any switchgear, transformer or disconnect door or cover.", "Operate a breaker, switch or disconnect.", "Climb onto a roof or enter a locked electrical room without the building's permission and safe access.", "Touch a boiler, burner or hot pipe."],
+ "tour": {
+  "open": "Let's walk through the equipment together. From a safe spot, show me the whole area slowly, from left to right. Don't open any doors on the electrical gear.",
+  "checkpoints": []
+ },
+ "sources": ["osha-electrical", "osha-loto", "osha-3075", "navedtra-14027", "ut-3-2", "usfa-heating"]
+}

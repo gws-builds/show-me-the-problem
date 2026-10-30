@@ -1,4 +1,40 @@
 [
- {"file": "dripping-tap.mp4", "title": "A dripping tap (daylight)", "credit": "\"Tropfender Wasserhahn 20240827 C1004\" by PantheraLeo1359531, Wikimedia Commons, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Scaled to 720p by us.", "source": "https://commons.wikimedia.org/wiki/File:Tropfender_Wasserhahn_20240827_C1004.webm", "voice": "mic"},
- {"file": "dripping-tap-dark.mp4", "title": "The same tap, darkened by us to test the lighting check", "credit": "Same clip, CC BY 4.0, PantheraLeo1359531. Darkened and scaled by us (brightness and gamma lowered); this is not how the original looks.", "source": "https://commons.wikimedia.org/wiki/File:Tropfender_Wasserhahn_20240827_C1004.webm", "voice": "mic"}
+ {
+  "file": "dripping-tap.mp4",
+  "title": "A dripping tap (daylight)",
+  "credit": "\"Tropfender Wasserhahn 20240827 C1004\" by PantheraLeo1359531, Wikimedia Commons, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Scaled to 720p by us.",
+  "source": "https://commons.wikimedia.org/wiki/File:Tropfender_Wasserhahn_20240827_C1004.webm",
+  "voice": "mic"
+ },
+ {
+  "file": "dripping-tap-dark.mp4",
+  "title": "The same tap, darkened by us to test the lighting check",
+  "credit": "Same clip, CC BY 4.0, PantheraLeo1359531. Darkened and scaled by us (brightness and gamma lowered); this is not how the original looks.",
+  "source": "https://commons.wikimedia.org/wiki/File:Tropfender_Wasserhahn_20240827_C1004.webm",
+  "voice": "mic"
+ },
+ {
+  "file": "rooftop-units.mp4",
+  "title": "Commercial: rooftop units (a still photo panned by us)",
+  "credit": "\"Rooftop Packaged Units.JPG\" by P199, Wikimedia Commons, public domain. Panned and cropped into an 18 s clip by us; it is a still photo, not video.",
+  "source": "https://commons.wikimedia.org/wiki/File:Rooftop_Packaged_Units.JPG",
+  "voice": "mic",
+  "room": "commercial"
+ },
+ {
+  "file": "switchgear-room.mp4",
+  "title": "Commercial: switchgear room (a still photo panned by us)",
+  "credit": "\"Electrical switchgear.JPG\" by P199, Wikimedia Commons, public domain. Panned and cropped into an 18 s clip by us; it is a still photo, not video.",
+  "source": "https://commons.wikimedia.org/wiki/File:Electrical_switchgear.JPG",
+  "voice": "mic",
+  "room": "commercial"
+ },
+ {
+  "file": "boiler-plant.mp4",
+  "title": "Commercial: school boiler room (a still photo panned by us)",
+  "credit": "\"Boiler room in a high school.jpg\" by Braedencapaul, Wikimedia Commons, CC0. Panned and cropped into an 18 s clip by us; it is a still photo, not video.",
+  "source": "https://commons.wikimedia.org/wiki/File:Boiler_room_in_a_high_school.jpg",
+  "voice": "mic",
+  "room": "commercial"
+ }
 ]
