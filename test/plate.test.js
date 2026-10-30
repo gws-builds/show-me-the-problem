@@ -98,3 +98,11 @@ test('read_plate: no legible plate means no age and a move-closer line; plate te
   assert.doesNotMatch(r.say, /\$|ignore|new unit/i);
   assert.equal(s.quote(), null);
 });
+
+test('red team, cost: a model looping on read_plate gets at most 3 model reads per call', async () => {
+  const s = createSession(); s.pushFrame(JPEG_640x480);
+  let looks = 0;
+  const client = { look: async () => { looks++; return { visible: false }; } };
+  for (let i = 0; i < 8; i++) await runTool('read_plate', {}, { client, session: s });
+  assert.equal(looks, 3);
+});

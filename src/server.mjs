@@ -12,6 +12,7 @@ import { upgrade, connectWebSocket } from './ws.js';
 import { createVoiceSession } from './voice.js';
 import { createGate, writeCode, cookieValue } from './gate.js';
 import { createTts } from './tts.js';
+import { loadCorpus } from './corpus.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
@@ -25,6 +26,8 @@ const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-busi
 // The owner of the deployment can open live calls past the public limits with this header.
 const STAFF_KEY = process.env.STAFF_KEY || '';
 const tts = createTts();
+// The trade library loads once (about a second) before the first call needs it.
+setImmediate(() => { const l = loadCorpus(); console.log(l.error ? `trade library NOT loaded: ${l.error}` : `trade library: ${l.index.size} passages (${l.loadMs} ms)`); });
 
 const calls = createCalls({
   ledger, priceList,

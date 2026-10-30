@@ -17,6 +17,8 @@ const fn = (name, description, properties, required = Object.keys(properties)) =
 });
 const str = (description) => ({ type: 'string', description });
 
+export const PLATE_READS = 3;
+
 export const DEFINITIONS = [
   fn('find_part', 'Look for a part in the live camera view. SAM 3.1 segments it; on a miss, code retries with an alternative noun and with a Muse Spark grounding point. Use plain object nouns, e.g. "faucet", "shut-off valve", "water heater", "breaker panel" (not states like "leak").', { part: str('what to find') }),
   fn('direct_camera', 'Tell the caller how to move the camera so the part or its label is visible.', { instruction: str('one short instruction, e.g. "Tilt down to the label on the tank"') }),
@@ -119,6 +121,9 @@ export async function runTool(name, args, ctx) {
     case 'read_plate': {
       const frame = session.latestFrame();
       if (!frame) return { output: { error: 'no camera frame yet' } };
+      // Cost bound: at most PLATE_READS model reads of a plate per call (red team: a model looping on read_plate).
+      if ((session.plateReads?.() ?? 0) >= PLATE_READS) return { output: { error: 'plate read limit for this call reached; continue without it' } };
+      session.countPlateRead?.();
       const j = await ctx.client.look(frame.dataUrl, PLATE_PROMPT, 'low');
       const p = describePlate(cleanPlate(j), { now: new Date(ctx.now?.() ?? Date.now()) });
       if (!p) {

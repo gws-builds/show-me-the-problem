@@ -112,3 +112,15 @@ test('a guided tour gets identification excerpts for its room', () => {
   assert.ok(s.evidence.list().some((e) => e.kind === 'reference'));
   assert.doesNotMatch(tourPrompt(createTour({ room: 'auto' })), /Excerpts from public trade manuals/);
 });
+
+test('red team: the library cannot create a hazard id or a price, and searching it costs no model call', async () => {
+  const { normalizeItems } = await import('../src/tour.js');
+  const tour = createTour({ room: 'electrical_panel' });
+  // "arc flash" is all over the electrical manuals, but it is not a hazard id on the cards: no safety call.
+  const [it] = normalizeItems([{ part: 'main_breaker', status: 'safety', hazard: 'arc_flash', evidence: 'manual says arc flash risk', x: 500, y: 500 }], tour);
+  assert.equal(it.status, 'attention');
+  const s = createSession();
+  const client = new Proxy({}, { get: () => { throw new Error('no model call expected'); } });
+  const r = await runTool('lookup_manual', { question: 'arc flash switchgear' }, { session: s, client });
+  assert.ok(r.output.excerpts.every((e) => !/\$\s?\d/.test(e.text)), 'no dollar amounts reach the model from the library');
+});

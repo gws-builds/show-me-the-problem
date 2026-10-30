@@ -47,7 +47,7 @@ export function instructionsFor(session) {
 export function createSession({ now = () => Date.now() } = {}) {
   let frame = null; let boxes = []; let part = ''; let quote = null; let pending = null; let tap = null; let frameN = 0; let locateMeta = null; let guidance = null;
   const lines = []; const events = []; const checklist = createChecklist(); const kept = new Map(); const evidence = createEvidence();
-  let tourRoom = null; let cards = []; const refCache = new Map(); let plate = null; let lang = 'en';
+  let tourRoom = null; let cards = []; const refCache = new Map(); let plate = null; let lang = 'en'; let plateReads = 0;
   return {
     /**
      * Cited trade-manual excerpts for a query (cached per query). Each passage used becomes a
@@ -72,6 +72,8 @@ export function createSession({ now = () => Date.now() } = {}) {
     /** The caller's language, from their words (code, sticky until they clearly switch). */
     lang: () => lang,
     setPlate(p) { plate = p; },
+    plateReads: () => plateReads,
+    countPlateRead() { plateReads++; },
     setTourRoom(r) { tourRoom = r; },
     setCards(ids) { if (ids.join() !== cards.join()) { cards = ids; events.push({ kind: 'kb', cards: ids }); } },
     cards: () => cards,

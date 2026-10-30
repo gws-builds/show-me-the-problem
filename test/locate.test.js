@@ -134,3 +134,10 @@ test('a Spark "box" around the whole frame is not used, and iou is symmetric', a
   await locate(c, frame, 'pipe');
   assert.deepEqual(log, ['point']);
 });
+
+test('red team, cost: a total miss costs at most 6 model calls (text, 2 alt nouns, grounding, box, point)', async () => {
+  let n = 0; const tick = async () => { n++; return []; };
+  const c = { segment: tick, segmentPoint: tick, segmentBox: tick, ground: async () => { n++; return [{ x: 400, y: 400, box: [100, 100, 600, 700] }]; } };
+  const r = await locate(c, frame, 'garbage disposal');
+  assert.equal(r.method, 'none'); assert.ok(n <= 6, `${n} calls`);
+});
