@@ -9,6 +9,7 @@
 //   - text in the frame (a sign saying "ignore your rules") is data: evidence that reads like an
 //     instruction is dropped, and spoken lines are composed here from card labels and short evidence.
 import { retrieve, partsOf, hazardsOf, contextFor, ROOMS, ROOM_LABEL } from './kb.js';
+import { corpusContext } from './corpus.js';
 import { maskGeometry, dataUrlSize } from './mask.js';
 import { AGREE_SCORE } from './hazards.js';
 
@@ -58,8 +59,15 @@ export function openLine(tour) {
   return safeLine(`${open} I'll name each part as I see it.`).text;
 }
 
+/** What to search the trade manuals for in this room: the room and the parts its cards expect. */
+export function roomQuery(tour) {
+  return [roomLabel(tour.room), ...[...partsOf(tour.cards).values()].slice(0, 6).map((p) => p.label)].join(' ');
+}
+
 export function tourPrompt(tour) {
   const parts = [...partsOf(tour.cards).values()];
+  // Identification help from the public manuals (local search, cited in the console). Never a status rule.
+  const refs = tour.room !== 'auto' && tour.refsFor ? tour.refsFor(roomQuery(tour)) : [];
   const seen = [...tour.found.keys()];
   return `You are guiding a homeowner who has never been in this space${tour.room !== 'auto' ? ` (${roomLabel(tour.room)})` : ''}. You see ONE frame from their phone camera.
 Name every device or part you can see${parts.length ? `, using these part ids when they fit: ${parts.map((p) => `${p.id} (${p.label})`).join('; ')}` : ''}. For anything else use a plain noun of 1 to 3 words.
@@ -75,6 +83,7 @@ Then pick the next camera move for a slow, complete look: pan_left, pan_right, s
 ${seen.length ? `Already seen: ${seen.join(', ')}.` : ''}
 ${tour.room === 'auto' ? `Also say which space this is: ${ROOMS.join(', ')}.` : ''}
 ${contextFor(tour.cards)}
+${corpusContext(refs, { max: 600 })}
 Reply with JSON only: {"room":"<${ROOMS.join('|')}>","items":[{"part":"<id or noun>","status":"<normal|attention|safety|cant_tell>","evidence":"<under 15 words, or empty>","hazard":"<hazard id, or empty>","better_view":"<under 12 words, or empty>","x":<int>,"y":<int>}],"move":"<move>"}`;
 }
 

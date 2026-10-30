@@ -213,6 +213,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   function startTour(c, room) {
     if (c.status === 'escalated') return null;
     c.tour = createTour({ room });
+    c.tour.refsFor = (q) => c.session.references?.(q, 2) ?? []; // cited trade-manual excerpts for this room
     c.session.setTourRoom(c.tour.room === 'auto' ? null : c.tour.room);
     c.client.setCap?.(TOUR.runCapUsd);
     c.tracking = null; c.lastTourAt = 0;

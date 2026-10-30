@@ -4,3 +4,4 @@ node_modules
 eval
 test
 .git
+kb/corpus/raw

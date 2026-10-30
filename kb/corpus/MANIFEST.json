@@ -1,0 +1,213 @@
+{
+ "builtAt": "2026-10-30T20:50:33.332Z",
+ "sources": {
+  "navedtra-14026": {
+   "file": "navedtra_14026.pdf",
+   "sha256": "842954fb2622ad0e06efe29bfe55cede46eee83a6f9ac908851e3c9613cf3867",
+   "bytes": 11212844,
+   "pages": 347,
+   "chunks": 754,
+   "questionPagesDropped": 9
+  },
+  "navedtra-14027": {
+   "file": "navedtra_14027.pdf",
+   "sha256": "b4125af5beac5cca678e0e33f75991d93fcafdd1e2f9ae3baf42fc4c244b3040",
+   "bytes": 12926531,
+   "pages": 287,
+   "chunks": 608,
+   "questionPagesDropped": 10
+  },
+  "neets-03": {
+   "file": "neets_14175.pdf",
+   "sha256": "1c9e144085ad82f38048e713d2ef8ad6f59d8891d83435b51afafcbeaad78719",
+   "bytes": 4567716,
+   "pages": 215,
+   "chunks": 303,
+   "questionPagesDropped": 14
+  },
+  "neets-04": {
+   "file": "neets_14176.pdf",
+   "sha256": "a0d1e34c02cf96a9d03a21d4b306f9a4bc1e8ce7c577e9fd9dcdea374da3c6e2",
+   "bytes": 2629151,
+   "pages": 153,
+   "chunks": 154,
+   "questionPagesDropped": 4
+  },
+  "navedtra-14256": {
+   "file": "navedtra_14256.pdf",
+   "sha256": "72eb5e20f80ff89caf9813c19b5aebc528d91a151a1f36286592c369213599be",
+   "bytes": 20815647,
+   "pages": 369,
+   "chunks": 403,
+   "questionPagesDropped": 5
+  },
+  "ut-3-2": {
+   "file": "ut32_1973.pdf",
+   "sha256": "12843697b74dbfa03745ade727f96a8e030d1dcadf12c6c1a9006a4cdaff4158",
+   "bytes": 35689216,
+   "pages": 661,
+   "chunks": 2063,
+   "questionPagesDropped": 0
+  },
+  "bu-3-2": {
+   "file": "bu32.pdf",
+   "sha256": "7c1d752d91717ecf8d26ca6c94f00b2f45aaf6bc0ec0326963ac88a2919b303d",
+   "bytes": 16351370,
+   "pages": 794,
+   "chunks": 1662,
+   "questionPagesDropped": 16
+  },
+  "fm-3-34-471": {
+   "file": "fm3-34-471.pdf",
+   "sha256": "dab3000b888f0bd9237f78a4989603a32d8102b4f6454d38d0b781aed62a1200",
+   "bytes": 3610379,
+   "pages": 277,
+   "chunks": 425,
+   "questionPagesDropped": 0
+  },
+  "fm-5-426": {
+   "file": "fm5-426.pdf",
+   "sha256": "7fd30a1d3468c6debe06a69d4f7b63e773cc3265687161ed794aa396be1e63ee",
+   "bytes": 4520854,
+   "pages": 224,
+   "chunks": 360,
+   "questionPagesDropped": 0
+  },
+  "hud-rrig": {
+   "file": "hud_rrig.pdf",
+   "sha256": "45736f5c3f0c3ce0601bda022b6a38c50152aba89c89278c8d0297b00161e49e",
+   "bytes": 5868671,
+   "pages": 163,
+   "chunks": 389,
+   "questionPagesDropped": 0
+  },
+  "osha-3075": {
+   "file": "osha3075.pdf",
+   "sha256": "e32343de21329cd840b9c1a620a2c4cecf173b3357039a21c773e06cebb8bdb9",
+   "bytes": 388323,
+   "pages": 72,
+   "chunks": 88,
+   "questionPagesDropped": 0
+  },
+  "osha-electrical": {
+   "file": "html/osha_electrical.html",
+   "sha256": "2dc5acbe662c2b4e614c9eb4420bc7457a23ede39f513bf8c6723815a244f09e",
+   "bytes": 104005,
+   "pages": 1,
+   "chunks": 5,
+   "questionPagesDropped": 0
+  },
+  "osha-loto": {
+   "file": "html/osha_loto.html",
+   "sha256": "5961ffe49fd0e765ac0e4046d552fbbadfdd7740e695517302ed08ccf88418e1",
+   "bytes": 107749,
+   "pages": 1,
+   "chunks": 8,
+   "questionPagesDropped": 0
+  },
+  "epa-fix-leak": {
+   "file": "html/epa_fix_leak.html",
+   "sha256": "4993eaae737f8ca17a407ce028e5fd5759b498d1ec8af474d4d34c466d976c1e",
+   "bytes": 88890,
+   "pages": 1,
+   "chunks": 11,
+   "questionPagesDropped": 0
+  },
+  "epa-faucets": {
+   "file": "html/epa_faucets.html",
+   "sha256": "18b907f3a88eea0378270a1c51433af94df8a201c4060065226798869796e1e2",
+   "bytes": 87320,
+   "pages": 1,
+   "chunks": 10,
+   "questionPagesDropped": 0
+  },
+  "usfa-heating": {
+   "file": "html/usfa_heating.html",
+   "sha256": "9b0e887556f28e9ef66d250b8105d52080b66e25ac727952de5be713c79dd60c",
+   "bytes": 42069,
+   "pages": 1,
+   "chunks": 1,
+   "questionPagesDropped": 0
+  }
+ },
+ "chunks": {
+  "file": "chunks.jsonl.gz",
+  "count": 7244,
+  "sha256": "ef31fa5a6e5d13ff581b65ef1334092eb2e090e193a2b170b94cb88bc938c8f8",
+  "bytes": 2121830
+ },
+ "flagged": [
+  {
+   "id": "navedtra-14026#207.480",
+   "text": "Control Circuits Solution: Figure 6-21 shows that the average energy consumption of a 1,000-lumen, 6.6-ampere, straight-series lamp with film cutout is 69 watts"
+  },
+  {
+   "id": "ut-3-2#11.22",
+   "text": "See Correspondence courses and recommended reading. See NavPers 10052 (current edition). (current edition). AUTHORIZATION Commanding Officer Naval Examining Cen"
+  },
+  {
+   "id": "ut-3-2#177.558",
+   "text": "The tank which, stores the compressed called the AIR RECEIVER, Whit ever dethani: are made for compressed air, they are 4,4e upon the receiver rather than avec*"
+  },
+  {
+   "id": "ut-3-2#401.1269",
+   "text": "The tank roof and roof beams- should be cleaned until free of all loose and loosely adherent mat'lrial. The only acceptable method for cleaning the lined surfac"
+  },
+  {
+   "id": "bu-3-2#127.288",
+   "text": "Chapter 4WOODWORKING: MATERIALS AND METHODS PLAIN BUTT DOWELED TONGUE AND GROOVE SPLINE Figute $23. Edge lairds. Members can be end-mitered to 45° in the wooden"
+  },
+  {
+   "id": "bu-3-2#216.508",
+   "text": "ADEOJATE CVRHG DENSE 440.44foitoustmoti TE SEE ABOVE, 'HER T AGGREGATE 'SEE ABOVE) SPECIAL SURFACE FINISH STABLE CONCRETE eteectoduchMOM FINES IN $0,0 BE. Jtsmo"
+  },
+  {
+   "id": "bu-3-2#241.582",
+   "text": "tCITALSOCI longs cuAt CLRAIANCI DETAIL AT DETAIL AT A Ao\" DETAIL AT C NOIR POW Ix- COMA NCO DETAIL AT D CSAMITI MO' Pun* CONTINUOUS CUM IiROIn' PI\" CIL* t CHAIM"
+  },
+  {
+   "id": "bu-3-2#246.594",
+   "text": "Chapter 7CONCRETE Careless nailing and exposed nails in form work cause accidents, all nailing should be IN WIRE wood swot correctly placed and secured. $011AWD"
+  },
+  {
+   "id": "bu-3-2#276.679",
+   "text": "Chapter 7CONCRETE 7 TACKnMET6R if:PAPER/MK GAGEOLLECTER HOPPER '*\"ft,'RaUL,C PRESSURE GCSE PRESSVR£ GAGE 6 dAr,uuM vALvECONTRO:. LECIOR 10P0ER SL DE C.'_N(JER 4"
+  },
+  {
+   "id": "bu-3-2#562.1378",
+   "text": "Consideration should be giver to Vie manpower, equipment, rigging. and tools tr At will be required. and oerything necessary in this line should be procured. Ad"
+  },
+  {
+   "id": "bu-3-2#660.1566",
+   "text": "In anwering items 1-1.1 Ao 1-11, refer I.) teXtboek figure 1-3. pr-eduiez. used tci m rim! re juisitioninu. Textbook I i4t > T -.. and The identifying code for "
+  },
+  {
+   "id": "bu-3-2#677.1575",
+   "text": "Textheek p4ge.: ,terimatien. -------Le4rnIng Obl.ctive: gtat the advantage-. of laminated lumber used In framing. fexch..4 How mane board feet :ire there in a p"
+  },
+  {
+   "id": "bu-3-2#775.1645",
+   "text": "(Fold along dotted line and staple or tape) (Fold along dotted line and staple or tape) DEPARTMENT OF THE NAVY NAVAL EDUCATION AND TRAINING PROGRAM DEVELOPMENT "
+  },
+  {
+   "id": "fm-3-34-471#266.408",
+   "text": "Bibliography DA Form 2028. Recommended Changes to Publications and Blank Forms. 1 February 1974. DA Form 2702. Bill of Materials. 1 July 1963. DA Pamphlet 611-2"
+  },
+  {
+   "id": "fm-5-426#216.355",
+   "text": "SOURCES USED These are the sources quoted or paraphrased in this publication. FM 5-480. Port Construction and Repair. 12 December 1990. TM 6-302-1. Army Facilit"
+  },
+  {
+   "id": "osha-3075#25.34",
+   "text": "How Can OSHA Help Me? OSHA can provide extensive help through a variety of programs, including assistance about safety and health programs, state plans, workpla"
+  },
+  {
+   "id": "epa-faucets#1.3",
+   "text": "Also, since these water savings reduce demands on water heaters, households will also save enough energy to run a hairdryer 17 minutes a day for a year. Achievi"
+  },
+  {
+   "id": "usfa-heating#1.0",
+   "text": "Heating Fire Safety Skip to main content An official website of the United States government Here's how you know Official websites use .gov A .gov website belon"
+  }
+ ]
+}

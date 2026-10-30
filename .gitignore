@@ -6,3 +6,4 @@ spend.json
 eval/photos/*.jpg
 eval/frames/*.jpg
 recordings/
+kb/corpus/raw/

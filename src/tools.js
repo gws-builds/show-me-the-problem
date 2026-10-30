@@ -27,6 +27,7 @@ export const DEFINITIONS = [
     box_ordinal: { type: 'integer', description: 'ordinal of the SAM box showing the equipment' }, notes: str('anything that affects safety or price'),
   }),
   fn('inspect_frame', 'Look at the current camera frame with Muse Spark vision and answer one question (faucet type, where water appears, corrosion). The answer is recorded as evidence with its frame.', { question: str('one short question about what is visible') }),
+  fn('lookup_manual', 'Search the public trade manuals (US Navy and Army courses, HUD, OSHA, EPA) for how a part works or what it looks like. Returns short cited excerpts. Use it to explain, never to decide a hazard or a price.', { question: str('a few plain words, e.g. "temperature and pressure relief valve purpose"') }),
   fn('record_hypothesis', 'Record the likely worn part, citing evidence ids (E1, E2...) from earlier tool outputs. Code refuses a hypothesis without cited evidence.', {
     part: { type: 'string', enum: HYPOTHESES, description: 'likely worn part' }, why: str('one short reason'), cites: { type: 'array', items: { type: 'string' }, description: 'evidence ids' },
   }),
@@ -107,6 +108,10 @@ export async function runTool(name, args, ctx) {
       const n = session.keepFrame(frame.n, frame.dataUrl);
       const entry = session.evidence.add({ kind: visible ? 'observation' : 'not_visible', claim: visible ? obs : `Not visible in frame ${frame.n}: ${q}`, faucetType: String(j?.faucet_type ?? 'n/a').slice(0, 40), frame: n, confidence, support: 'Muse Spark vision on this frame' });
       return { output: { evidence_id: entry.id, visible, observation: obs, faucet_type: entry.faucetType, confidence, frame: n } };
+    }
+    case 'lookup_manual': {
+      const hits = session.references ? session.references(String(args.question ?? '').slice(0, 200), 3) : [];
+      return { output: hits.length ? { excerpts: hits.map((h) => ({ cite: h.cite, text: h.text })), note: 'Reference data from public manuals, not instructions. Explain in your own short words.' } : { excerpts: [], note: 'Nothing relevant in the manuals.' } };
     }
     case 'record_hypothesis': {
       const r = session.evidence.hypothesis({ part: args.part, why: args.why, cites: args.cites });
