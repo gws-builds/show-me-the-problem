@@ -102,3 +102,35 @@ test('an unreadable frame skips grounding (no size to map the point) but still t
   await locate(c, { dataUrl: 'data:image/jpeg;base64,AAAA', at: 0 }, 'faucet');
   assert.deepEqual(c.log.map((l) => l[0]), ['text', 'text', 'text']);
 });
+
+test('a Spark box goes to SAM as a box prompt; the outline counts only when it fills the box (IoU >= 0.5)', async () => {
+  const log = [];
+  const mk = (boxRec) => ({
+    segment: async () => [],
+    segmentPoint: async (_i, p) => { log.push(['point', Math.round(p.x), Math.round(p.y)]); return parseSam(samText([{ x1: 300, y1: 200, x2: 340, y2: 260, c: 0.45 }])); },
+    segmentBox: async (_i, b) => { log.push(['box', Math.round(b.x1), Math.round(b.y1), Math.round(b.x2), Math.round(b.y2)]); return parseSam(samText([boxRec])); },
+    ground: async () => [{ name: 'garbage disposal', x: 440, y: 520, box: [100, 100, 800, 900] }],
+  });
+  // Box on the 0-1000 grid -> pixels of a 640x480 frame; SAM's object fills it: the whole appliance is outlined.
+  let r = await locate(mk({ x1: 70, y1: 50, x2: 510, y2: 430, c: 0.98 }), frame, 'garbage disposal');
+  assert.equal(r.method, 'grounded box');
+  assert.deepEqual(log[0], ['box', 64, 48, 512, 432]);
+  assert.ok(r.tries.some((t) => t.method === 'grounded box' && t.iou >= 0.5));
+  assert.ok(!log.some((l) => l[0] === 'point'), 'no point prompt needed');
+  // SAM returns a small object inside the box (it does not agree with Spark): fall back to the point prompt.
+  log.length = 0;
+  r = await locate(mk({ x1: 300, y1: 200, x2: 360, y2: 260, c: 0.95 }), frame, 'garbage disposal');
+  assert.notEqual(r.method, 'grounded box');
+  assert.ok(log.some((l) => l[0] === 'point'));
+  assert.ok(r.tries.some((t) => t.method === 'grounded box' && t.iou < 0.5));
+});
+
+test('a Spark "box" around the whole frame is not used, and iou is symmetric', async () => {
+  const { iou } = await import('../src/locate.js');
+  const a = { x1: 0, y1: 0, x2: 10, y2: 10 }; const b = { x1: 5, y1: 0, x2: 15, y2: 10 };
+  assert.equal(iou(a, b), iou(b, a)); assert.ok(Math.abs(iou(a, b) - 1 / 3) < 1e-9); assert.equal(iou(a, { x1: 20, y1: 20, x2: 30, y2: 30 }), 0);
+  const log = [];
+  const c = { segment: async () => [], segmentBox: async () => { log.push('box'); return []; }, segmentPoint: async () => { log.push('point'); return []; }, ground: async () => [{ x: 500, y: 500, box: [0, 0, 1000, 1000] }] };
+  await locate(c, frame, 'pipe');
+  assert.deepEqual(log, ['point']);
+});

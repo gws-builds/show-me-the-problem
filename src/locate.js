@@ -2,12 +2,23 @@
 //   1. A point the caller tapped (fresh) -> SAM point prompt.
 //   2. SAM text prompt with a plain noun ("pipe", not "pipe leak": SAM wants objects, not states).
 //   3. On a miss, in parallel: SAM with an alternative noun, and Muse Spark grounding
-//      (a point on a 0-1000 grid) handed to SAM as a point prompt.
+//      (a box and a point on a 0-1000 grid). The box goes to SAM as a box prompt first: the
+//      outline counts only if SAM's object fills Spark's box (IoU >= 0.5, two models agree).
+//      Otherwise the point goes to SAM as a point prompt, as before.
 // The best record wins; the verifier still requires confidence >= 0.5 before any quote.
 import { maskGeometry, dataUrlSize } from './mask.js';
 import { samNounsFor } from './kb.js';
 
 export const MIN_SCORE = 0.5;
+export const BOX_AGREE_IOU = 0.5; // SAM's box-prompt outline must match Spark's box this well
+const MAX_BOX_FRAC = 0.9; // a "box" around nearly the whole frame says nothing about where the part is
+
+/** Intersection over union of two boxes {x1,y1,x2,y2} in the same units. */
+export function iou(a, b) {
+  const w = Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)); const h = Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
+  const i = w * h; const u = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i;
+  return u > 0 ? i / u : 0;
+}
 export const TAP_FRESH_MS = 20_000;
 
 // Words that describe a state, not an object: SAM matches objects.
@@ -60,8 +71,8 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
   const size = dataUrlSize(frame.dataUrl);
   const attempt = async (method, noun, run) => {
     let records = [];
-    try { records = await run(); } catch (err) { if (err?.code) throw err; tries.push({ method, noun, n: 0, error: String(err.message).slice(0, 80) }); return { method, noun, records }; }
-    tries.push({ method, noun, n: records.length, score: best(records)?.score ?? null });
+    try { const out = await run(); if (Array.isArray(out)) records = out; else { records = out.records; method = out.method; } } catch (err) { if (err?.code) throw err; tries.push({ method, noun, n: 0, error: String(err.message).slice(0, 80) }); return { method, noun, records }; }
+    if (method !== 'grounded box') tries.push({ method, noun, n: records.length, score: best(records)?.score ?? null }); // the box try logged itself, with its IoU
     return { method, noun, records };
   };
   const results = [];
@@ -77,6 +88,15 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
         const pts = await client.ground(frame.dataUrl, nouns.slice(0, 2));
         tries.push({ method: 'spark grounding', noun: nouns.slice(0, 2).join(' / '), n: pts.length, point: pts[0] ? [pts[0].x, pts[0].y] : null });
         if (!pts.length) return [];
+        const b = pts[0].box;
+        if (b && client.segmentBox && (b[2] - b[0]) * (b[3] - b[1]) < MAX_BOX_FRAC * 1e6) {
+          const spark = { x1: (b[0] * size.width) / 1000, y1: (b[1] * size.height) / 1000, x2: (b[2] * size.width) / 1000, y2: (b[3] * size.height) / 1000 };
+          const recs = await client.segmentBox(frame.dataUrl, { ...spark, ...size });
+          const t = best(recs);
+          const agree = t ? iou(t, spark) : 0;
+          tries.push({ method: 'grounded box', noun: nouns[0], n: recs.length, score: t?.score ?? null, iou: Number(agree.toFixed(2)) });
+          if (ok(t) && agree >= BOX_AGREE_IOU) return { records: recs, method: 'grounded box' };
+        }
         return client.segmentPoint(frame.dataUrl, { x: (pts[0].x * size.width) / 1000, y: (pts[0].y * size.height) / 1000, ...size });
       }));
     }
