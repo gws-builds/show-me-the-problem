@@ -20,6 +20,7 @@ import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
 import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
+import { toLang } from './i18n.js';
 
 export const LIMITS = {
   frameBytes: 400_000, // data URL length, ~300 KB JPEG
@@ -74,7 +75,10 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   const asCaller = (callId, token) => { const c = get(callId); if (!same(token, c.camToken)) throw new CallError('Not your call.', 403, 'FORBIDDEN'); return c; };
   const asOwner = (callId, token) => { const c = get(callId); if (!same(token, c.ownerToken)) throw new CallError('Owner link required.', 403, 'FORBIDDEN'); return c; };
 
-  const say = (c, text, status) => { c.says.push({ n: c.says.length + 1, text, status, at: now() }); c.status = status ?? c.status; };
+  // Every line the caller hears goes through here: on a Spanish call, code-composed lines are translated
+  // from a fixed table (i18n.js); the model's own lines are already Spanish.
+  const labelEs = (label) => priceList.find((r) => r.label === label)?.labelEs ?? label;
+  const say = (c, text, status) => { c.says.push({ n: c.says.length + 1, text: toLang(text, c.session.lang?.(), { labelEs }), status, at: now() }); c.status = status ?? c.status; };
 
   async function exclusive(c, fn) {
     if (c.busy) throw new CallError('Still thinking about the last thing you said.', 409, 'BUSY');
@@ -361,7 +365,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     sayable(callId, token, text) {
       const c = asCaller(callId, token); const t = String(text ?? '');
       if (!t || t.length > 600) return false;
-      return SPOKEN_CUES.has(t) || c.says.some((s) => s.text === t) || Boolean(c.shownGuide?.has(t));
+      return SPOKEN_CUES.has(t) || [...SPOKEN_CUES].some((x) => toLang(x, 'es') === t) || c.says.some((s) => s.text === t) || Boolean(c.shownGuide?.has(t));
     },
     voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice && !c.voice.closed) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
     setVoice(callId, v) { const c = calls.get(String(callId)); if (c) c.voice = v; },
@@ -409,7 +413,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     view(callId) {
       const c = get(callId);
       const p = c.session.pendingBooking();
-      const g = c.session.guidance();
+      const g0 = c.session.guidance();
+      const g = g0?.words ? { ...g0, words: toLang(g0.words, c.session.lang?.()) } : g0;
       if (g?.words) { c.shownGuide ??= new Set(); if (c.shownGuide.size < 200) c.shownGuide.add(g.words); }
       return {
         id: c.id, now: now(), status: c.status, turns: c.turns, spentUsd: Math.round(c.client.spent() * 10000) / 10000,
@@ -417,10 +422,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote, workOrder: c.booking ? null : workOrder(c.session, { slot: p.slot, quote: p.quote }) } : null,
         evidence: c.session.evidence.list(),
         booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
-        boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), footage: c.footage, latency: { p50: p50(c.latencies), n: c.latencies.length },
+        boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: g, lang: c.session.lang?.() ?? 'en', footage: c.footage, latency: { p50: p50(c.latencies), n: c.latencies.length },
         tour: tourView(c.tour), cards: c.session.cards(), capUsd: c.client.cap?.() ?? null,
       };
     },
+    langOf(callId) { return calls.get(String(callId))?.session.lang?.() ?? 'en'; },
     frameOf(callId) { return get(callId).session.latestFrame()?.dataUrl ?? null; },
     keptFrameOf(callId, n) { return get(callId).session.keptFrame(Number(n)); },
     annotatedOf(callId, token) { return asOwner(callId, token).annotated; },

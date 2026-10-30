@@ -6,161 +6,184 @@
    "jobType": "water heater",
    "label": "Water heater flush and inspection",
    "priceCents": 18900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Lavado e inspección del calentador de agua"
   },
   {
    "id": "wh-tpr",
    "jobType": "water heater",
    "label": "Temperature and pressure relief valve replacement",
    "priceCents": 24900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Cambio de la válvula de alivio de temperatura y presión"
   },
   {
    "id": "wh-nohot",
    "jobType": "water heater",
    "label": "No hot water diagnosis (applied to repair)",
    "priceCents": 12900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Diagnóstico de falta de agua caliente (se descuenta de la reparación)"
   },
   {
    "id": "wh-tankless",
    "jobType": "water heater",
    "label": "Tankless water heater descale and service",
    "priceCents": 27900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Descalcificación y servicio de calentador sin tanque"
   },
   {
    "id": "ep-trip",
    "jobType": "breaker panel",
    "label": "Tripping breaker diagnosis",
    "priceCents": 14900,
-   "trade": "electrical"
+   "trade": "electrical",
+   "labelEs": "Diagnóstico de breaker que se dispara"
   },
   {
    "id": "ep-circuit",
    "jobType": "breaker panel",
    "label": "New 240V circuit (up to 25 ft)",
    "priceCents": 64900,
-   "trade": "electrical"
+   "trade": "electrical",
+   "labelEs": "Circuito nuevo de 240 V (hasta 25 pies)"
   },
   {
    "id": "ep-replace",
    "jobType": "breaker panel",
    "label": "Panel replacement estimate visit",
    "priceCents": 0,
-   "trade": "electrical"
+   "trade": "electrical",
+   "labelEs": "Visita de presupuesto para cambio de panel"
   },
   {
    "id": "ac-tune",
    "jobType": "air conditioner",
    "label": "AC tune-up",
    "priceCents": 13900,
-   "trade": "hvac"
+   "trade": "hvac",
+   "labelEs": "Mantenimiento del aire acondicionado"
   },
   {
    "id": "ac-diag",
    "jobType": "air conditioner",
    "label": "AC not cooling diagnosis",
    "priceCents": 14900,
-   "trade": "hvac"
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de aire acondicionado que no enfría"
   },
   {
    "id": "ac-fan",
    "jobType": "air conditioner",
    "label": "Condenser fan motor replacement",
    "priceCents": 54900,
-   "trade": "hvac"
+   "trade": "hvac",
+   "labelEs": "Cambio del motor del ventilador del condensador"
   },
   {
    "id": "pp-leak",
    "jobType": "pipe",
    "label": "Pipe leak repair (accessible, up to 3 ft)",
    "priceCents": 32900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Reparación de fuga en tubería (accesible, hasta 3 pies)"
   },
   {
    "id": "sp-diag",
    "jobType": "sump pump",
    "label": "Sump pump test and float switch service",
    "priceCents": 16900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Prueba de bomba de sumidero y servicio del flotador"
   },
   {
    "id": "gd-replace",
    "jobType": "garbage disposal",
    "label": "Garbage disposal replacement (1/2 HP unit included)",
    "priceCents": 38900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Cambio del triturador de basura (unidad de 1/2 HP incluida)"
   },
   {
    "id": "gd-unjam",
    "jobType": "garbage disposal",
    "label": "Garbage disposal unjam and reset",
    "priceCents": 11900,
-   "trade": "plumbing"
+   "trade": "plumbing",
+   "labelEs": "Destrabar y reiniciar el triturador de basura"
   },
   {
    "id": "th-smart",
    "jobType": "thermostat",
    "label": "Smart thermostat install (customer-supplied unit)",
    "priceCents": 15900,
-   "trade": "hvac"
+   "trade": "hvac",
+   "labelEs": "Instalación de termostato inteligente (unidad del cliente)"
   },
   {
    "id": "th-diag",
    "jobType": "thermostat",
    "label": "Thermostat or low-voltage diagnosis",
    "priceCents": 12900,
-   "trade": "hvac"
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de termostato o bajo voltaje"
   },
   {
    "id": "so-add",
    "jobType": "outlet",
    "label": "Add a standard outlet (existing circuit)",
    "priceCents": 22900,
-   "trade": "electrical"
+   "trade": "electrical",
+   "labelEs": "Agregar un enchufe estándar (circuito existente)"
   },
   {
    "id": "ep-hottub",
    "jobType": "breaker panel",
    "trade": "electrical",
    "label": "Hot tub / spa 240V GFCI circuit install (up to 40 ft)",
-   "priceCents": 129900
+   "priceCents": 129900,
+   "labelEs": "Circuito GFCI de 240 V para jacuzzi (hasta 40 pies)"
   },
   {
    "id": "fc-diag",
    "jobType": "faucet",
    "trade": "plumbing",
    "label": "Faucet leak diagnosis (applied to repair)",
-   "priceCents": 9900
+   "priceCents": 9900,
+   "labelEs": "Diagnóstico de fuga del grifo (se descuenta de la reparación)"
   },
   {
    "id": "fc-cart",
    "jobType": "faucet",
    "trade": "plumbing",
    "label": "Faucet cartridge replacement (standard cartridge included)",
-   "priceCents": 22900
+   "priceCents": 22900,
+   "labelEs": "Cambio del cartucho del grifo (cartucho estándar incluido)"
   },
   {
    "id": "fc-oring",
    "jobType": "faucet",
    "trade": "plumbing",
    "label": "Faucet O-ring and seal repair",
-   "priceCents": 15900
+   "priceCents": 15900,
+   "labelEs": "Reparación de o-ring y sellos del grifo"
   },
   {
    "id": "fc-replace",
    "jobType": "faucet",
    "trade": "plumbing",
    "label": "Kitchen faucet replacement (customer-supplied faucet)",
-   "priceCents": 24900
+   "priceCents": 24900,
+   "labelEs": "Cambio de grifo de cocina (grifo del cliente)"
   },
   {
    "id": "sv-replace",
    "jobType": "shut-off valve",
    "trade": "plumbing",
    "label": "Under-sink shut-off valve replacement (each)",
-   "priceCents": 18900
+   "priceCents": 18900,
+   "labelEs": "Cambio de llave de paso bajo el fregadero (cada una)"
   }
  ]
 }

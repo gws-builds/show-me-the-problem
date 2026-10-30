@@ -25,16 +25,20 @@ export const MOVES = {
 // ---- code gates on what is said ----
 const OPEN_COVER = /\b(open|remove|take off|unscrew|pull off|lift off|unbolt|pry)\b[^.!?]{0,30}\b(cover|dead ?front|panel|breaker box|electrical box|junction box|fuse box|disconnect)\b/i;
 const TOUCH_INSIDE = /\b(touch|reach in|put your hand|poke|grab|wiggle|tighten|jiggle)\b[^.!?]{0,30}\b(wires?|wiring|inside|bus ?bars?|terminals?|lugs?|conductors?)\b/i;
-const NEGATION = /\b(don'?t|do not|never|without|not|no need to)\b/i;
+// Spanish too (red team, Oct 30): a Spanish call must not be told "abra la tapa del panel" either.
+const OPEN_COVER_ES = /\b(abr[aei]\w*|quit[ae]\w*|retir[ae]\w*|destornill\w*|desatornill\w*|levant[ae]\w*|saqu[ae]\w*)\b[^.!?]{0,40}\b(tapa|cubierta|panel|caja (el[eé]ctrica|de (fusibles|breakers|empalme))|tablero|interruptor de desconexi[oó]n)\b/i;
+const TOUCH_INSIDE_ES = /\b(toqu[ea]\w*|meta (la|su) mano|agarr[ea]\w*|muev[ae]\w*|aprie?t[ea]\w*|ajust[ea]\w*|jal[ea]\w*)\b[^.!?]{0,40}\b(cables?|alambres?|adentro|dentro|barras?|terminales?|bornes?|conductores?)\b/i;
+const NEGATION = /\b(don'?t|do not|never|without|not|no need to|no|nunca|sin|jam[aá]s)\b/i;
 export const SAFE_PANEL_LINE = 'Step back so I can see the whole panel. Please do not open the cover or touch anything inside.';
 
 /** Returns { text, blocked }. A sentence telling the caller to open an electrical cover or touch inside is replaced. */
 export function safeLine(text) {
   const sentences = String(text ?? '').split(/(?<=[.!?])\s+/);
   for (const s of sentences) {
-    for (const re of [OPEN_COVER, TOUCH_INSIDE]) {
+    for (const re of [OPEN_COVER, TOUCH_INSIDE, OPEN_COVER_ES, TOUCH_INSIDE_ES]) {
       const m = s.match(re);
-      if (m && !NEGATION.test(s.slice(0, m.index))) return { text: SAFE_PANEL_LINE, blocked: true };
+      // A negation counts only in the same clause ("do not open", "no abra"); "No worries, open the cover" is blocked.
+      if (m && !NEGATION.test(s.slice(0, m.index).split(/[,;:]/).pop())) return { text: SAFE_PANEL_LINE, blocked: true };
     }
   }
   return { text: String(text ?? ''), blocked: false };

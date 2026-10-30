@@ -71,6 +71,8 @@ export function workOrder(session, { slot = null, quote = null } = {}) {
   const hyp = ev.filter((e) => e.kind === 'hypothesis').at(-1) ?? null;
   const checks = session.checklist.list();
   return {
+    plate: session.plate?.() ? { claim: session.plate().summary, evidence: session.plate().evidence, model: session.plate().model, serial: session.plate().serial, age: session.plate().age } : null,
+    references: ev.filter((e) => e.kind === 'reference').slice(0, 4).map((e) => ({ cite: e.support, evidence: e.id })),
     equipment: outlines.at(-1) ? { claim: outlines.at(-1).claim, evidence: outlines.at(-1).id, frame: outlines.at(-1).frame } : null,
     observations: ev.filter((e) => e.kind === 'observation').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
     tour: ev.filter((e) => e.kind === 'tour').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),

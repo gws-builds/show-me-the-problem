@@ -20,7 +20,7 @@ let sayN = 0;
 function unlockAudio() { try { player.src = '/silence.mp3'; player.play().catch(() => {}); } catch { /* no audio */ } }
 function browserSay(text) {
   try {
-    const u = new SpeechSynthesisUtterance(text); u.rate = 1.05;
+    const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; if (lastView?.lang === 'es') u.lang = 'es-US';
     u.onstart = () => { Speech.speaking = true; Speech.current = text; };
     u.onend = u.onerror = () => { Speech.speaking = false; };
     speechSynthesis.cancel(); speechSynthesis.speak(u);

@@ -165,7 +165,7 @@ async function route(req, res) {
     if (req.method === 'POST' && action === 'say') {
       const text = String((await json(req, 1400)).text ?? '');
       if (!calls.sayable(id, cam, text)) return send(res, 403, { error: 'Only the agent\'s own lines are spoken.', code: 'NOT_SAYABLE' });
-      const audio = await tts.speak(id, text).catch(() => null);
+      const audio = await tts.speak(id, text, calls.langOf?.(id) ?? 'en').catch(() => null);
       if (!audio) return send(res, 503, { error: 'Natural voice unavailable; the browser voice is used.', code: 'NO_TTS' });
       return send(res, 200, audio, 'audio/mpeg');
     }

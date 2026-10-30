@@ -19,6 +19,7 @@ function renderWorkOrder(wo, evidence) {
   const byId = Object.fromEntries((evidence ?? []).map((e) => [e.id, e]));
   const rows = [];
   const add = (dt, dd) => { if (dd) rows.push(el('dt', dt), el('dd', dd)); };
+  if (wo.plate) add('Rating plate', `${wo.plate.claim} [${wo.plate.evidence}]`);
   add('Equipment', wo.equipment ? `${wo.equipment.claim} [${wo.equipment.evidence}, frame ${wo.equipment.frame}]` : 'Not outlined on camera');
   for (const o of wo.observations) add('Seen on camera', `${o.claim} [${o.evidence}, frame ${o.frame}]`);
   add('Likely worn part', wo.hypothesis ? `${wo.hypothesis.claim} [${wo.hypothesis.evidence}; cites ${wo.hypothesis.cites.join(', ')}]` : 'No hypothesis recorded');
@@ -29,6 +30,7 @@ function renderWorkOrder(wo, evidence) {
   add('Quote', wo.quote ? `${wo.quote.label}, ${money(wo.quote.priceCents)} (${wo.quote.source})` : 'Technician confirms on site');
   add('Visit', wo.slot?.label);
   add('Caller said', wo.callerSaid.join(' · '));
+  if (wo.references?.length) add('Manual references', wo.references.map((r) => `${r.cite} [${r.evidence}]`).join(' · '));
   add('Note', wo.note);
   $('wo').replaceChildren(...rows);
   const ev = wo.equipment ? byId[wo.equipment.evidence] : null;
