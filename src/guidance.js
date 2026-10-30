@@ -3,7 +3,12 @@
 // middle of the frame at a usable size; "locked" means two analyzed frames in a row
 // agree that it is centred, big enough and steady.
 
-export const DARK_LUMA = 45; // mean luma 0-255 of the sent frame; below this the models see too little
+// Mean luma 0-255 of the sent frame. Below DARK_LUMA the call advises more light; arrows stay
+// on while SAM still outlines the part (Oct 30 test: SAM outlined a faucet in a digitally
+// darkened frame down to luma 12), and only below BLACK_LUMA, or with no outline, does the
+// screen show "too dark" instead of arrows.
+export const DARK_LUMA = 45;
+export const BLACK_LUMA = 15;
 export const CENTER_TOL = 0.17; // centroid within 17% of the middle on both axes
 export const MIN_AREA = 0.04; // part covers at least 4% of the frame
 export const MAX_AREA = 0.7;
@@ -19,7 +24,8 @@ const DARK_WORDS = 'It is too dark for me to see. Turn on a light, or shine a se
  *   arrow: 'up' | 'down' | 'left' | 'right' | 'closer' | 'back' | null
  */
 export function guide(geo, { prev = null, luma = null } = {}) {
-  if (typeof luma === 'number' && luma < DARK_LUMA) return { state: 'dark', arrow: null, words: DARK_WORDS, luma };
+  const dim = typeof luma === 'number' && luma < DARK_LUMA;
+  if ((dim && !(geo?.area > 0)) || (typeof luma === 'number' && luma < BLACK_LUMA)) return { state: 'dark', arrow: null, words: DARK_WORDS, luma };
   if (!geo || !(geo.area > 0)) return { state: 'searching', arrow: null, words: 'Point the camera at it, slowly.', luma };
   const { cx, cy, area } = geo;
   const dx = cx - 0.5; const dy = cy - 0.5;

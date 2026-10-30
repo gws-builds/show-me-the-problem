@@ -45,3 +45,9 @@ main.call { max-width: 560px; }
 .staged-pill { background:#fde047; color:#1a1400; border-color:#fde047; font-weight:800; }
 .workorder dt { color: var(--text); font-weight: 700; margin-top: 8px; } .workorder dd { margin: 2px 0 0; color: var(--dim); }
 .ev-still { position: relative; display:inline-block; width: 100%; max-width: 360px; } .ev-still img { width:100%; display:block; border-radius:8px; } .ev-still canvas { position:absolute; inset:0; width:100%; height:100%; }
+.stage .footage-label { position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,.7); color:#fde047; font-weight:800; font-size:.78rem; padding:4px 8px; border-radius:6px; }
+[hidden] { display: none !important; }
+.mt { margin-top: 14px; } .m0 { margin: 0; } img.ann { max-width: 100%; border-radius: 10px; }
+main.call .stage { aspect-ratio: auto; min-height: 200px; }
+main.call .stage video { height: auto; max-height: 62vh; }
+.meter > i { width: 0; }

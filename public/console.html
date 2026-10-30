@@ -1,13 +1,13 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Console</title><link rel="stylesheet" href="/app.css"></head>
 <body><main>
-<div class="row"><h1 style="margin:0">Agent Console</h1><span class="pill" id="status">…</span><span class="small" id="mode"></span><span class="pill staged-pill" id="staged" hidden>STAGED SCENE</span></div>
+<div class="row"><h1 class="m0">Agent Console</h1><span class="pill" id="status">…</span><span class="small" id="mode"></span><span class="pill staged-pill" id="staged" hidden>STAGED SCENE</span></div>
 <p>Every step of one call: what the caller said, which tool the agent picked, what SAM outlined, what the verifier allowed, every safety check with its frame, and what it cost. Read-only.</p>
 <div class="grid">
   <div>
     <div class="card"><h2>What the camera saw</h2><div class="stage"><img id="still" alt="Latest camera frame with the SAM 3.1 outline"><canvas class="overlay" id="ov"></canvas><div class="staged-label" id="stagedOnStill" hidden>STAGED SCENE · arranged by us; detection is live</div></div><p class="small" id="part"></p></div>
     <div class="card"><h2>Safety and inspection checks</h2><ul class="checks" id="checks"></ul></div>
     <div class="card"><h2>Evidence ledger</h2><ul class="evidence" id="evidence"></ul></div>
-    <div class="card"><h2>Cost and speed</h2><div class="meter"><i id="meter" style="width:0"></i></div><p class="small" id="cost"></p><p class="small" id="lat"></p></div>
+    <div class="card"><h2>Cost and speed</h2><div class="meter"><i id="meter"></i></div><p class="small" id="cost"></p><p class="small" id="lat"></p></div>
     <div class="card" id="bookingCard" hidden><h2>Booking</h2><p id="booking"></p></div>
   </div>
   <div class="card"><h2>Timeline</h2><ul class="timeline" id="tl"></ul></div>

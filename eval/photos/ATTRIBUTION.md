@@ -37,3 +37,4 @@ All eval photos are from Wikimedia Commons under the licenses shown.
 - jk02.jpg: "Sunflower from Silesia2.jpg" by Pudelek (Edit by Yzmo), CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Sunflower_from_Silesia2.jpg
 - jk03.jpg: "Air conditioners in Nis.jpg" by Tiia Monto, CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Air_conditioners_in_Nis.jpg
 - oo01.jpg: "Condenser unit for central air conditioning.JPG" by H Padleckas, CC BY-SA 3.0, https://commons.wikimedia.org/wiki/File:Condenser_unit_for_central_air_conditioning.JPG
+- `fc01`: frame at 3 s of "Tropfender Wasserhahn 20240827 C1004" by PantheraLeo1359531, Wikimedia Commons, CC BY 4.0. `es01` and `es02` reuse the `wh01` and `ep01` photos with Spanish caller lines.

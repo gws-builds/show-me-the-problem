@@ -29,3 +29,13 @@ test('spend survives a restart', () => {
   createLedger(f).record('sam-3.1', { images: 2 });
   assert.equal(createLedger(f).state().spentUsd, 0.005);
 });
+
+test('a fresh ledger starts from SPENT_BASELINE_USD (container restarts keep the account total)', async () => {
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const { createLedger } = await import('../src/budget.js');
+  process.env.SPENT_BASELINE_USD = '81';
+  try {
+    const l = createLedger(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'stb-b-')), 'l.json'));
+    assert.equal(l.mode(), 'read-only');
+  } finally { delete process.env.SPENT_BASELINE_USD; }
+});

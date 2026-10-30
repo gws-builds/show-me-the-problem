@@ -83,7 +83,7 @@ export async function runTool(name, args, ctx) {
       const obs = String(j?.observation ?? '').slice(0, 200);
       const visible = j?.visible === true && obs.length > 0;
       const confidence = Math.max(0, Math.min(1, Number(j?.confidence) || 0));
-      const n = session.keepFrame(frame.n);
+      const n = session.keepFrame(frame.n, frame.dataUrl);
       const entry = session.evidence.add({ kind: visible ? 'observation' : 'not_visible', claim: visible ? obs : `Not visible in frame ${frame.n}: ${q}`, faucetType: String(j?.faucet_type ?? 'n/a').slice(0, 40), frame: n, confidence, support: 'Muse Spark vision on this frame' });
       return { output: { evidence_id: entry.id, visible, observation: obs, faucet_type: entry.faucetType, confidence, frame: n } };
     }

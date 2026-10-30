@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { acceptKey, encodeFrame, parseFrames } from '../src/ws.js';
+import { acceptKey, encodeFrame, parseFrames, encodeClientFrame, parseServerFrames } from '../src/ws.js';
 import { createVoiceSession, isEcho, handshake, BYTES_PER_SECOND } from '../src/voice.js';
 import { createLedger } from '../src/budget.js';
 import { createClient } from '../src/meta.js';
@@ -123,4 +123,13 @@ test('streamed audio is priced into the ledger', () => {
   s.end();
   assert.ok(ledger.state().spentUsd > before);
   assert.ok(up.sent.some((d) => typeof d === 'string' && /endStream/.test(d)));
+});
+
+test('upstream client frames are masked and server frames parse back (HTTP/1.1 client used for api.meta.ai)', () => {
+  const f = parseFrames(encodeClientFrame('{"type":"endStream"}')).frames[0];
+  assert.equal(f.opcode, 1); assert.equal(f.data.toString(), '{"type":"endStream"}');
+  const big = parseFrames(encodeClientFrame(Buffer.alloc(3000, 9))).frames[0];
+  assert.equal(big.data.length, 3000);
+  const back = parseServerFrames(Buffer.concat([encodeFrame('{"type":"transcript"}'), encodeFrame(Buffer.alloc(200))]));
+  assert.equal(back.frames.length, 2); assert.equal(back.frames[0].data.toString(), '{"type":"transcript"}');
 });

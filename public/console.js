@@ -3,14 +3,25 @@ const page = document.currentScript.dataset.page;
 const $ = (s) => document.getElementById(s);
 
 if (page === 'index') {
-  $('start').addEventListener('click', async () => {
-    $('start').disabled = true; $('err').textContent = '';
-    const r = await fetch('/api/calls', { method: 'POST' }).catch(() => null);
+  async function open(footage) {
+    $('err').textContent = '';
+    const r = await fetch(`/api/calls${footage ? `?footage=${encodeURIComponent(footage)}` : ''}`, { method: 'POST' }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : {};
-    if (!r?.ok) { $('err').textContent = j.error || 'Could not start a call.'; $('start').disabled = false; return; }
-    $('camLink').href = `/call#${j.id}.${j.camToken}`; $('ownerLink').href = `/owner#${j.id}.${j.ownerToken}`; $('consoleLink').href = `/console#${j.id}`;
+    if (!r?.ok) { $('err').textContent = j.error || 'Could not start a call.'; return; }
+    $('camLink').href = `/call${footage ? `?footage=${encodeURIComponent(footage)}` : ''}#${j.id}.${j.camToken}`;
+    $('camLink').textContent = footage ? 'Open the footage call' : 'Open the camera';
+    $('ownerLink').href = `/owner#${j.id}.${j.ownerToken}`; $('consoleLink').href = `/console#${j.id}`;
     $('links').hidden = false;
-  });
+  }
+  $('start').addEventListener('click', () => open(null));
+  fetch('/api/footage').then((r) => r.json()).then((list) => {
+    $('footageButtons').replaceChildren(...list.map((f) => { const b = document.createElement('button'); b.className = 'secondary'; b.textContent = f.title; b.onclick = () => open(f.file); return b; }));
+    $('footageCredit').textContent = list.map((f) => f.credit).filter((c, i, a) => a.indexOf(c) === i).join(' ');
+  }).catch(() => {});
+  fetch('/api/runs').then((r) => r.json()).then((runs) => {
+    $('runs').replaceChildren(...runs.map((x) => { const li = document.createElement('li'); const a = document.createElement('a'); a.href = `/console#${x.id}`; a.textContent = `${new Date(x.at).toLocaleString()} · ${x.status} · ${x.turns} lines${x.staged ? ' · staged scene' : ''}${x.footage ? ' · footage mode' : ''}`; li.append(a); return li; }));
+    if (!runs.length) $('runs').textContent = 'None yet.';
+  }).catch(() => {});
 }
 
 if (page === 'console') {
@@ -36,6 +47,7 @@ if (page === 'console') {
       case 'latency': return line('say', 'Turn latency', `${(e.ms / 1000).toFixed(1)} s (${e.channel})`);
       case 'echo_dropped': return line('', 'Echo dropped', e.text);
       case 'staged': return line('code_gate', 'Staged scene', e.text);
+      case 'footage': return line('verify', 'Footage mode', e.text);
       case 'code_gate': return line('code_gate', `Code gate${e.name ? `: ${e.name}` : ''}`, e.text);
       case 'owner_paged': return line('owner_paged', 'Owner paged', e.reason);
       case 'booking_requested': return line('verify', 'Booking waits for the owner', `slot ${e.slot}`);
@@ -50,7 +62,7 @@ if (page === 'console') {
   const render = (v, live) => {
     lastView = v;
     $('status').textContent = v.status.replace('_', ' '); $('status').className = `pill ${v.status}`;
-    $('mode').textContent = live ? 'live' : 'recorded call (replay)';
+    $('mode').textContent = `${live ? 'live' : 'recorded call (replay)'}${v.footage ? ' · footage mode (recorded clip, analyzed live)' : ''}`;
     $('staged').hidden = $('stagedOnStill').hidden = !v.staged;
     $('meter').style.width = `${Math.min(100, (v.spentUsd / CAP) * 100)}%`;
     $('cost').textContent = `$${Number(v.spentUsd).toFixed(4)} of the $${CAP.toFixed(2)} per-call limit`;

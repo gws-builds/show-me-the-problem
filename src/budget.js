@@ -33,7 +33,10 @@ export function costOf(model, usage = {}) {
 }
 
 export function createLedger(file) {
-  const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { spentUsd: 0, calls: 0 }; } };
+  // A fresh container has no ledger file: SPENT_BASELINE_USD starts it at the spend already on the
+  // account, so the $80 and $100 lines still mean the account total, not this container's.
+  const baseline = Math.max(0, Number(process.env.SPENT_BASELINE_USD) || 0);
+  const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { spentUsd: baseline, calls: 0 }; } };
   const save = (s) => { fs.writeFileSync(`${file}.tmp`, JSON.stringify(s)); fs.renameSync(`${file}.tmp`, file); };
   return {
     state: load,

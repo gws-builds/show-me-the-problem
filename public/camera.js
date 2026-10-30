@@ -136,9 +136,16 @@ $('typed').addEventListener('submit', async (e) => {
 // ---- start ----
 async function start() {
   if (FOOTAGE) {
-    const v = media(); v.muted = false; v.src = `/footage/${encodeURIComponent(FOOTAGE)}`; v.loop = false; v.controls = true;
+    // The clip is the camera. The caller's voice is your microphone (or the clip's own sound
+    // when the clip has the caller talking in it); typing always works too.
+    const v = media(); v.srcObject = null; v.src = `/footage/${encodeURIComponent(FOOTAGE)}`; v.loop = params.get('voice') !== 'clip'; v.controls = true; v.muted = params.get('voice') !== 'clip';
     await v.play().catch(() => {});
-    window.Voice?.startFromElement(v, id, cam);
+    if (params.get('voice') === 'clip') window.Voice?.startFromElement(v, id, cam);
+    else {
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); window.Voice?.startFromStream(stream, id, cam); }
+      catch { $('heard').textContent = 'No microphone: type what you would say below.'; }
+    }
+    $('torchNote').textContent = 'Footage mode: recorded clip, analyzed live now.';
   } else {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     media().srcObject = new MediaStream(stream.getVideoTracks());
@@ -150,5 +157,5 @@ async function start() {
   if (lastView?.says?.length) Speech.say(lastView.says[lastView.says.length - 1].text);
 }
 $('go').addEventListener('click', () => start().catch((err) => { $('err').textContent = `Camera or microphone blocked: ${err.name}. You can still type below.`; }));
-if (FOOTAGE) { $('footageNote').hidden = false; $('go').textContent = 'Play the recorded clip (analyzed live)'; }
+if (FOOTAGE) { $('footageNote').hidden = false; $('footageLabel').hidden = false; $('go').textContent = 'Play the recorded clip (analyzed live)'; }
 if (!id || !cam) $('line').textContent = 'This link is missing its call code. Start a new call from the home page.'; else poll();

@@ -27,8 +27,11 @@ test('lock needs two centred, steady frames in a row', () => {
 });
 
 test('a dark frame asks for light before anything else', () => {
-  const g = guide({ cx: 0.5, cy: 0.5, area: 0.2 }, { luma: DARK_LUMA - 1 });
+  const g = guide(null, { luma: DARK_LUMA - 1 });
   assert.equal(g.state, 'dark'); assert.match(g.words, /light|flashlight/);
+  // Dim but SAM still outlines it: keep guiding. Near black: ask for light.
+  assert.equal(guide({ cx: 0.5, cy: 0.1, area: 0.2 }, { luma: DARK_LUMA - 10 }).arrow, 'up');
+  assert.equal(guide({ cx: 0.5, cy: 0.5, area: 0.2 }, { luma: 5 }).state, 'dark');
   assert.equal(guide(null).state, 'searching');
 });
 

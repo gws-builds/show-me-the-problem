@@ -28,7 +28,7 @@ export const LIMITS = {
   callsPerIpPerHour: 6,
   trackChecks: 8, // SAM re-checks while the caller moves the camera (each updates the guidance arrow)
   trackEveryMs: 1500,
-  hazardScans: 8, // camera hazard scans per call (Spark lists, SAM must agree)
+  hazardScans: 12, // camera hazard scans per call (2 min of camera at one per 10 s) (Spark lists, SAM must agree)
   scanEveryMs: 10_000,
 };
 
@@ -137,7 +137,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     c.scanning = true; c.scans++; c.lastScanAt = now();
     try {
       const r = await scanFrame(c.client, frame);
-      const n = c.session.keepFrame(frame.n);
+      const n = c.session.keepFrame(frame.n, frame.dataUrl);
       const cl = c.session.checklist;
       for (const id of r.clear) cl.set(id, 'clear', n, 'Nothing seen by Muse Spark in this frame');
       for (const f of r.findings) {
@@ -175,7 +175,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     /** Ends a call now (the caller hung up, or a test run finished); keeps its replay. */
     end(callId) { const c = calls.get(String(callId)); if (c) { calls.delete(c.id); c.voice?.end(); onEnd?.(c); } },
 
-    create({ ip = 'unknown', live = false } = {}) {
+    create({ ip = 'unknown', live = false, footage = null } = {}) {
       sweep();
       if (ledger.mode() !== 'live' && !live) throw new CallError('The live demo is resting to protect its credit. Recorded calls are on the console page.', 503, 'REPLAY_ONLY');
       if (calls.size >= LIMITS.maxLiveCalls) throw new CallError('Too many live calls right now. Try again in a few minutes.', 429, 'BUSY');
@@ -184,7 +184,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       ipHits.set(ip, [...hits, now()]);
       const c = {
         id: id(), camToken: id(), ownerToken: id(), createdAt: now(), turns: 0, busy: false, status: 'started', says: [], history: [], tracking: null,
-        pages: [], booking: null, annotated: null, latencies: [], voice: null, scans: 0, scanning: false, warned: new Set(), staged: false,
+        footage, pages: [], booking: null, annotated: null, latencies: [], voice: null, scans: 0, scanning: false, warned: new Set(), staged: false,
       };
       c.session = createSession({ now });
       c.client = makeClient(live);
@@ -193,6 +193,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         notifyOwner: async (m) => { c.pages.push({ ...m, at: now() }); c.session.log({ kind: 'owner_paged', reason: m.reason }); },
       };
       calls.set(c.id, c);
+      if (footage) c.session.log({ kind: 'footage', text: `Footage mode: recorded clip "${footage}" is played in the browser and its frames go to the models live.` });
       say(c, 'Hi, this is the office. Point your camera at the problem and tell me what is going on.', 'started');
       return { id: c.id, camToken: c.camToken, ownerToken: c.ownerToken };
     },
@@ -334,7 +335,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote, workOrder: c.booking ? null : workOrder(c.session, { slot: p.slot, quote: p.quote }) } : null,
         evidence: c.session.evidence.list(),
         booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
-        boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), latency: { p50: p50(c.latencies), n: c.latencies.length },
+        boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), footage: c.footage, latency: { p50: p50(c.latencies), n: c.latencies.length },
       };
     },
     frameOf(callId) { return get(callId).session.latestFrame()?.dataUrl ?? null; },

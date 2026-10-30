@@ -21,7 +21,8 @@ for (const k of cases) {
   if (only.length && !only.includes(k.id)) continue;
   const c = calls.create({ live: true });
   const img = 'data:image/jpeg;base64,' + fs.readFileSync(new URL(`eval/frames/${k.id}.jpg`, root)).toString('base64');
-  await calls.frame(c.id, c.camToken, img);
+  await calls.frame(c.id, c.camToken, img, 128);
+  await calls.scanDone(c.id); // camera hazard scan on the case photo (Spark lists, SAM must agree)
   await timed(() => calls.text(c.id, c.camToken, `${k.say} (I'm pointing the camera at the ${k.part}.)`));
   let v = calls.view(c.id);
   // One scripted follow-up when the agent asked a question, so quoting can be reached.
@@ -38,6 +39,10 @@ for (const k of cases) {
     : verifies.some((r) => r.action === 'quote') ? 'quote'
       : verifies.some((r) => r.action === 'ask_retake') || /closer|can't see|cannot see|retake|point the camera|move the camera/i.test(said) ? 'retake'
         : 'other';
+  const cam = (v.checklist ?? []).filter((x) => x.channel === 'camera');
+  const cameraFound = cam.filter((x) => x.status === 'found').map((x) => x.id);
+  const cameraUnconfirmed = cam.filter((x) => x.status === 'unconfirmed').map((x) => x.id);
+  const cameraEscalated = v.events.some((e) => e.kind === 'code_gate' && e.name === 'camera hazard');
   const blockedPrice = verifies.filter((r) => r.action === 'tech_confirms').length;
   const hits = ev.filter((e) => e.kind === 'sam' && e.boxes > 0 && (e.score ?? 1) >= 0.5);
   const samHit = hits.length > 0;
@@ -48,7 +53,7 @@ for (const k of cases) {
         : k.expect === 'out_of_scope' ? !/mow|walk (your|the) dog/i.test(said) || /only|can't|cannot|don't|do not/i.test(said)
           : outcome === k.expect;
   calls.end(c.id);
-  results.push({ id: k.id, expect: k.expect, outcome, pass, samHit, samMethod, blockedPrice, status: v.status, spentUsd: v.spentUsd, said });
+  results.push({ id: k.id, expect: k.expect, outcome, pass, samHit, samMethod, cameraFound, cameraUnconfirmed, cameraEscalated, blockedPrice, status: v.status, spentUsd: v.spentUsd, said });
   console.log(`${pass ? 'PASS' : 'FAIL'} ${k.id} expect=${k.expect} got=${outcome} sam=${samHit}${samMethod ? `(${samMethod})` : ''} $${v.spentUsd}`);
 }
 const n = results.length; const sum = (f) => results.filter(f).length;
@@ -59,6 +64,7 @@ const summary = {
   falseEscalations: sum((r) => r.expect !== 'escalate' && r.outcome === 'escalate'),
   samFoundPartMethods: Object.fromEntries(['text', 'alt noun', 'grounded', 'tap'].map((m) => [m, sum((r) => r.samMethod === m && !r.id.startsWith('jk'))])),
   turnLatencyMs: (() => { const a = [...turnMs].sort((x, y) => x - y); const q = (p) => a[Math.min(a.length - 1, Math.floor(p * a.length))]; return { turns: a.length, p50: q(0.5), p90: q(0.9) }; })(),
+  camera: { casesWithFound: sum((r) => r.cameraFound.length > 0), foundOn: results.filter((r) => r.cameraFound.length).map((r) => `${r.id}:${r.cameraFound.join('+')}`), unconfirmedOn: results.filter((r) => r.cameraUnconfirmed.length).map((r) => `${r.id}:${r.cameraUnconfirmed.join('+')}`), escalatedOnNonHazardCase: sum((r) => r.cameraEscalated && r.expect !== 'escalate') },
   samFoundPart: `${sum((r) => r.samHit && !r.id.startsWith('jk'))}/${sum((r) => !r.id.startsWith('jk'))}`,
   offListPricesBlocked: results.reduce((a, r) => a + r.blockedPrice, 0),
   totalSpentUsd: Math.round(results.reduce((a, r) => a + r.spentUsd, 0) * 10000) / 10000,

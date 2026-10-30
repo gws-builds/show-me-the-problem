@@ -47,8 +47,8 @@ export function createSession({ now = () => Date.now() } = {}) {
       if (top && (top.score ?? 1) >= 0.5 && meta.frameN != null) {
         const n = this.keepFrame(meta.frameN, meta.dataUrl);
         const last = evidence.list().filter((e) => e.kind === 'outline').at(-1);
-        // One entry per part and frame burst: replace-by-new only when the part or the method changes or 5 frames passed.
-        if (!last || last.part !== p || n - (last.frame ?? 0) >= 5 || last.method !== meta.method) {
+        // A new entry when the part or the method changes, or every 30 frames; entries are never edited.
+        if (!last || last.part !== p || last.method !== meta.method || n - (last.frame ?? 0) >= 30) {
           if (/valve/.test(p) && checklist.get('shutoff')) checklist.set('shutoff', 'clear', n, `Valve outlined by SAM at ${(top.score ?? 1).toFixed(2)}`);
           evidence.add({ kind: 'outline', part: p, method: meta.method, claim: `"${p}" outlined by SAM 3.1 (${meta.method}, confidence ${(top.score ?? 1).toFixed(2)})`, frame: n, confidence: top.score ?? 1, geo: top.geo, support: 'SAM mask on this frame' });
         }

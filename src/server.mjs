@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createLedger } from './budget.js';
 import { createClient } from './meta.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
-import { upgrade } from './ws.js';
+import { upgrade, connectWebSocket } from './ws.js';
 import { createVoiceSession } from './voice.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -25,7 +25,7 @@ const calls = createCalls({
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
     if (!c.turns) return;
-    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, staged: c.staged, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking, checklist: c.session.checklist.list().map(({ geo, ...x }) => x), evidence: c.session.evidence.list().map(({ geo, ...x }) => x), latency: c.latencies })); } catch { /* replay is optional */ }
+    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, staged: c.staged, footage: c.footage ?? null, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking, checklist: c.session.checklist.list().map(({ geo, ...x }) => x), evidence: c.session.evidence.list().map(({ geo, ...x }) => x), latency: c.latencies })); } catch { /* replay is optional */ }
   },
 });
 setInterval(() => calls.sweep(), 60_000).unref();
@@ -66,9 +66,32 @@ async function readBody(req, max) {
 const json = async (req, max) => { try { return JSON.parse((await readBody(req, max)).toString('utf8') || '{}'); } catch (e) { if (e instanceof CallError) throw e; throw new CallError('Bad JSON.'); } };
 const clientIp = (req) => (process.env.TRUST_PROXY === '1' ? String(req.headers['x-forwarded-for'] ?? '').split(',').pop().trim() : '') || req.socket.remoteAddress || 'unknown';
 
+// Footage mode: only the clips listed in public/footage/footage.json, with Range support (Safari needs it).
+const FOOTAGE = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/footage/footage.json'), 'utf8'));
+function sendClip(req, res, file) {
+  const f = path.join(ROOT, 'public/footage', file); const size = fs.statSync(f).size;
+  const m = String(req.headers.range ?? '').match(/^bytes=(\d*)-(\d*)$/);
+  if (!m) { res.writeHead(200, { ...HEADERS, 'Content-Type': 'video/mp4', 'Content-Length': size, 'Accept-Ranges': 'bytes' }); return fs.createReadStream(f).pipe(res); }
+  let start = m[1] ? Number(m[1]) : size - Number(m[2]); let end = m[1] && m[2] ? Number(m[2]) : size - 1;
+  start = Math.max(0, start); end = Math.min(size - 1, end);
+  if (start > end) { res.writeHead(416, { ...HEADERS, 'Content-Range': `bytes */${size}` }); return res.end(); }
+  res.writeHead(206, { ...HEADERS, 'Content-Type': 'video/mp4', 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes' });
+  fs.createReadStream(f, { start, end }).pipe(res);
+}
+
 async function route(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  if (req.method === 'GET' && p === '/api/footage') return send(res, 200, FOOTAGE);
+  const clip = p.match(/^\/footage\/([a-z0-9-]+\.mp4)$/);
+  if (req.method === 'GET' && clip && FOOTAGE.some((x) => x.file === clip[1])) return sendClip(req, res, clip[1]);
+  if (req.method === 'GET' && p === '/api/runs') {
+    // Replay fallback: the latest recorded calls (events and lines only, never media).
+    const dir = path.join(DATA, 'runs');
+    const list = fs.readdirSync(dir).filter((f) => /^[a-f0-9]{32}\.json$/.test(f)).map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((a, b) => b.t - a.t).slice(0, 10)
+      .map(({ f }) => { try { const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); return { id: r.id, at: r.at, status: r.status, staged: Boolean(r.staged), footage: r.footage ?? null, turns: (r.says ?? []).length }; } catch { return null; } }).filter(Boolean);
+    return send(res, 200, list);
+  }
   if (req.method === 'GET' && STATIC[p]) {
     const [file, type] = STATIC[p];
     return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', file)), `${type}; charset=utf-8`);
@@ -76,7 +99,8 @@ async function route(req, res) {
   if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size() });
   if (req.method === 'POST' && p === '/api/calls') {
     const staff = STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY;
-    return send(res, 200, calls.create({ ip: clientIp(req), live: Boolean(staff) }));
+    const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
+    return send(res, 200, calls.create({ ip: clientIp(req), live: Boolean(staff), footage }));
   }
   const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|staged|decision|still|annotated|frames\/\d{1,6}))?$/);
   if (m) {
@@ -146,7 +170,7 @@ server.on('upgrade', (req, socket) => {
       calls.voiceAuth(callId, String(token ?? ''));
       session = createVoiceSession({
         calls, callId, client: calls.clientOf(callId), apiKey: process.env.META_API_KEY,
-        openUpstream: (url) => new WebSocket(url), toClient,
+        openUpstream: (url) => connectWebSocket(url), toClient,
       });
       calls.setVoice(callId, session);
       clearTimeout(authTimer);
