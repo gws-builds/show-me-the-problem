@@ -50,11 +50,16 @@ function fakeUpstream() {
   return up;
 }
 
+// Hazard scans (Spark vision without tools) see nothing unless a test says otherwise.
+let HAZARD_SCAN = () => '{"findings":[]}';
+const setHazardScan = (fn) => { HAZARD_SCAN = fn; };
+
 function setup(agent = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-v-'));
   const ledger = createLedger(path.join(dir, 'l.json'));
   const fetchImpl = async (url, init) => {
     const body = JSON.parse(init.body);
+    if (body.model !== 'sam-3.1' && !body.tools) return new Response(JSON.stringify({ output_text: HAZARD_SCAN(body), usage: { input_tokens: 500, output_tokens: 20 } }));
     if (body.model === 'sam-3.1') return new Response(JSON.stringify({ output_text: '<0f>0<|box;x1=170;y1=100;x2=470;y2=540;w=640;h=640;c=0.9|>' }));
     const next = agent.shift();
     const output = next ? [{ type: 'function_call', call_id: 'c', name: next[0], arguments: JSON.stringify(next[1]) }] : [];

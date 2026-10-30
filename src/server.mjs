@@ -25,7 +25,7 @@ const calls = createCalls({
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
     if (!c.turns) return;
-    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking })); } catch { /* replay is optional */ }
+    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, staged: c.staged, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking, checklist: c.session.checklist.list().map(({ geo, ...x }) => x), latency: c.latencies })); } catch { /* replay is optional */ }
   },
 });
 setInterval(() => calls.sweep(), 60_000).unref();
@@ -78,7 +78,7 @@ async function route(req, res) {
     const staff = STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY;
     return send(res, 200, calls.create({ ip: clientIp(req), live: Boolean(staff) }));
   }
-  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|decision|still|annotated))?$/);
+  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|staged|decision|still|annotated|frames\/\d{1,6}))?$/);
   if (m) {
     const [, id, action] = m;
     const cam = String(req.headers['x-cam-token'] ?? ''); const owner = String(req.headers['x-owner-token'] ?? '');
@@ -99,6 +99,12 @@ async function route(req, res) {
       if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
       return send(res, 200, await calls.speech(id, cam, await readBody(req, LIMITS.wavBytes)));
     }
+    if (req.method === 'GET' && action?.startsWith('frames/')) {
+      const d = calls.keptFrameOf(id, action.split('/')[1]);
+      if (!d) return send(res, 404, { error: 'No such evidence frame.' });
+      return send(res, 200, Buffer.from(d.split(',')[1], 'base64'), 'image/jpeg');
+    }
+    if (req.method === 'POST' && action === 'staged') return send(res, 200, calls.setStaged(id, cam, (await json(req, 200)).staged === true));
     if (req.method === 'POST' && action === 'tap') { const b = await json(req, 200); return send(res, 200, await calls.tap(id, cam, b.x, b.y)); }
     if (req.method === 'POST' && action === 'text') return send(res, 200, await calls.text(id, cam, (await json(req, 2000)).text));
     if (req.method === 'POST' && action === 'decision') return send(res, 200, await calls.decide(id, owner, (await json(req, 200)).approve === true));

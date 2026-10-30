@@ -13,6 +13,8 @@ import { createSession, callerTurn, MAX_TURNS } from './agent.js';
 import { runTool } from './tools.js';
 import { hazardIn } from './verifier.js';
 import { guide, DARK_LUMA } from './guidance.js';
+import { scanFrame, severityOf } from './hazards.js';
+import { maskGeometry } from './mask.js';
 
 export const LIMITS = {
   frameBytes: 400_000, // data URL length, ~300 KB JPEG
@@ -25,9 +27,13 @@ export const LIMITS = {
   callsPerIpPerHour: 6,
   trackChecks: 8, // SAM re-checks while the caller moves the camera (each updates the guidance arrow)
   trackEveryMs: 1500,
+  hazardScans: 8, // camera hazard scans per call (Spark lists, SAM must agree)
+  scanEveryMs: 10_000,
 };
 
 const id = (n = 16) => randomBytes(n).toString('hex');
+const article = (noun) => `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
+const maskGeometryOf = (rec) => maskGeometry(rec);
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 export class CallError extends Error {
@@ -77,13 +83,16 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     if (c.turns >= MAX_TURNS) { say(c, 'Let me get the owner to call you back to finish this.', 'handoff'); return; }
     c.turns++;
     c.session.heard(line);
+    const cl = c.session.checklist;
     // Code, not the model, decides that a hazard ends the call's quoting.
     if (hazardIn(line)) {
+      cl.set('words', 'found', null, `Caller said: "${line.slice(0, 120)}"`);
       const r = await runTool('escalate', { reason: `Caller said: ${line.slice(0, 200)}` }, c.ctx);
       c.session.log({ kind: 'code_gate', name: 'hazard', text: 'Hazard words heard: escalated in code before any model call.' });
       say(c, r.say, 'escalated');
       return;
     }
+    cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
     c.history.push({ role: 'user', content: `Caller: ${line}` });
     try {
       const r = await callerTurn(c.ctx, c.history);
@@ -115,6 +124,41 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     });
   }
 
+  // Camera hazards: Spark lists what it sees, SAM must outline it (>= 0.5) before anything happens.
+  // Runs beside the conversation, never blocking it. Escalating categories end quoting and page
+  // the owner; flammables near heat are a spoken warning plus an owner note, and the call goes on.
+  async function scan(c) {
+    const frame = c.session.latestFrame(); if (!frame) return;
+    c.scanning = true; c.scans++; c.lastScanAt = now();
+    try {
+      const r = await scanFrame(c.client, frame);
+      const n = c.session.keepFrame(frame.n);
+      const cl = c.session.checklist;
+      for (const id of r.clear) cl.set(id, 'clear', n, 'Nothing seen by Muse Spark in this frame');
+      for (const f of r.findings) {
+        const geo = f.record ? maskGeometryOf(f.record) : null;
+        if (f.status === 'found') cl.set(f.category, 'found', n, `${f.object}${f.near ? ` near ${f.near}` : ''}: ${f.why} (Spark saw it; SAM outlined it at ${f.score.toFixed(2)})`, { geo, object: f.object });
+        else cl.set(f.category, 'unconfirmed', n, `Spark saw "${f.object}", SAM could not outline it (${f.score.toFixed(2)}): not escalated`);
+      }
+      c.session.log({ kind: 'hazard_scan', frame: n, staged: Boolean(c.staged), clear: r.clear, findings: r.findings.map(({ category, object, near, score, status }) => ({ category, object, near, score: Number(score.toFixed(2)), status })) });
+      for (const f of r.findings.filter((x) => x.status === 'found')) {
+        if (c.warned.has(f.category)) continue;
+        c.warned.add(f.category);
+        if (severityOf(f.category) === 'escalate') {
+          await c.ctx.notifyOwner({ urgent: true, reason: `Camera hazard (${f.category}): ${f.object} in frame ${n}, confirmed by Spark and SAM.` });
+          c.session.log({ kind: 'code_gate', name: 'camera hazard', text: `${f.category}: ${f.object} seen by Spark and outlined by SAM (${f.score.toFixed(2)}). Escalated in code.` });
+          say(c, `Stop for a moment: I can see ${article(f.object)} that looks unsafe (${f.why || f.category}). I am getting the owner on this now. Please do not touch it.`, 'escalated');
+        } else {
+          await c.ctx.notifyOwner({ urgent: false, reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.` });
+          c.session.log({ kind: 'code_gate', name: 'camera warning', text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.` });
+          say(c, `Before anything else: I can see ${article(f.object)}${f.near ? ` close to the ${f.near}` : ''}. Please move it away from the heat.`, c.status);
+        }
+      }
+    } catch (err) {
+      c.session.log({ kind: 'error', text: `hazard scan: ${String(err.message).slice(0, 120)}` });
+    } finally { c.scanning = false; }
+  }
+
   function sweep() {
     for (const [k, c] of calls) if (now() - c.createdAt > LIMITS.callTtlMs) { calls.delete(k); c.voice?.end(); onEnd?.(c); }
     for (const [ip, hits] of ipHits) { const keep = hits.filter((t) => now() - t < 3_600_000); if (keep.length) ipHits.set(ip, keep); else ipHits.delete(ip); }
@@ -135,7 +179,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       ipHits.set(ip, [...hits, now()]);
       const c = {
         id: id(), camToken: id(), ownerToken: id(), createdAt: now(), turns: 0, busy: false, status: 'started', says: [], history: [], tracking: null,
-        pages: [], booking: null, annotated: null, latencies: [], voice: null,
+        pages: [], booking: null, annotated: null, latencies: [], voice: null, scans: 0, scanning: false, warned: new Set(), staged: false,
       };
       c.session = createSession({ now });
       c.client = makeClient(live);
@@ -166,6 +210,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         say(c, g.words, c.status);
       }
       c.prevDark = dark;
+      if (l != null) {
+        const n = c.session.latestFrame().n;
+        if (dark) c.session.checklist.set('lighting', 'found', c.session.keepFrame(n), `Too dark: light ${l}/255`);
+        else if (c.session.checklist.get('lighting').status !== 'clear' || n % 10 === 0) c.session.checklist.set('lighting', 'clear', c.session.keepFrame(n), `Light ${l}/255`);
+      }
+      if (!dark && !c.scanning && c.scans < LIMITS.hazardScans && (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs)) c.scanP = scan(c);
       await track(c).catch(() => {});
       return { ok: true };
     },
@@ -219,6 +269,14 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         return { heard: line };
       });
     },
+    /** The caller marks the scene as staged: a visible label on the call page, console and replay. */
+    setStaged(callId, token, staged) {
+      const c = asCaller(callId, token); c.staged = Boolean(staged);
+      c.session.log({ kind: 'staged', on: c.staged, text: c.staged ? 'Caller marked this as a staged scene.' : 'Staged label removed.' });
+      return { ok: true, staged: c.staged };
+    },
+    /** Waits for a running hazard scan (eval and tests). */
+    async scanDone(callId) { await get(callId).scanP; },
     voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
     setVoice(callId, v) { const c = calls.get(String(callId)); if (c) c.voice = v; },
     recentSays(callId, n = 2) { const c = calls.get(String(callId)); return c ? c.says.slice(-n).map((x) => x.text) : []; },
@@ -268,11 +326,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         id: c.id, now: now(), status: c.status, turns: c.turns, spentUsd: Math.round(c.client.spent() * 10000) / 10000,
         says: c.says, events: c.session.events(), pages: c.pages.map(({ reason, at }) => ({ reason, at })),
         pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote } : null,
-        booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()),
+        booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
         boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), latency: { p50: p50(c.latencies), n: c.latencies.length },
       };
     },
     frameOf(callId) { return get(callId).session.latestFrame()?.dataUrl ?? null; },
+    keptFrameOf(callId, n) { return get(callId).session.keptFrame(Number(n)); },
     annotatedOf(callId, token) { return asOwner(callId, token).annotated; },
   };
 }

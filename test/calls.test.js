@@ -13,6 +13,10 @@ const JPEG = 'data:image/jpeg;base64,' + 'A'.repeat(400);
 const WAV = (() => { const b = Buffer.alloc(44 + 32000); b.write('RIFF', 0); b.write('WAVE', 8); b.write('fmt ', 12); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(16000, 24); b.writeUInt32LE(32000, 28); b.write('data', 36); b.writeUInt32LE(32000, 40); return b; })();
 
 // A scripted Meta API. `agent` answers Spark turns in order; `sam` says how many boxes SAM returns per call.
+// Hazard scans (Spark vision without tools) see nothing unless a test says otherwise.
+let HAZARD_SCAN = () => '{"findings":[]}';
+const setHazardScan = (fn) => { HAZARD_SCAN = fn; };
+
 function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-calls-'));
   const file = path.join(dir, 'ledger.json');
@@ -23,6 +27,7 @@ function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips
     if (url.endsWith('/asr/transcribe')) { counts.asr++; return new Response(heard); }
     if (url.endsWith('/images/edits')) { counts.image++; return new Response(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgo=' }] })); }
     const body = JSON.parse(init.body);
+    if (body.model !== 'sam-3.1' && !body.tools) return new Response(JSON.stringify({ output_text: HAZARD_SCAN(body), usage: { input_tokens: 500, output_tokens: 20 } }));
     if (body.model === 'sam-3.1') { counts.sam++; const n = sam(counts.sam); return new Response(JSON.stringify({ output_text: Array.from({ length: n }, (_, i) => `<0f>${i + 1}<|box;x1=170;y1=100;x2=470;y2=540;w=640;h=640;c=0.9|>`).join('') })); }
     counts.spark++;
     const next = agent.shift();

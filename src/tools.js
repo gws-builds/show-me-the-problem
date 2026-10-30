@@ -60,7 +60,7 @@ export async function runTool(name, args, ctx) {
       const boxes = session.boxes().map((b) => ({ id: String(b.ordinal), label: session.lastPart(), score: b.score ?? 1 }));
       const v = verify(
         { equipment: args.equipment, issue: args.issue, priceListId: args.price_list_id, boxId: String(args.box_ordinal), notes: args.notes },
-        { priceList: ctx.priceList, boxes, callerText: session.callerText() },
+        { priceList: ctx.priceList, boxes, callerText: session.callerText(), cameraHazard: session.checklist?.foundEscalating() ?? false },
       );
       session.log({ kind: 'verify', result: v });
       if (v.action === 'escalate') { await ctx.notifyOwner?.({ urgent: true, reason: v.reason, transcript: session.callerText() }); return { output: v, say: v.reason, status: 'escalated' }; }
@@ -71,7 +71,7 @@ export async function runTool(name, args, ctx) {
       await ctx.notifyOwner?.({ urgent: true, reason: args.reason, transcript: session.callerText() });
       return { output: { escalated: true }, say: 'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.', status: 'escalated' };
     case 'request_booking': {
-      if (hazardIn(session.callerText())) return { output: { refused: 'hazard on this call' }, say: 'The owner is calling you about this now. No visit is booked until they do.', status: 'escalated' };
+      if (hazardIn(session.callerText()) || session.checklist?.foundEscalating()) return { output: { refused: 'hazard on this call' }, say: 'The owner is calling you about this now. No visit is booked until they do.', status: 'escalated' };
       const slot = ctx.calendar.find((s) => s.id === args.slot_id);
       if (!slot) return { output: { error: 'unknown slot' } };
       session.setPendingBooking({ slot, brief: String(args.brief).slice(0, 800), quote: session.quote() });

@@ -48,12 +48,12 @@ export function hazardIn(...texts) {
  * boxes: SAM 3.1 detections [{ id, label, score }].
  * Returns { action: 'quote' | 'escalate' | 'ask_retake' | 'tech_confirms', ... }.
  */
-export function verify(proposal, { priceList = [], boxes = [], callerText = '', photoText = '' } = {}) {
+export function verify(proposal, { priceList = [], boxes = [], callerText = '', photoText = '', cameraHazard = false } = {}) {
   const checks = [];
   const pass = (name, ok, detail) => { checks.push({ name, ok, detail }); return ok; };
 
   // Hazards first: no price is ever given once one is seen.
-  if (!pass('no hazard', !(proposal?.hazardSeen === true || hazardIn(callerText, proposal?.notes, proposal?.issue, photoText)), 'hazard words or flag')) {
+  if (!pass('no hazard', !(cameraHazard || proposal?.hazardSeen === true || hazardIn(callerText, proposal?.notes, proposal?.issue, photoText)), cameraHazard ? 'camera hazard confirmed by Spark and SAM' : 'hazard words or flag')) {
     return { action: 'escalate', reason: 'Possible hazard: the owner is being called now. No price is given.', checks };
   }
   // The photo must show something SAM found with confidence.

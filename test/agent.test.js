@@ -15,6 +15,7 @@ function fakeApi(script) {
   const calls = [];
   const fetchImpl = async (url, init) => {
     const body = JSON.parse(init.body); calls.push(body);
+    if (body.model !== 'sam-3.1' && !body.tools) return new Response(JSON.stringify({ output_text: '{"findings":[]}' }));
     if (body.model === 'sam-3.1') return new Response(JSON.stringify({ output_text: '1<|box;x1=10;y1=20;x2=300;y2=600;w=640;h=640|>' }));
     const next = script.shift();
     const output = next ? [{ type: 'function_call', call_id: `c${calls.length}`, name: next[0], arguments: JSON.stringify(next[1]) }] : [{ type: 'message', content: [{ type: 'output_text', text: 'hi' }] }];

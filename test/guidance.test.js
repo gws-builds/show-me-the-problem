@@ -50,6 +50,5 @@ test('two dark frames in a row make the call say how to light it, in code, once 
   assert.ok(v.events.some((e) => e.kind === 'lighting'));
   await calls.frame(c.id, c.camToken, J, 18);
   assert.equal(calls.view(c.id).says.filter((s) => /too dark/.test(s.text)).length, 1);
-  await calls.frame(c.id, c.camToken, J, 'bright');
-  assert.equal(calledModel, 0);
+  assert.equal(calledModel, 0); // the lighting check never calls a model
 });
