@@ -64,6 +64,12 @@ if [[ -z "${META_API_KEY:-}" ]]; then
 fi
 [[ -n "${META_API_KEY:-}" ]] || die "META_API_KEY is empty"
 echo "Meta key: loaded"
+# Natural voice (Deepgram Aura-2): DEEPGRAM_API_KEY from env or ../.secrets/member_deepgram.env; browser voice without it.
+DG_FILE="${DEEPGRAM_ENV_FILE:-$ROOT/../.secrets/member_deepgram.env}"
+if [[ -z "${DEEPGRAM_API_KEY:-}" && -f "$DG_FILE" ]]; then
+  DEEPGRAM_API_KEY="$(sed -n 's/^MEMBER_DEEPGRAM_API_TOKEN[[:space:]]*=[[:space:]]*//p' "$DG_FILE" | tr -d "\"'" | head -1)"; export DEEPGRAM_API_KEY
+fi
+[[ -n "${DEEPGRAM_API_KEY:-}" ]] && echo "Natural voice: on" || echo "Natural voice: off (browser voice)"
 
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then die "port $PORT is already in use (another server?)"; fi
 

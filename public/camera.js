@@ -13,18 +13,41 @@ let stream = null; let spoken = 0; let lastView = null; let lastSaidGuide = ''; 
 const media = () => $('v');
 
 // ---- voice out ----
+// A natural voice (server-side, only the agent's own lines); the browser voice if that fails.
+// iPhones only play audio after a tap, so the first tap unlocks one reused <audio> element.
+const player = new Audio(); player.preload = 'auto';
+let sayN = 0;
+function unlockAudio() { try { player.src = '/silence.mp3'; player.play().catch(() => {}); } catch { /* no audio */ } }
+function browserSay(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text); u.rate = 1.05;
+    u.onstart = () => { Speech.speaking = true; Speech.current = text; };
+    u.onend = u.onerror = () => { Speech.speaking = false; };
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch { /* text is on screen anyway */ }
+}
 const Speech = {
-  speaking: false, current: '',
-  say(text) {
-    try {
-      const u = new SpeechSynthesisUtterance(text); u.rate = 1.05;
-      u.onstart = () => { Speech.speaking = true; Speech.current = text; };
-      u.onend = u.onerror = () => { Speech.speaking = false; };
-      speechSynthesis.cancel(); speechSynthesis.speak(u);
-    } catch { /* text is on screen anyway */ }
+  speaking: false, current: '', natural: true,
+  async say(text) {
+    const n = ++sayN; Speech.stop(); Speech.speaking = true; Speech.current = text;
+    if (Speech.natural) {
+      try {
+        const r = await api('/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        if (n !== sayN) return; // a newer line arrived while this one was being made
+        if (r.ok) {
+          const url = URL.createObjectURL(await r.blob()); if (n !== sayN) { URL.revokeObjectURL(url); return; }
+          player.onended = player.onerror = () => { URL.revokeObjectURL(url); if (n === sayN) Speech.speaking = false; };
+          player.src = url; await player.play(); return;
+        }
+        if (r.status === 503) Speech.natural = false; // no key or cap reached: browser voice from now on
+      } catch { /* fall through to the browser voice */ }
+      if (n !== sayN) return;
+    }
+    browserSay(text);
   },
-  stop() { try { speechSynthesis.cancel(); } catch { /* none */ } Speech.speaking = false; },
+  stop() { try { player.pause(); speechSynthesis.cancel(); } catch { /* none */ } Speech.speaking = false; },
 };
+document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;
 
 // ---- frames ----

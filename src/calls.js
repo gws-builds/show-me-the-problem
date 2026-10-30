@@ -13,6 +13,9 @@ import { createSession, callerTurn, MAX_TURNS } from './agent.js';
 import { runTool } from './tools.js';
 import { hazardIn } from './verifier.js';
 import { guide, DARK_LUMA } from './guidance.js';
+
+// Fixed lines the caller page may speak besides the agent's own (recording cues, the lock).
+export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can stop recording now.', 'Got it. Hold still.']);
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
@@ -351,6 +354,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     },
     /** The newest call (the console follows it during a recording session). */
     latest() { let best = null; for (const c of calls.values()) if (!best || c.createdAt >= best.createdAt) best = c; return best ? { id: best.id } : null; },
+    /** Natural voice out: only lines this call's agent said, guidance it showed, or the fixed recording cues. */
+    sayable(callId, token, text) {
+      const c = asCaller(callId, token); const t = String(text ?? '');
+      if (!t || t.length > 600) return false;
+      return SPOKEN_CUES.has(t) || c.says.some((s) => s.text === t) || Boolean(c.shownGuide?.has(t));
+    },
     voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice && !c.voice.closed) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
     setVoice(callId, v) { const c = calls.get(String(callId)); if (c) c.voice = v; },
     recentSays(callId, n = 2) { const c = calls.get(String(callId)); return c ? c.says.slice(-n).map((x) => x.text) : []; },
@@ -397,6 +406,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     view(callId) {
       const c = get(callId);
       const p = c.session.pendingBooking();
+      const g = c.session.guidance();
+      if (g?.words) { c.shownGuide ??= new Set(); if (c.shownGuide.size < 200) c.shownGuide.add(g.words); }
       return {
         id: c.id, now: now(), status: c.status, turns: c.turns, spentUsd: Math.round(c.client.spent() * 10000) / 10000,
         says: c.says, events: c.session.events(), pages: c.pages.map(({ reason, at, urgent }) => ({ reason, at, urgent })),

@@ -11,6 +11,7 @@ import { createCalls, CallError, LIMITS } from './calls.js';
 import { upgrade, connectWebSocket } from './ws.js';
 import { createVoiceSession } from './voice.js';
 import { createGate, writeCode, cookieValue } from './gate.js';
+import { createTts } from './tts.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
@@ -23,6 +24,7 @@ setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
 // The owner of the deployment can open live calls past the public limits with this header.
 const STAFF_KEY = process.env.STAFF_KEY || '';
+const tts = createTts();
 
 const calls = createCalls({
   ledger, priceList,
@@ -46,6 +48,7 @@ const STATIC = {
   '/owner.js': ['owner.js', 'text/javascript'],
   '/overlay.js': ['overlay.js', 'text/javascript'],
   '/voice.js': ['voice.js', 'text/javascript'],
+  '/silence.mp3': ['silence.mp3', 'audio/mpeg'],
   '/pcm-worklet.js': ['pcm-worklet.js', 'text/javascript'],
   '/go': ['go.html', 'text/html'],
   '/go.js': ['go.js', 'text/javascript'],
@@ -133,7 +136,7 @@ async function route(req, res) {
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
     return send(res, 200, calls.create({ ip: key, live: Boolean(staff), footage }));
   }
-  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|staged|tour|decision|still|annotated|frames\/\d{1,6}))?$/);
+  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|say|text|tap|staged|tour|decision|still|annotated|frames\/\d{1,6}))?$/);
   if (m) {
     const [, id, action] = m;
     const cam = String(req.headers['x-cam-token'] ?? ''); const owner = String(req.headers['x-owner-token'] ?? '');
@@ -158,6 +161,13 @@ async function route(req, res) {
       const d = calls.keptFrameOf(id, action.split('/')[1]);
       if (!d) return send(res, 404, { error: 'No such evidence frame.' });
       return send(res, 200, Buffer.from(d.split(',')[1], 'base64'), 'image/jpeg');
+    }
+    if (req.method === 'POST' && action === 'say') {
+      const text = String((await json(req, 1400)).text ?? '');
+      if (!calls.sayable(id, cam, text)) return send(res, 403, { error: 'Only the agent\'s own lines are spoken.', code: 'NOT_SAYABLE' });
+      const audio = await tts.speak(id, text).catch(() => null);
+      if (!audio) return send(res, 503, { error: 'Natural voice unavailable; the browser voice is used.', code: 'NO_TTS' });
+      return send(res, 200, audio, 'audio/mpeg');
     }
     if (req.method === 'POST' && action === 'tour') return send(res, 200, calls.tour(id, cam, String((await json(req, 200)).room ?? 'auto')));
     if (req.method === 'POST' && action === 'staged') return send(res, 200, calls.setStaged(id, cam, (await json(req, 200)).staged === true));
