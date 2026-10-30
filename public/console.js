@@ -104,7 +104,7 @@ if (page === 'console') {
     const img = $('still'); const v = lastView; if (!v) return;
     const t = v.tour;
     Overlay.draw($('ov'), img.naturalWidth, img.naturalHeight, { records: v.boxes ?? [], part: v.part, guidance: v.guidance, showGuidance: true,
-      hazards: (v.checklist ?? []).filter((c) => c.geo && c.status === 'found').map((c) => ({ label: c.label, geo: c.geo, status: c.status })),
+      hazards: (v.checklist ?? []).filter((c) => c.geo && c.status === 'found').map((c) => ({ label: Overlay.hazardLabel(c), geo: c.geo, status: c.status })),
       tourItems: t ? t.found.filter((f) => f.geo && f.geoFrame === t.lastFrame).map((f) => ({ geo: f.geo, label: `${f.label} · ${f.statusWords}`, status: f.status })) : [] });
   };
   async function poll() {

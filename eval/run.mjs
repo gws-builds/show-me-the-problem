@@ -17,6 +17,13 @@ const ledger = createLedger(new URL('.data/ledger.json', root).pathname, { sessi
 const calls = createCalls({ ledger, priceList, makeClient: () => createClient({ ledger, live: true }) });
 const FOLLOW_UP = 'It started a couple of days ago. Nothing else is wrong. What would it cost and when can you come?';
 const results = []; const turnMs = [];
+// Each finished case is also appended here, so a crashed run keeps what it measured.
+const PROGRESS = new URL('.data/eval_progress.jsonl', root);
+const keep = (r) => { results.push(r); fs.appendFileSync(PROGRESS, `${JSON.stringify(r)}\n`); };
+// EVAL_RESUME=1: cases already in the progress file are not run again (no second spend).
+const done = process.env.EVAL_RESUME === '1' && fs.existsSync(PROGRESS) ? fs.readFileSync(PROGRESS, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+if (done.length) results.push(...done);
+if (process.env.EVAL_RESUME !== '1') fs.rmSync(PROGRESS, { force: true });
 const timed = async (fn) => { const t0 = Date.now(); await fn(); turnMs.push(Date.now() - t0); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const frameOf = (k) => 'data:image/jpeg;base64,' + fs.readFileSync(new URL(`eval/frames/${k.id}.jpg`, root)).toString('base64');
@@ -61,9 +68,10 @@ async function sceneCase(k) {
 
 for (const k of cases) {
   if (only.length && !only.includes(k.id)) continue;
+  if (done.some((r) => r.id === k.id)) continue;
   if (k.mode === 'tour' || k.expect === 'warning' || k.expect === 'no_warning') {
     const r = await (k.mode === 'tour' ? tourCase(k) : sceneCase(k));
-    results.push(r);
+    keep(r);
     console.log(`${r.pass ? 'PASS' : 'FAIL'} ${k.id} expect=${r.expect} got=${r.outcome}${r.namedExpected ? ` named=${r.namedExpected} [${r.named.join(', ')}]` : ''} $${r.spentUsd}`);
     continue;
   }
@@ -101,7 +109,7 @@ for (const k of cases) {
         : k.expect === 'out_of_scope' ? !/mow|walk (your|the) dog/i.test(said) || /only|can't|cannot|don't|do not/i.test(said)
           : outcome === k.expect;
   calls.end(c.id);
-  results.push({ id: k.id, mode: 'call', expect: k.expect, outcome, pass, samHit, samMethod, cameraFound, cameraUnconfirmed, cameraEscalated, blockedPrice, status: v.status, spentUsd: v.spentUsd, said });
+  keep({ id: k.id, mode: 'call', expect: k.expect, outcome, pass, samHit, samMethod, cameraFound, cameraUnconfirmed, cameraEscalated, blockedPrice, status: v.status, spentUsd: v.spentUsd, said });
   console.log(`${pass ? 'PASS' : 'FAIL'} ${k.id} expect=${k.expect} got=${outcome} sam=${samHit}${samMethod ? `(${samMethod})` : ''} $${v.spentUsd}`);
 }
 const n = results.length; const sum = (f) => results.filter(f).length;

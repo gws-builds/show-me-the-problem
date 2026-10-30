@@ -52,7 +52,7 @@ function drawOverlay() {
   const ageMs = g?.at && view.now ? (view.now - g.at) + (Date.now() - view.receivedAt) : 0;
   Overlay.draw($('ov'), v.videoWidth, v.videoHeight, {
     records: view?.boxes ?? [], part: view?.part, guidance: g, showGuidance: Boolean(view?.tracking || g?.state === 'dark' || g?.state === 'locked'),
-    hazards: (view?.checklist ?? []).filter((c) => c.geo && (c.status === 'found')).map((c) => ({ label: c.label, geo: c.geo, status: c.status })),
+    hazards: (view?.checklist ?? []).filter((c) => c.geo && (c.status === 'found')).map((c) => ({ label: Overlay.hazardLabel(c), geo: c.geo, status: c.status })),
     tourItems: tourItems(view),
     ageMs: Math.max(0, ageMs),
   });

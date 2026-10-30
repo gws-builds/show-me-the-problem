@@ -96,5 +96,9 @@ window.Overlay = (() => {
     }
   }
 
-  return { draw, fit };
+  // Short on-video label for a confirmed hazard: what SAM outlined and why it matters.
+  const SHORT = { flammables: 'flammable near heat', water_electric: 'water near electrical', wiring: 'exposed wiring', scorch: 'scorch or melting', combustion: 'vent pipe gap' };
+  const hazardLabel = (c) => `${c.object ? `${c.object} · ` : ''}${SHORT[c.id] ?? c.label}`;
+
+  return { draw, fit, hazardLabel };
 })();

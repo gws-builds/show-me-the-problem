@@ -155,6 +155,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       await c.ctx.notifyOwner({ urgent: false, reason: `Camera note (${f.category}): ${f.object}, frame ${n}. Not connected to power, so not escalated.` });
       c.session.log({ kind: 'code_gate', name: 'camera attention', text: `${f.object}: bare wire on a cord that is not connected to power. Needs attention, not escalated (knowledge-base threshold).` });
       say(c, `I can see bare wire on ${article(f.object)} that does not look plugged in. Please keep it unplugged and don't use it; the technician should replace it.`, c.status);
+      // The agent hears the code's judgement, so it does not escalate the same sign again without new evidence.
+      c.history.push({ role: 'user', content: `[camera check, code] ${f.object}: bare wire on a loose cord or strip that is NOT connected to power (frame ${n}). Knowledge-base threshold: needs attention, not an emergency. Do not escalate this sign again unless you see it plugged in, in a wall box or panel, or the caller reports sparks, heat or smoke. Advise not to use it; the technician replaces it.` });
     } else {
       await c.ctx.notifyOwner({ urgent: false, reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.` });
       c.session.log({ kind: 'code_gate', name: 'camera warning', text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.` });

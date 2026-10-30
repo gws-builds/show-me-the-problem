@@ -18,7 +18,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, '.data', 'sim');
 const PW = process.env.PLAYWRIGHT_PATH || '/opt/homebrew/lib/node_modules/playwright/index.mjs';
-const { chromium, webkit } = await import(PW);
+const { chromium } = await import(PW);
+// WebKit can come from another local Playwright whose browser build is already installed (no download).
+const { webkit } = await import(process.env.PLAYWRIGHT_WEBKIT_PATH || PW);
 const only = new Set(process.argv.slice(2));
 const want = (x) => !only.size || only.has(x);
 fs.mkdirSync(OUT, { recursive: true });
@@ -102,9 +104,11 @@ async function scenarioB(srv, m) {
     const errors = []; page.on('pageerror', (e) => errors.push(String(e.message)));
     await startTake(page, srv, 'Faucet drip (main take)');
     await page.click('#recording');
-    const t0 = Date.now(); let v = null; const states = new Set();
+    const t0 = Date.now(); let v = null; const states = new Set(); let maxOverlay = 0;
+    const overlayPixels = () => page.evaluate(() => { const c = document.getElementById('ov'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) n++; return n; });
     while (Date.now() - t0 < 90_000) {
       await sleep(1500); v = await view(page);
+      const px = await overlayPixels(); if (px > maxOverlay) { maxOverlay = px; await page.locator('.stage').screenshot({ path: path.join(OUT, 'B_voice_outline.png') }); }
       states.add(await page.textContent('#vstate'));
       const heard = (v?.events ?? []).some((e) => e.kind === 'caller');
       const outlined = (v?.events ?? []).some((e) => e.kind === 'sam' && e.boxes > 0 && (e.score ?? 1) >= 0.5);
@@ -118,10 +122,10 @@ async function scenarioB(srv, m) {
     r.voiceLatencyMs = (v?.events ?? []).filter((e) => e.kind === 'latency' && e.channel === 'voice').map((e) => e.ms);
     const sam = (v?.events ?? []).filter((e) => e.kind === 'sam');
     r.samOutlines = sam.map((e) => `${e.part}:${e.method}:${e.boxes}@${e.score != null ? Number(e.score).toFixed(2) : '-'}`);
-    r.outlineOnScreen = await page.evaluate(() => { const c = document.getElementById('ov'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) n++; return n; });
+    r.outlinePixelsOnScreenMax = maxOverlay; // outlines fade 4 s after their frame, so the peak is what the caller saw
     await page.locator('.stage').screenshot({ path: path.join(OUT, 'B_voice_stage.png') });
     r.spentUsd = v?.spentUsd; r.pageErrors = errors;
-    r.pass = Boolean(caller.some((t) => /faucet|drip/i.test(t)) && r.agentLines.length && sam.some((e) => e.boxes > 0 && (e.score ?? 1) >= 0.5));
+    r.pass = Boolean(caller.some((t) => /faucet|drip/i.test(t)) && r.agentLines.length && sam.some((e) => e.boxes > 0 && (e.score ?? 1) >= 0.5) && maxOverlay > 50);
   } finally { await browser.close(); }
   return r;
 }
