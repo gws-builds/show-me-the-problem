@@ -2,11 +2,13 @@
 // the overlay (mask outline, guidance arrow, lock) is drawn from the server's view.
 // Voice: hands-free realtime transcription over a WebSocket (voice.js), with a
 // push-to-talk fallback. All agent text is set with textContent.
-const [id, cam] = location.hash.slice(1).split('.');
+const [id, cam, ownerTok] = location.hash.slice(1).split('.');
 const $ = (s) => document.getElementById(s);
 const api = (path, opts = {}) => fetch(`/api/calls/${id}${path}`, { ...opts, headers: { 'x-cam-token': cam, ...(opts.headers || {}) } });
 const params = new URLSearchParams(location.search);
 const FOOTAGE = params.get('footage'); // footage mode: a recorded clip analyzed live
+const TAKE = params.get('take'); // recording session: cues to start/stop the screen recording, and a script card
+let take = null; let takeEnded = false;
 let stream = null; let spoken = 0; let lastView = null; let lastSaidGuide = ''; let lastGuideAt = 0; let started = false;
 const media = () => $('v');
 
@@ -51,8 +53,30 @@ function drawOverlay() {
   Overlay.draw($('ov'), v.videoWidth, v.videoHeight, {
     records: view?.boxes ?? [], part: view?.part, guidance: g, showGuidance: Boolean(view?.tracking || g?.state === 'dark' || g?.state === 'locked'),
     hazards: (view?.checklist ?? []).filter((c) => c.geo && (c.status === 'found')).map((c) => ({ label: c.label, geo: c.geo, status: c.status })),
+    tourItems: tourItems(view),
     ageMs: Math.max(0, ageMs),
   });
+}
+
+// Tour labels: only parts outlined on the latest tour frame, so a label never sits on an old position.
+function tourItems(view) {
+  const t = view?.tour; if (!t) return [];
+  return t.found.filter((f) => f.geo && f.geoFrame === t.lastFrame).map((f) => ({ geo: f.geo, label: `${f.label} · ${f.statusWords}`, status: f.status }));
+}
+
+function renderFound(t) {
+  $('tourStart').hidden = Boolean(t && !t.done);
+  if (!t) { $('found').replaceChildren(); return; }
+  $('found').replaceChildren(...t.found.map((f) => {
+    const li = document.createElement('li'); li.className = `fnd ${f.status}`;
+    const s = document.createElement('span'); s.className = 'st'; s.textContent = f.statusWords;
+    const l = document.createElement('strong'); l.textContent = ` ${f.label}`;
+    li.append(s, l);
+    const d = document.createElement('div'); d.className = 'small';
+    d.textContent = [f.evidence, f.status === 'cant_tell' && f.better ? `needs: ${f.better}` : '', `frame ${f.frame}`].filter(Boolean).join(' · ');
+    li.append(d);
+    return li;
+  }));
 }
 
 function speakGuidance(g, tracking) {
@@ -87,6 +111,8 @@ async function poll() {
     speakGuidance(view.guidance, view.tracking);
     $('staged').hidden = !view.staged; $('stagedToggle').checked = Boolean(view.staged);
     renderChecklist(view.checklist);
+    renderFound(view.tour);
+    checkTakeEnd(view);
     if (view.latency?.p50 != null) $('lat').textContent = `turn latency p50 ${(view.latency.p50 / 1000).toFixed(1)} s (${view.latency.n} turns)`;
   } catch { /* next poll */ }
   setTimeout(poll, 700);
@@ -107,17 +133,31 @@ $('ov').addEventListener('click', async (e) => {
   $('heard').textContent = j.outlined ? 'Outlined.' : (j.error || 'Nothing outlined there. Try again.');
 });
 
-// ---- torch (Android Chrome only; iOS browsers cannot turn on the flashlight) ----
+// ---- Light: the phone torch through the camera track (Android Chrome; iPhone Safari from iOS 17.5) ----
+// iOS may not list "torch" in getCapabilities and may report a stale getSettings(), so the button is
+// always offered, our own on/off state is kept, and an honest note shows when nothing reports a torch.
 function setupTorch(track) {
-  const caps = track?.getCapabilities?.() ?? {};
-  if (caps.torch) {
-    $('torch').hidden = false; let on = false;
-    $('torch').onclick = async () => { on = !on; try { await track.applyConstraints({ advanced: [{ torch: on }] }); $('torch').textContent = on ? 'Flashlight off' : 'Flashlight on'; } catch { $('torchNote').textContent = 'This phone would not turn the flashlight on.'; } };
-  } else {
-    $('torchNote').textContent = /iPhone|iPad/.test(navigator.userAgent)
-      ? 'iPhone browsers cannot turn on the flashlight. For dark spots, use a lamp or a second phone\'s flashlight.'
-      : 'No flashlight control here. For dark spots, use a lamp or a second phone\'s flashlight.';
-  }
+  if (!track) return;
+  const caps = track.getCapabilities?.() ?? {};
+  let on = false;
+  $('torch').hidden = false; $('torch').textContent = 'Light';
+  $('torch').onclick = async () => {
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !on }] });
+      on = !on; $('torch').textContent = on ? 'Light off' : 'Light'; $('torch').classList.toggle('on', on);
+      const reported = 'torch' in caps || 'torch' in (track.getSettings?.() ?? {});
+      $('torchNote').textContent = on && !reported ? 'If no light came on, this browser cannot switch it: use a lamp or a second phone\'s flashlight.' : '';
+    } catch { $('torchNote').textContent = 'This phone would not turn the light on. Use a lamp or a second phone\'s flashlight.'; }
+  };
+}
+
+// Camera settings that iPhone 12 Safari accepts: rear camera, at most 1280x720. Frames sent to the
+// models are scaled to 768 px anyway. If a phone refuses them, fall back to "any rear camera".
+const VIDEO = { facingMode: { ideal: 'environment' }, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 24, max: 30 } };
+const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+async function openCamera() {
+  try { return await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: AUDIO }); }
+  catch (err) { if (err?.name !== 'OverconstrainedError' && err?.name !== 'NotReadableError') throw err; return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: AUDIO }); }
 }
 
 // ---- staged scene label ----
@@ -147,7 +187,7 @@ async function start() {
     }
     $('torchNote').textContent = 'Footage mode: recorded clip, analyzed live now.';
   } else {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    stream = await openCamera();
     media().srcObject = new MediaStream(stream.getVideoTracks());
     setupTorch(stream.getVideoTracks()[0]);
     window.Voice?.startFromStream(stream, id, cam);
@@ -157,5 +197,48 @@ async function start() {
   if (lastView?.says?.length) Speech.say(lastView.says[lastView.says.length - 1].text);
 }
 $('go').addEventListener('click', () => start().catch((err) => { $('err').textContent = `Camera or microphone blocked: ${err.name}. You can still type below.`; }));
+
+// ---- guided tour ----
+$('tourGo').addEventListener('click', async () => {
+  const r = await api('/tour', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: $('room').value }) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  if (!r?.ok) $('heard').textContent = j.error || 'Could not start the tour.';
+});
+
+// ---- recording session: cues and the take's script ----
+function cue(text) { Speech.say(text); }
+function checkTakeEnd(view) {
+  if (!take || takeEnded || !started) return;
+  if (ownerTok && view.status === 'awaiting_owner') { $('ownerStep').hidden = false; $('ownerLink').href = `/owner#${id}.${ownerTok}`; }
+  const end = take.end ?? [];
+  const done = ['escalated', 'handoff', 'declined'].includes(view.status) || end.includes(view.status)
+    || (end.includes('tour') && view.tour?.done)
+    || (end.includes('warning') && (view.checklist ?? []).some((c) => c.id === 'flammables' && c.status === 'found'));
+  if (done) endTake(5000);
+}
+function endTake(delay = 0) {
+  if (takeEnded) return; takeEnded = true;
+  // Let the agent finish its last line, then cue the stop.
+  const go = () => { if (Speech.speaking) return setTimeout(go, 700); $('recStop').hidden = false; $('recStop').scrollIntoView({ behavior: 'smooth' }); cue('You can stop recording now.'); };
+  setTimeout(go, delay);
+}
+async function setupTake() {
+  const takes = await fetch('/takes.json').then((r) => r.json()).catch(() => []);
+  take = takes.find((t) => t.id === TAKE) ?? null;
+  if (!take) return;
+  $('consent').hidden = true; $('recStart').hidden = false;
+  $('takeTitle').textContent = `Take: ${take.title}. ${take.setup}`;
+  $('scriptTitle').textContent = take.title; $('scriptPoint').textContent = take.point;
+  $('scriptSay').replaceChildren(...take.say.map((x) => { const li = document.createElement('li'); li.textContent = x; return li; }));
+  cue('Start your screen recording now.'); // spoken where the browser allows it before a tap; the banner is the cue
+  $('recording').onclick = async () => {
+    $('recStart').hidden = true; $('script').hidden = false;
+    try { await start(); } catch (err) { $('consent').hidden = false; $('err').textContent = `Camera or microphone blocked: ${err.name}.`; return; }
+    if (take.staged) { await api('/staged', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staged: true }) }).catch(() => {}); }
+    if (take.tour) { $('room').value = take.tour; $('tourGo').click(); }
+  };
+  $('finish').onclick = () => endTake(0);
+}
+if (TAKE) setupTake();
 if (FOOTAGE) { $('footageNote').hidden = false; $('footageLabel').hidden = false; $('go').textContent = 'Play the recorded clip (analyzed live)'; }
 if (!id || !cam) $('line').textContent = 'This link is missing its call code. Start a new call from the home page.'; else poll();

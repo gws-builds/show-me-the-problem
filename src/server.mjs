@@ -10,11 +10,16 @@ import { createClient } from './meta.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
 import { upgrade, connectWebSocket } from './ws.js';
 import { createVoiceSession } from './voice.js';
+import { createGate, writeCode, cookieValue } from './gate.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
 fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-const ledger = createLedger(path.join(DATA, 'ledger.json'));
+// SPEND_STOP_USD: a hard stop for this server run (default $5), on top of the per-call caps and the account-wide stops.
+const ledger = createLedger(path.join(DATA, 'ledger.json'), { sessionStopUsd: Number(process.env.SPEND_STOP_USD) || 5 });
+// A fresh access code every start, stored for the session script; never printed here.
+const gate = createGate({ code: writeCode(path.join(DATA, 'access_code')) });
+setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
 // The owner of the deployment can open live calls past the public limits with this header.
 const STAFF_KEY = process.env.STAFF_KEY || '';
@@ -42,7 +47,13 @@ const STATIC = {
   '/overlay.js': ['overlay.js', 'text/javascript'],
   '/voice.js': ['voice.js', 'text/javascript'],
   '/pcm-worklet.js': ['pcm-worklet.js', 'text/javascript'],
+  '/go': ['go.html', 'text/html'],
+  '/go.js': ['go.js', 'text/javascript'],
+  '/takes.json': ['takes.json', 'application/json'],
 };
+// Served without the access code: the code-entry page and its style and script only.
+const OPEN = { '/gate': ['gate.html', 'text/html'], '/gate.js': ['gate.js', 'text/javascript'], '/app.css': ['app.css', 'text/css'] };
+const NEXT = { home: '/', go: '/go', console: '/console#latest' };
 const HEADERS = {
   'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'X-Content-Type-Options': 'nosniff',
@@ -82,6 +93,23 @@ function sendClip(req, res, file) {
 async function route(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  const key = clientIp(req);
+  if (req.method === 'GET' && OPEN[p]) { const [file, type] = OPEN[p]; return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', file)), `${type}; charset=utf-8`); }
+  // /k/<code>: a link with the code sets the cookie and leaves the code out of the address bar.
+  const k = p.match(/^\/k\/([a-z0-9-]{1,64})$/);
+  if (req.method === 'GET' && k) {
+    if (!gate.check(k[1], key)) { res.writeHead(gate.locked(key) ? 429 : 302, { ...HEADERS, Location: '/gate?bad=1' }); return res.end(); }
+    const secure = String(req.headers['x-forwarded-proto'] ?? '') === 'https';
+    res.writeHead(302, { ...HEADERS, 'Set-Cookie': gate.cookie(secure), Location: NEXT[url.searchParams.get('to')] ?? '/go' });
+    return res.end();
+  }
+  const header = String(req.headers['x-access-code'] ?? '');
+  const ok = header ? gate.check(header, key) : gate.check(cookieValue(req.headers.cookie), key, { count: false });
+  if (!ok) {
+    if (gate.locked(key)) return send(res, 429, { error: 'Too many wrong codes. Try again later.', code: 'LOCKED' });
+    if (p.startsWith('/api/')) return send(res, 401, { error: 'Access code required.', code: 'NO_ACCESS' });
+    res.writeHead(302, { ...HEADERS, Location: '/gate' }); return res.end();
+  }
   if (req.method === 'GET' && p === '/api/footage') return send(res, 200, FOOTAGE);
   const clip = p.match(/^\/footage\/([a-z0-9-]+\.mp4)$/);
   if (req.method === 'GET' && clip && FOOTAGE.some((x) => x.file === clip[1])) return sendClip(req, res, clip[1]);
@@ -96,13 +124,16 @@ async function route(req, res) {
     const [file, type] = STATIC[p];
     return send(res, 200, fs.readFileSync(path.join(ROOT, 'public', file)), `${type}; charset=utf-8`);
   }
-  if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size() });
+  if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size(), session: ledger.session() });
+  if (req.method === 'GET' && p === '/api/calls/latest') return send(res, 200, calls.latest() ?? { id: null });
   if (req.method === 'POST' && p === '/api/calls') {
-    const staff = STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY;
+    // Everyone past the access code is trusted staff (the founder, or a judge given the link); the
+    // session spend stop and the per-call caps still apply. STAFF_KEY stays for the container deploy.
+    const staff = (STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY) || ok;
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
-    return send(res, 200, calls.create({ ip: clientIp(req), live: Boolean(staff), footage }));
+    return send(res, 200, calls.create({ ip: key, live: Boolean(staff), footage }));
   }
-  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|staged|decision|still|annotated|frames\/\d{1,6}))?$/);
+  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|staged|tour|decision|still|annotated|frames\/\d{1,6}))?$/);
   if (m) {
     const [, id, action] = m;
     const cam = String(req.headers['x-cam-token'] ?? ''); const owner = String(req.headers['x-owner-token'] ?? '');
@@ -128,6 +159,7 @@ async function route(req, res) {
       if (!d) return send(res, 404, { error: 'No such evidence frame.' });
       return send(res, 200, Buffer.from(d.split(',')[1], 'base64'), 'image/jpeg');
     }
+    if (req.method === 'POST' && action === 'tour') return send(res, 200, calls.tour(id, cam, String((await json(req, 200)).room ?? 'auto')));
     if (req.method === 'POST' && action === 'staged') return send(res, 200, calls.setStaged(id, cam, (await json(req, 200)).staged === true));
     if (req.method === 'POST' && action === 'tap') { const b = await json(req, 200); return send(res, 200, await calls.tap(id, cam, b.x, b.y)); }
     if (req.method === 'POST' && action === 'text') return send(res, 200, await calls.text(id, cam, (await json(req, 2000)).text));
@@ -145,7 +177,7 @@ async function route(req, res) {
 const server = http.createServer((req, res) => {
   route(req, res).catch((err) => {
     if (err instanceof CallError) return send(res, err.status, { error: err.message, code: err.code });
-    if (err?.code && /HARD_STOP|READ_ONLY|RUN_CAP/.test(err.code)) return send(res, 503, { error: err.message, code: err.code });
+    if (err?.code && /HARD_STOP|READ_ONLY|RUN_CAP|SESSION_STOP/.test(err.code)) return send(res, 503, { error: err.message, code: err.code });
     console.error('request failed', err?.message);
     send(res, 500, { error: 'Something went wrong.' });
   });
@@ -158,6 +190,7 @@ server.on('upgrade', (req, socket) => {
   const m = new URL(req.url, 'http://x').pathname.match(/^\/api\/calls\/([a-f0-9]{32})\/voice$/);
   const origin = String(req.headers.origin ?? ''); const host = String(req.headers.host ?? '');
   if (!m || (origin && new URL(origin).host !== host)) { socket.destroy(); return; }
+  if (!gate.check(cookieValue(req.headers.cookie), clientIp(req), { count: false })) { socket.destroy(); return; }
   const ws = upgrade(req, socket); if (!ws) return;
   const callId = m[1]; let session = null;
   const toClient = (o) => ws.send(JSON.stringify(o));
@@ -180,4 +213,4 @@ server.on('upgrade', (req, socket) => {
 });
 const PORT = Number(process.env.PORT || 8642);
 const HOST = process.env.HOST || '127.0.0.1';
-server.listen(PORT, HOST, () => console.log(`snap-to-booked on http://${HOST}:${PORT} (${ledger.mode()})`));
+server.listen(PORT, HOST, () => console.log(`snap-to-booked on http://${HOST}:${PORT} (${ledger.mode()}; access code in ${path.relative(ROOT, path.join(DATA, 'access_code'))}; spend stop $${ledger.session().stopUsd} this run)`));

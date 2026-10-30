@@ -1,0 +1,19 @@
+{
+ "id": "outlet_cord", "title": "Outlets, extension cords and power strips", "room": "other",
+ "match": ["outlet", "socket", "plug", "extension cord", "cord", "power strip", "receptacle"],
+ "parts": [
+  {"id": "outlet", "label": "Outlet", "sam": "outlet", "looks": "A wall receptacle with a cover plate.", "normal": "Cover plate on, no discoloration.", "abnormal": "Brown or black marks, melted plastic, cover plate missing with wiring visible."},
+  {"id": "cord", "label": "Cord or power strip", "sam": "cord", "looks": "A flexible cord or a strip with several sockets.", "normal": "Insulation intact.", "abnormal": "Cut, frayed or taped insulation; bare conductors."}
+ ],
+ "faults": [
+  {"name": "Home-made or damaged cord", "evidence": "Bare conductor ends, split jacket, or a strip opened up. If it is visibly not plugged in, it needs attention (replace it), not an emergency."}
+ ],
+ "hazards": [
+  {"id": "outlet_scorch", "label": "Scorched or melted outlet", "category": "scorch", "escalate": true, "threshold": "Clear brown or black scorch or melting on an outlet or plug."},
+  {"id": "live_bare_wire", "label": "Bare wire on a powered circuit", "category": "wiring", "escalate": true, "threshold": "Bare conductors in a wall box, panel or fixture, or on a cord that is plugged in. A cord that is visibly unplugged (cut end, no plug, lying on a bench) is attention, not escalation."}
+ ],
+ "may": ["Unplug a damaged cord at the wall if the plug and hands are dry.", "Stop using a warm outlet and leave it off."],
+ "must_not": ["Touch bare wire.", "Repair a cord with tape."],
+ "tour": {"open": "Show me the outlet or cord from about half a metre.", "checkpoints": []},
+ "sources": ["usfa-elec-card", "usfa-elec-flyer", "osha-elec"]
+}

@@ -16,6 +16,7 @@ import { guide, DARK_LUMA } from './guidance.js';
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
+import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
 
 export const LIMITS = {
   frameBytes: 400_000, // data URL length, ~300 KB JPEG
@@ -30,7 +31,10 @@ export const LIMITS = {
   trackEveryMs: 1500,
   hazardScans: 12, // camera hazard scans per call (2 min of camera at one per 10 s) (Spark lists, SAM must agree)
   scanEveryMs: 10_000,
+  tourSteps: TOUR.steps, // guided-tour steps per call (Spark names parts, SAM outlines them)
+  tourEveryMs: TOUR.everyMs,
 };
+const STOP_CODES = new Set(['RUN_CAP', 'READ_ONLY', 'HARD_STOP', 'SESSION_STOP']);
 
 const id = (n = 16) => randomBytes(n).toString('hex');
 const article = (noun) => `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
@@ -105,7 +109,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       afterAgent(c, await callerTurn(c.ctx, c.history));
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
-      say(c, err.code === 'RUN_CAP' || err.code === 'READ_ONLY' || err.code === 'HARD_STOP' ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', err.code ? 'handoff' : c.status);
+      say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', err.code ? 'handoff' : c.status);
     }
   }
 
@@ -132,6 +136,32 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // Camera hazards: Spark lists what it sees, SAM must outline it (>= 0.5) before anything happens.
   // Runs beside the conversation, never blocking it. Escalating categories end quoting and page
   // the owner; flammables near heat are a spoken warning plus an owner note, and the call goes on.
+  // One confirmed camera finding (Spark + SAM agree), from the hazard scan or the tour: checklist,
+  // owner page, spoken line. Escalating ones end quoting; the rest are a warning and the call goes on.
+  async function raise(c, f, n, source) {
+    const sev = severityOf(f);
+    const cl = c.session.checklist;
+    cl.addCheck?.(f.category);
+    const detail = `${f.object}${f.near ? ` near ${f.near}` : ''}: ${f.why} (${source}; SAM outlined it at ${f.score.toFixed(2)})`;
+    cl.set(f.category, sev === 'attention' ? 'attention' : 'found', n, detail, { geo: f.geo ?? null, object: f.object });
+    if (c.warned.has(f.category)) return;
+    c.warned.add(f.category);
+    if (sev === 'escalate') {
+      await c.ctx.notifyOwner({ urgent: true, reason: `Camera hazard (${f.category}): ${f.object} in frame ${n}, confirmed by Spark and SAM.` });
+      c.session.log({ kind: 'code_gate', name: 'camera hazard', text: `${f.category}: ${f.object} seen by Spark and outlined by SAM (${f.score.toFixed(2)}). Escalated in code.` });
+      say(c, `Stop for a moment: I can see ${article(f.object)} that looks unsafe (${f.why || f.category}). I am getting the owner on this now. Please do not touch it.`, 'escalated');
+      if (c.tour) c.tour.done = true;
+    } else if (sev === 'attention') {
+      await c.ctx.notifyOwner({ urgent: false, reason: `Camera note (${f.category}): ${f.object}, frame ${n}. Not connected to power, so not escalated.` });
+      c.session.log({ kind: 'code_gate', name: 'camera attention', text: `${f.object}: bare wire on a cord that is not connected to power. Needs attention, not escalated (knowledge-base threshold).` });
+      say(c, `I can see bare wire on ${article(f.object)} that does not look plugged in. Please keep it unplugged and don't use it; the technician should replace it.`, c.status);
+    } else {
+      await c.ctx.notifyOwner({ urgent: false, reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.` });
+      c.session.log({ kind: 'code_gate', name: 'camera warning', text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.` });
+      say(c, `Before anything else: I can see ${article(f.object)}${f.near ? ` close to the ${f.near}` : ''}. Please move it away from the heat.`, c.status);
+    }
+  }
+
   async function scan(c) {
     const frame = c.session.latestFrame(); if (!frame) return;
     c.scanning = true; c.scans++; c.lastScanAt = now();
@@ -140,28 +170,48 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const n = c.session.keepFrame(frame.n, frame.dataUrl);
       const cl = c.session.checklist;
       for (const id of r.clear) cl.set(id, 'clear', n, 'Nothing seen by Muse Spark in this frame');
-      for (const f of r.findings) {
-        const geo = f.record ? maskGeometryOf(f.record) : null;
-        if (f.status === 'found') cl.set(f.category, 'found', n, `${f.object}${f.near ? ` near ${f.near}` : ''}: ${f.why} (Spark saw it; SAM outlined it at ${f.score.toFixed(2)})`, { geo, object: f.object });
-        else cl.set(f.category, 'unconfirmed', n, `Spark saw "${f.object}", SAM could not outline it (${f.score.toFixed(2)}): not escalated`);
-      }
-      c.session.log({ kind: 'hazard_scan', frame: n, staged: Boolean(c.staged), clear: r.clear, findings: r.findings.map(({ category, object, near, score, status }) => ({ category, object, near, score: Number(score.toFixed(2)), status })) });
-      for (const f of r.findings.filter((x) => x.status === 'found')) {
-        if (c.warned.has(f.category)) continue;
-        c.warned.add(f.category);
-        if (severityOf(f.category) === 'escalate') {
-          await c.ctx.notifyOwner({ urgent: true, reason: `Camera hazard (${f.category}): ${f.object} in frame ${n}, confirmed by Spark and SAM.` });
-          c.session.log({ kind: 'code_gate', name: 'camera hazard', text: `${f.category}: ${f.object} seen by Spark and outlined by SAM (${f.score.toFixed(2)}). Escalated in code.` });
-          say(c, `Stop for a moment: I can see ${article(f.object)} that looks unsafe (${f.why || f.category}). I am getting the owner on this now. Please do not touch it.`, 'escalated');
-        } else {
-          await c.ctx.notifyOwner({ urgent: false, reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.` });
-          c.session.log({ kind: 'code_gate', name: 'camera warning', text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.` });
-          say(c, `Before anything else: I can see ${article(f.object)}${f.near ? ` close to the ${f.near}` : ''}. Please move it away from the heat.`, c.status);
-        }
-      }
+      for (const f of r.findings.filter((x) => x.status !== 'found')) cl.set(f.category, 'unconfirmed', n, `Spark saw "${f.object}", SAM could not outline it (${f.score.toFixed(2)}): not escalated`);
+      c.session.log({ kind: 'hazard_scan', frame: n, staged: Boolean(c.staged), clear: r.clear, findings: r.findings.map(({ category, object, near, score, status, where, powered }) => ({ category, object, near, where, powered, score: Number(score.toFixed(2)), status })) });
+      for (const f of r.findings.filter((x) => x.status === 'found')) await raise(c, { ...f, geo: f.record ? maskGeometryOf(f.record) : null }, n, 'Spark saw it');
     } catch (err) {
       c.session.log({ kind: 'error', text: `hazard scan: ${String(err.message).slice(0, 120)}` });
     } finally { c.scanning = false; }
+  }
+
+  // Guided tour: one step every few seconds while frames arrive. Runs beside the conversation.
+  async function tourTick(c) {
+    const frame = c.session.latestFrame(); if (!frame || !c.tour || c.tour.done) return;
+    c.touring = true; c.lastTourAt = now();
+    try {
+      const r = await tourStep(c.client, c.tour, frame);
+      const n = c.session.keepFrame(frame.n, frame.dataUrl);
+      c.session.log({ kind: 'tour', frame: n, step: c.tour.step, room: c.tour.room, items: r.items.map(({ id, label, status, evidence, score, note, confirmScore }) => ({ id, label, status, evidence, score: score != null ? Number(score.toFixed(2)) : null, confirmScore: confirmScore != null ? Number(confirmScore.toFixed(2)) : null, note })) });
+      for (const it of r.items.filter((x) => x.status === 'attention' || x.status === 'safety')) {
+        if (!c.session.evidence.list().some((e) => e.kind === 'tour' && e.part === it.id && e.status === it.status)) c.session.evidence.add({ kind: 'tour', part: it.id, status: it.status, claim: `${it.label}: ${it.status === 'safety' ? 'safety issue' : 'needs attention'}, ${it.evidence}`, frame: n, confidence: it.score ?? 0.5, geo: it.geo ?? null, support: 'Muse Spark on this frame; SAM outline' });
+      }
+      for (const it of [...r.escalate, ...r.warn]) await raise(c, { category: it.hazard.category, object: it.label.toLowerCase(), near: '', why: it.evidence, score: it.confirmScore ?? it.score ?? 0, geo: it.geo ?? null }, n, `tour: ${it.hazard.label}`);
+      if (c.status === 'escalated') return;
+      if (r.say) say(c, r.say, r.done ? 'waiting_caller' : 'touring');
+      if (r.done) {
+        c.history.push({ role: 'user', content: tourMemo(c.tour) });
+        say(c, 'Would you like a price for a visit to look at any of this?', 'waiting_caller');
+        c.session.log({ kind: 'tour_done', text: `Tour of the ${c.tour.room.replace('_', ' ')} finished after ${c.tour.step} steps.` });
+      }
+    } catch (err) {
+      c.session.log({ kind: 'error', text: `tour: ${String(err.message).slice(0, 120)}` });
+      if (err?.code) { c.tour.done = true; say(c, 'I have to stop the tour here. The owner will call you back.', 'handoff'); }
+    } finally { c.touring = false; }
+  }
+
+  function startTour(c, room) {
+    if (c.status === 'escalated') return null;
+    c.tour = createTour({ room });
+    c.session.setTourRoom(c.tour.room === 'auto' ? null : c.tour.room);
+    c.client.setCap?.(TOUR.runCapUsd);
+    c.tracking = null; c.lastTourAt = 0;
+    const line = openLine(c.tour);
+    c.session.log({ kind: 'tour_start', room: c.tour.room, text: `Guided tour started (${c.tour.room}). Spend cap for this call raised to $${TOUR.runCapUsd.toFixed(2)}.` });
+    return { say: line };
   }
 
   function sweep() {
@@ -177,6 +227,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
 
     create({ ip = 'unknown', live = false, footage = null } = {}) {
       sweep();
+      if (ledger.mode() === 'stopped') throw new CallError('The spending stop for this session is reached. No new calls until a restart.', 503, 'SPEND_STOP');
       if (ledger.mode() !== 'live' && !live) throw new CallError('The live demo is resting to protect its credit. Recorded calls are on the console page.', 503, 'REPLAY_ONLY');
       if (calls.size >= LIMITS.maxLiveCalls) throw new CallError('Too many live calls right now. Try again in a few minutes.', 429, 'BUSY');
       const hits = (ipHits.get(ip) ?? []).filter((t) => now() - t < 3_600_000);
@@ -191,6 +242,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       c.ctx = {
         client: c.client, session: c.session, priceList, calendar: nextSlots(now()),
         notifyOwner: async (m) => { c.pages.push({ ...m, at: now() }); c.session.log({ kind: 'owner_paged', reason: m.reason }); },
+        startTour: (room) => startTour(c, room),
       };
       calls.set(c.id, c);
       if (footage) c.session.log({ kind: 'footage', text: `Footage mode: recorded clip "${footage}" is played in the browser and its frames go to the models live.` });
@@ -222,6 +274,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         else if (c.session.checklist.get('lighting').status !== 'clear' || n % 10 === 0) c.session.checklist.set('lighting', 'clear', c.session.keepFrame(n), `Light ${l}/255`);
       }
       if (!dark && !c.scanning && c.scans < LIMITS.hazardScans && (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs)) c.scanP = scan(c);
+      if (!dark && c.tour && !c.tour.done && !c.touring && c.status !== 'escalated' && (!c.lastTourAt || now() - c.lastTourAt >= LIMITS.tourEveryMs)) c.tourP = tourTick(c);
       await track(c).catch(() => {});
       return { ok: true };
     },
@@ -283,6 +336,19 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     },
     /** Waits for a running hazard scan (eval and tests). */
     async scanDone(callId) { await get(callId).scanP; },
+    /** Waits for a running tour step (eval and tests). */
+    async tourDone(callId) { await get(callId).tourP; },
+    /** The caller starts a guided tour from the page (button), same as the agent's start_tour tool. */
+    tour(callId, token, room) {
+      const c = asCaller(callId, token);
+      if (c.tour && !c.tour.done) return { ok: true, room: c.tour.room };
+      const r = startTour(c, room);
+      if (!r) throw new CallError('This call was escalated. The owner is calling you.', 409, 'HAZARD');
+      say(c, r.say, 'touring');
+      return { ok: true, room: c.tour.room };
+    },
+    /** The newest call (the console follows it during a recording session). */
+    latest() { let best = null; for (const c of calls.values()) if (!best || c.createdAt >= best.createdAt) best = c; return best ? { id: best.id } : null; },
     voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice && !c.voice.closed) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
     setVoice(callId, v) { const c = calls.get(String(callId)); if (c) c.voice = v; },
     recentSays(callId, n = 2) { const c = calls.get(String(callId)); return c ? c.says.slice(-n).map((x) => x.text) : []; },
@@ -336,6 +402,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         evidence: c.session.evidence.list(),
         booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
         boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), footage: c.footage, latency: { p50: p50(c.latencies), n: c.latencies.length },
+        tour: tourView(c.tour), cards: c.session.cards(), capUsd: c.client.cap?.() ?? null,
       };
     },
     frameOf(callId) { return get(callId).session.latestFrame()?.dataUrl ?? null; },

@@ -1,0 +1,26 @@
+{
+ "id": "water_heater", "title": "Tank or tankless water heater", "room": "boiler_room",
+ "match": ["water heater", "hot water", "tank", "tankless", "heater", "relief valve", "tpr", "pilot", "rotten egg"],
+ "parts": [
+  {"id": "water_heater", "label": "Water heater", "sam": "water heater", "looks": "A tall round tank (or a wall box for tankless) with a data plate, cold and hot pipes on top.", "normal": "Dry base, no rust streaks.", "abnormal": "Water around the base, rust at the bottom seam or fittings."},
+  {"id": "tpr_valve", "label": "Temperature and pressure relief valve", "sam": "valve", "looks": "A brass valve with a lever, on the top or upper side, with a pipe down to near the floor.", "normal": "Dry discharge pipe.", "abnormal": "Dripping or wet discharge pipe, crust at the outlet, an outlet that is capped."},
+  {"id": "gas_control", "label": "Gas control and thermostat dial", "sam": "dial", "looks": "The box with a temperature dial near the bottom of a gas tank.", "normal": "Identified only.", "abnormal": "Soot or scorch around it or the burner access."},
+  {"id": "flue", "label": "Flue (vent pipe)", "sam": "pipe", "looks": "The pipe on top of a gas tank going to the chimney or wall.", "normal": "Seated on the draft hood, joints together.", "abnormal": "Gap, separated joint, heavy rust-through."},
+  {"id": "expansion_tank", "label": "Expansion tank", "sam": "tank", "looks": "A small round tank on the cold pipe above the heater.", "normal": "Dry.", "abnormal": "Rust or drips."},
+  {"id": "drain_valve", "label": "Drain valve", "sam": "valve", "looks": "A hose-thread valve near the bottom of the tank.", "normal": "Dry.", "abnormal": "Dripping."}
+ ],
+ "faults": [
+  {"name": "No hot water", "evidence": "Caller's words; the camera can show the data plate (fuel, age) but not the cause."},
+  {"name": "Tank leak", "evidence": "Water at the base with no other source visible above it."},
+  {"name": "Relief valve discharging", "evidence": "Wet or dripping discharge pipe."}
+ ],
+ "hazards": [
+  {"id": "wh_flue_gap", "label": "Vent pipe disconnected", "category": "combustion", "escalate": true, "threshold": "A visible gap between the vent pipe and the draft hood, or a separated joint, on a gas water heater."},
+  {"id": "wh_scorch", "label": "Scorch at the burner access", "category": "scorch", "escalate": true, "threshold": "Black scorch or melted parts around the burner access or gas control."},
+  {"id": "wh_combustibles", "label": "Combustibles at the heater", "category": "flammables", "escalate": false, "threshold": "Paint, fuel, rags or boxes against a gas water heater."}
+ ],
+ "may": ["Show the data plate.", "Move stored items away."],
+ "must_not": ["Relight a pilot or operate the gas control.", "Lift the relief valve lever.", "Open the burner access cover."],
+ "tour": {"open": "Show me the water heater from the floor to the pipes on top.", "checkpoints": [{"part": "tpr_valve", "hint": "Look at the upper side of the tank for a brass valve with a pipe going down."}, {"part": "flue", "hint": "Tilt up to the pipe on top of the heater."}]},
+ "sources": ["nfpa-heating", "usfa-heating", "cpsc-heating", "nfpa-co"]
+}

@@ -26,9 +26,14 @@ const NEGATED = /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t
 const CLAUSE = /[.!?;,]|\b(but|and|so|though|although|yet|because|now|then|except|pero|y|porque|aunque|ahora)\b/gi;
 const lastClause = (s) => s.split(CLAUSE).filter((x) => x !== undefined).pop() ?? '';
 
-function hazardInOne(text) {
+// Which patterns are about bare or exposed wiring (English, Spanish). Used when code has already judged
+// the camera's wiring finding (a cord visibly not connected to power is "attention", kb/cards/outlet_cord.json).
+const WIRING = new Set([2, 7]);
+
+function hazardInOne(text, skip = null) {
   const t = String(text);
-  for (const re of HAZARDS) {
+  for (const [i, re] of HAZARDS.entries()) {
+    if (skip?.has(i)) continue;
     for (const m of t.matchAll(new RegExp(re.source, 'gi'))) {
       if (!NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index)))) return true;
     }
@@ -38,7 +43,23 @@ function hazardInOne(text) {
 
 /** True when the caller's words, the model's notes or the photo text show a hazard that is not negated. */
 export function hazardIn(...texts) {
-  return texts.filter(Boolean).some(hazardInOne);
+  return texts.filter(Boolean).some((t) => hazardInOne(t));
+}
+
+// The model's own quote notes talk about risk in general ("Stab-Lok panels are a known fire hazard",
+// "a loose fitting could cause a leak"). That is not a sign seen on this call: the eval case ep04 was
+// escalated by exactly such a note (Oct 30). Clauses that only describe a possibility, a reputation or
+// a question are dropped before the hazard words are matched. Observed signs ("scorch marks on the
+// main breaker") still escalate, and the caller's own words are never filtered.
+const HYPOTHETICAL = /\b(known|reputation|reported|history of|prone|tend(s|ency)?|risk|could|can|may|might|would|possible|possibly|potential(ly)?|if|whether|check(ed)? for|ask(ed)? about|rule out|recall(ed|s)?|inspector|flagged|older|brand)\b|\b(fire|shock|safety) hazards?\b|\?/i;
+const SENTENCE = /[.;!?\n]+|\b(but|and|so|though|although)\b/i;
+export function modelNoteHazardIn(...texts) {
+  return modelNoteHazard(texts);
+}
+/** wiringSettled: the camera's wiring finding was already judged in code, so the model restating it is not new evidence. */
+function modelNoteHazard(texts, { wiringSettled = false } = {}) {
+  const skip = wiringSettled ? WIRING : null;
+  return texts.filter(Boolean).some((t) => String(t).split(SENTENCE).filter((x) => x && !HYPOTHETICAL.test(x)).some((x) => hazardInOne(x, skip)));
 }
 
 /**
@@ -48,17 +69,21 @@ export function hazardIn(...texts) {
  * boxes: SAM 3.1 detections [{ id, label, score }].
  * Returns { action: 'quote' | 'escalate' | 'ask_retake' | 'tech_confirms', ... }.
  */
-export function verify(proposal, { priceList = [], boxes = [], callerText = '', photoText = '', cameraHazard = false } = {}) {
+export function verify(proposal, { priceList = [], boxes = [], outlines = [], callerText = '', photoText = '', cameraHazard = false, wiringSettled = false } = {}) {
   const checks = [];
   const pass = (name, ok, detail) => { checks.push({ name, ok, detail }); return ok; };
 
   // Hazards first: no price is ever given once one is seen.
-  if (!pass('no hazard', !(cameraHazard || proposal?.hazardSeen === true || hazardIn(callerText, proposal?.notes, proposal?.issue, photoText)), cameraHazard ? 'camera hazard confirmed by Spark and SAM' : 'hazard words or flag')) {
+  if (!pass('no hazard', !(cameraHazard || proposal?.hazardSeen === true || hazardIn(callerText, photoText) || modelNoteHazard([proposal?.notes, proposal?.issue], { wiringSettled })), cameraHazard ? 'camera hazard confirmed by Spark and SAM' : 'hazard words or flag')) {
     return { action: 'escalate', reason: 'Possible hazard: the owner is being called now. No price is given.', checks };
   }
-  // The photo must show something SAM found with confidence.
-  const box = boxes.find((b) => b.id === proposal?.boxId);
-  if (!pass('equipment is in the photo', Boolean(box && box.score >= 0.5), box ? `box ${box.id} score ${box.score}` : 'no matching box')) {
+  // The photo must show something SAM found with confidence: the box the model named, or else an
+  // outline SAM already drew on this call (evidence ledger) at 0.5 or more. The model naming the
+  // wrong ordinal after a later miss (eval ac02) is not a reason to ask for another photo.
+  let box = boxes.find((b) => b.id === proposal?.boxId && b.score >= 0.5) ?? null;
+  const prior = !box ? [...outlines].filter((o) => (o.confidence ?? 0) >= 0.5).sort((a, b) => (b.frame ?? 0) - (a.frame ?? 0))[0] : null;
+  if (prior) box = { id: prior.id, label: prior.part, score: prior.confidence };
+  if (!pass('equipment is in the photo', Boolean(box && box.score >= 0.5), box ? `${prior ? `outline ${prior.id} on frame ${prior.frame}` : `box ${box.id}`} score ${box.score}` : 'no matching box')) {
     return { action: 'ask_retake', reason: 'We could not see the part clearly. Please send a closer photo.', checks };
   }
   // Price: only an exact row from the owner's list, with the list's own amount.

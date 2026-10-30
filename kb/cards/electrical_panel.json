@@ -1,0 +1,36 @@
+{
+ "id": "electrical_panel", "title": "Electrical panel (breaker box)", "room": "electrical_panel", "primary": true,
+ "match": ["breaker panel", "electrical panel", "breaker box", "panel", "breaker", "breakers", "fuse box", "circuit", "tripping", "stab-lok", "federal pacific", "main breaker", "subpanel"],
+ "no_open": true,
+ "parts": [
+  {"id": "panel_door", "label": "Panel door and cover", "sam": "electrical panel", "looks": "A grey or beige metal box on the wall with a hinged door; behind the door, a flat cover (dead front) with only breaker handles showing.", "normal": "Cover in place with every slot filled or blanked.", "abnormal": "Cover missing, an open slot showing the inside, rust on the box."},
+  {"id": "main_breaker", "label": "Main breaker", "sam": "circuit breaker", "looks": "The largest breaker, usually at the top, marked with a bigger number (100, 150, 200).", "normal": "Handle seated, label readable.", "abnormal": "Scorch or melting around it."},
+  {"id": "branch_breakers", "label": "Branch breakers", "sam": "circuit breaker", "looks": "Rows of smaller breaker handles, each with a number (15, 20, 30).", "normal": "All handles lined up in ON.", "abnormal": "One handle in the middle (tripped) or OFF; discoloured or melted handles."},
+  {"id": "directory", "label": "Circuit directory", "sam": "label", "looks": "The paper list of circuits inside the door.", "normal": "Filled in.", "abnormal": "Blank: worth labelling, not a fault."},
+  {"id": "brand_label", "label": "Panel brand label", "sam": "label", "looks": "The maker's label inside the door or on the cover.", "normal": "", "abnormal": "Some older brands are often flagged by inspectors for replacement; we only note the brand, never judge it on camera."},
+  {"id": "scorch", "label": "Scorch or melting", "sam": "burn mark", "looks": "Brown or black marks, bubbled or melted plastic.", "normal": "", "abnormal": "Safety issue when clearly visible."},
+  {"id": "loose_wire", "label": "Exposed or loose wire", "sam": "wire", "looks": "Bare copper or wires visible outside the cover.", "normal": "", "abnormal": "Safety issue when visible without opening anything."},
+  {"id": "water_stain", "label": "Water staining", "sam": "stain", "looks": "Drip marks or rust trails on or above the panel.", "normal": "", "abnormal": "Safety issue if water is on the panel now."}
+ ],
+ "faults": [
+  {"name": "Tripped breaker", "evidence": "One handle visibly out of line with the others. Resetting is the caller's choice; we never tell them to touch anything inside."},
+  {"name": "Panel replacement candidate", "evidence": "The brand label or age, read from the outside; quote the replacement estimate visit, it is not by itself an emergency."}
+ ],
+ "hazards": [
+  {"id": "exposed_live_parts", "label": "Exposed wiring or open slots", "category": "wiring", "escalate": true, "threshold": "Bare wire, an open knockout or a missing cover that exposes the inside of a panel that is installed on a wall."},
+  {"id": "panel_scorch", "label": "Scorch or melting at the panel", "category": "scorch", "escalate": true, "threshold": "Clearly visible brown or black scorch, or melted plastic, on a breaker or the cover."},
+  {"id": "panel_water", "label": "Water on the panel", "category": "water_electric", "escalate": true, "threshold": "Water drops, a wet streak or a drip landing on the panel or its wiring."}
+ ],
+ "may": ["Show the panel from the outside with the door open.", "Read the labels aloud.", "Step back so the whole panel is in view."],
+ "must_not": ["Remove the cover (dead front) or any screw.", "Touch any wire or anything inside the box.", "Stand in water near the panel.", "Reset a breaker that trips again right away."],
+ "tour": {
+  "open": "Let's look at your panel. Open only the small door, nothing else, and stand back about two steps so I can see the whole panel. Please do not touch anything inside.",
+  "checkpoints": [
+   {"part": "panel_door", "hint": "Step back so I can see the whole panel and the wall around it."},
+   {"part": "main_breaker", "hint": "Move a little closer to the top of the panel, where the biggest breaker usually is. Don't touch it."},
+   {"part": "branch_breakers", "hint": "Tilt down slowly along the rows of breakers."},
+   {"part": "directory", "hint": "Show me the paper list inside the door."}
+  ]
+ },
+ "sources": ["usfa-elec-flyer", "usfa-elec-card", "osha-elec"]
+}

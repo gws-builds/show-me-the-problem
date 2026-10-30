@@ -25,8 +25,10 @@ if (page === 'index') {
 }
 
 if (page === 'console') {
-  const id = location.hash.slice(1);
-  const CAP = 0.25; let frameKey = ''; let lastView = null;
+  // "#latest" follows the newest call (a recording session captures this page while takes change).
+  const follow = location.hash.slice(1) === 'latest';
+  let id = follow ? '' : location.hash.slice(1);
+  let frameKey = ''; let lastView = null;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const line = (kind, title, detail) => {
     const li = el('li', kind); li.append(el('span', 'k', title));
@@ -55,6 +57,10 @@ if (page === 'console') {
       case 'annotated': return line('tool', 'Muse Image', e.ok ? 'illustration made (labelled, not evidence)' : 'no image returned');
       case 'say': return line('say', `Agent says (${e.status})`, e.text);
       case 'error': return line('error', 'Error', e.text);
+      case 'tour_start': return line('code_gate', 'Guided tour', e.text);
+      case 'tour_done': return line('say', 'Tour finished', e.text);
+      case 'tour': return line(e.items.some((i) => i.status === 'safety') ? 'code_gate' : 'tool', `Tour step ${e.step}, frame ${e.frame} (${String(e.room).replace('_', ' ')})`, e.items.length ? e.items.map((i) => `${i.label}: ${i.status}${i.evidence ? ` (${i.evidence})` : ''}${i.score != null ? ` SAM ${i.score}` : ''}${i.note ? ` [${i.note}]` : ''}`).join('; ') : 'nothing named in this frame');
+      case 'kb': return line('verify', 'Knowledge base', `cards in the agent's context: ${e.cards.join(', ') || 'none'}`);
       default: return line('', e.kind, JSON.stringify(e).slice(0, 200));
     }
   };
@@ -64,8 +70,19 @@ if (page === 'console') {
     $('status').textContent = v.status.replace('_', ' '); $('status').className = `pill ${v.status}`;
     $('mode').textContent = `${live ? 'live' : 'recorded call (replay)'}${v.footage ? ' · footage mode (recorded clip, analyzed live)' : ''}`;
     $('staged').hidden = $('stagedOnStill').hidden = !v.staged;
-    $('meter').style.width = `${Math.min(100, (v.spentUsd / CAP) * 100)}%`;
-    $('cost').textContent = `$${Number(v.spentUsd).toFixed(4)} of the $${CAP.toFixed(2)} per-call limit`;
+    const cap = v.capUsd ?? 0.25;
+    $('meter').style.width = `${Math.min(100, (v.spentUsd / cap) * 100)}%`;
+    $('cost').textContent = `$${Number(v.spentUsd).toFixed(4)} of the $${cap.toFixed(2)} per-call limit`;
+    $('tourCard').hidden = !v.tour;
+    if (v.tour) {
+      $('tourH').textContent = `Found in this room: ${v.tour.roomLabel} (${v.tour.done ? 'tour finished' : `step ${v.tour.step} of ${v.tour.steps}`})`;
+      $('found').replaceChildren(...v.tour.found.map((f) => {
+        const li = el('li', `fnd ${f.status}`); li.append(el('span', 'st', f.statusWords), el('strong', '', ` ${f.label}`));
+        const t = thumb(f.frame, live); if (t) li.append(t);
+        li.append(el('div', 'small', [f.evidence, f.better ? `needs: ${f.better}` : '', f.note, `frame ${f.frame}`, f.score != null ? `SAM ${Number(f.score).toFixed(2)}` : 'not outlined'].filter(Boolean).join(' · ')));
+        return li;
+      }));
+    }
     const lat = Array.isArray(v.latency) ? { p50: [...v.latency].sort((a, b) => a - b)[Math.floor(v.latency.length / 2)], n: v.latency.length } : v.latency;
     $('lat').textContent = lat?.n ? `Turn latency p50 ${(lat.p50 / 1000).toFixed(1)} s over ${lat.n} turn(s), measured from the end of speech (voice) or the message (typed) to the agent's line.` : '';
     $('tl').replaceChildren(...v.events.map(describe));
@@ -85,10 +102,17 @@ if (page === 'console') {
   };
   const draw = () => {
     const img = $('still'); const v = lastView; if (!v) return;
+    const t = v.tour;
     Overlay.draw($('ov'), img.naturalWidth, img.naturalHeight, { records: v.boxes ?? [], part: v.part, guidance: v.guidance, showGuidance: true,
-      hazards: (v.checklist ?? []).filter((c) => c.geo && c.status === 'found').map((c) => ({ label: c.label, geo: c.geo, status: c.status })) });
+      hazards: (v.checklist ?? []).filter((c) => c.geo && c.status === 'found').map((c) => ({ label: c.label, geo: c.geo, status: c.status })),
+      tourItems: t ? t.found.filter((f) => f.geo && f.geoFrame === t.lastFrame).map((f) => ({ geo: f.geo, label: `${f.label} · ${f.statusWords}`, status: f.status })) : [] });
   };
   async function poll() {
+    if (follow) {
+      const l = await fetch('/api/calls/latest').then((x) => x.json()).catch(() => ({}));
+      if (l.id && l.id !== id) { id = l.id; frameKey = ''; $('still').hidden = true; }
+      if (!id) { $('status').textContent = 'waiting for a call'; setTimeout(poll, 2000); return; }
+    }
     let r = await fetch(`/api/calls/${id}`).catch(() => null);
     if (r?.ok) {
       const v = await r.json(); render(v, true);
@@ -97,8 +121,9 @@ if (page === 'console') {
       setTimeout(poll, 1500); return;
     }
     r = await fetch(`/api/runs/${id}`).catch(() => null);
-    if (r?.ok) { const v = await r.json(); render({ ...v, part: '' }, false); return; }
+    if (r?.ok) { const v = await r.json(); render({ ...v, part: '' }, false); if (follow) setTimeout(poll, 2000); return; }
     $('status').textContent = 'not found';
+    if (follow) setTimeout(poll, 2000);
   }
-  if (/^[a-f0-9]{32}$/.test(id)) poll(); else $('status').textContent = 'no call id';
+  if (follow || /^[a-f0-9]{32}$/.test(id)) poll(); else $('status').textContent = 'no call id';
 }

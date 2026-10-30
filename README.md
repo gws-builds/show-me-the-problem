@@ -3,6 +3,7 @@
 **A live call that sees.** A homeowner calls a plumbing, HVAC or electrical business and points their phone at what is broken. An agent built on Meta's models:
 
 - outlines the part on the live camera and steers the phone with arrows and voice ("tilt up, closer, hold still") until the view is usable;
+- leads a **guided tour** for someone who has never been in the room (boiler room, under a sink, an electrical panel): it names every part on screen with a label on its outline and a status (looks normal, needs attention, safety issue, can't tell from this angle), and keeps a "found in this room" list;
 - talks hands-free, and stops talking when the caller starts;
 - looks for hazards the caller never mentioned, and only acts when two models agree;
 - shows every safety check as **clear** or **found**, with the frame it used;
@@ -32,7 +33,21 @@ The agent's voice is the browser's built-in speech synthesis: Meta lists no text
 
 1. **Grounded handoff** (`src/locate.js`). A fresh tap on the screen goes first, as a SAM point prompt. Otherwise SAM gets a plain object noun ("pipe", not "pipe leak"). On a miss, two things run in parallel: SAM with an alternative noun, and a Muse Spark grounding point handed to SAM as a point prompt. The most confident result wins.
 2. **Guidance** (`src/guidance.js`, no model call). From the mask's centroid and area: up, down, left, right, closer or back. "Locked" means two analyzed frames in a row agree the part is centred, big enough and steady. Outlines come from the last analyzed frame and fade as they age, so they never pretend to be live.
-3. **Light** (in code). The page sends each frame's mean brightness. Two dark frames in a row make the agent say "turn on a light, or use a second phone's flashlight". Android Chrome gets a flashlight button; iPhone browsers cannot control the flashlight, and the page says so.
+3. **Light** (in code). The page sends each frame's mean brightness. Two dark frames in a row make the agent say "turn on a light, or use a second phone's flashlight". A **Light** button turns on the phone torch through the camera track (`applyConstraints({advanced:[{torch:true}]})`: Android Chrome, and iPhone Safari from iOS 17.5 per WebKit's bug tracker). Where nothing reports a torch, the page says to use a lamp. The camera asks for the rear camera at up to 1280x720 (`facingMode: environment`), which iPhone 12 Safari accepts, and falls back to any rear camera.
+
+## Guided tour (`src/tour.js`)
+
+For a caller who has never been in the room. The caller taps **Guided tour** (or says "I've never been in here" and the agent calls `start_tour`). Every 4.5 s while frames arrive, Muse Spark looks at the frame with the room's knowledge-base cards and lists each part it sees (part ids from the cards, e.g. `expansion_tank`, `pressure_relief_valve`, `p_trap`, `main_breaker`), with a status, the visible sign, and a point on it. SAM 3.1 outlines each part from that point, and the label is drawn on the outline. The agent leads the camera: first "show me the whole room slowly", then toward the next part the card expects ("look along the side of the boiler for a brass valve with a pipe going down"), or the move the model picked. Code decides what is said:
+
+- **No fault without a visible sign.** "Needs attention" or "safety issue" without evidence becomes "can't tell from this angle", and the agent asks for the view that would tell.
+- **A safety issue needs the card's hazard threshold and SAM.** The model must name a hazard id from the card (e.g. `flue_gap`: a visible gap in the vent pipe), and SAM must find the object by its noun at 0.5 or more. Otherwise it stays "needs attention". A confirmed escalating hazard pages the owner and stops quoting, like a camera hazard.
+- **Electrical panels: look, never open.** Every line the agent says, in a tour or not, passes `safeLine()`: a sentence telling the caller to open or remove a cover, or to touch anything inside a box, is replaced in code.
+- **A status only moves up.** A fault seen on frame 7 stays, with frame 7 as evidence; a later "can't tell" never hides it.
+- When the card's checkpoints are all seen (or after 16 steps), the agent sums up, hands the list to the conversation and offers a price for a visit. A tour call may spend up to $0.60 (other calls $0.25).
+
+## Knowledge base (`kb/`, `src/kb.js`)
+
+Eight short equipment cards (boiler, water heater, under the sink, electrical panel, faucet, stove, outlets and cords, AC/thermostat/sump/disposal), written in our own words from public safety sources listed in `kb/SOURCES.md` (NFPA, U.S. Fire Administration, CPSC, EPA WaterSense, Natural Resources Canada, OSHA). Each card has the parts and what they look like, normal and abnormal signs, common faults and the evidence each needs, hazards with the evidence threshold to escalate, what a homeowner may do, and what we never ask. Retrieval is plain and auditable: the tour room picks its card; otherwise the equipment words heard or outlined on the call pick at most two cards, which go into the agent's context labelled as data. Code reads the thresholds directly (for example: bare wire on a cord that is visibly not plugged in is "needs attention", not an emergency).
 
 ## Safety is in code, not in the prompt
 
@@ -43,7 +58,8 @@ The agent's voice is the browser's built-in speech synthesis: Meta lists no text
 - **Hypotheses need evidence.** `record_hypothesis` is refused unless it cites ledger entries from a frame observation, an outline or the caller's words.
 - **Water shut-off steps are fixed text in code.** Anything about gas is refused in code.
 - **Nothing is booked by the model.** Only the owner's token approves, and never on a hazard call. The demo calendar is in memory; this repository does not book into Jobber.
-- **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call; the public demo switches to replays at $80 of the credit; everything stops at $100.
+- **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call ($0.60 for a guided tour); each server run has a hard **session spend stop** (`SPEND_STOP_USD`, $5 by default) counted from the ledger when it starts; the public demo switches to replays at $80 of the credit; everything stops at $100.
+- **Access code on every page and API.** A random code is made at each server start and written to `.data/access_code` (mode 600), never logged or committed. `/k/<code>` sets an HttpOnly, SameSite=Strict cookie and redirects, so the code leaves the address bar; without it, pages redirect to a code-entry page, APIs answer 401 and the voice WebSocket is closed before any model call. 20 wrong codes in 10 minutes lock that client out. This sits on top of the per-call tokens.
 - **Bounds for strangers:** frame and audio size and rate, one message at a time, 6 calls per IP per hour, 10 live calls at once, 15-minute calls, a WebSocket origin check, and voice tokens sent in the first message, never in a URL.
 - **Untrusted text stays text.** Text on equipment and caller words are data. Pages render with `textContent` under a strict CSP. Frames are kept in memory for the call only (up to 24 evidence frames); a recorded call keeps events and lines, never media.
 
@@ -62,9 +78,11 @@ META_API_KEY=... node eval/run.mjs    # the eval against the live models
 
 On the start page, **Start a call** gives three links: the camera page (the caller), the owner page (approve), and the Agent Console (every step, check, evidence entry, cost and latency, live). **Recorded calls** lists replays.
 
-The phone camera needs HTTPS. Locally, use footage mode or a laptop webcam on `127.0.0.1`.
+Every page needs the access code: open `http://127.0.0.1:8642/k/<code from .data/access_code>`.
 
-## Deploy (one container)
+The phone camera needs HTTPS. For a recording session, `scripts/record_session.sh` starts the server on 127.0.0.1, a Cloudflare quick tunnel to it (temporary https URL, no account), prints the phone link with the code as text and a terminal QR (`scripts/qr.mjs`, no dependencies), opens the Agent Console in its own window (`/console#latest` follows the newest call) and records the Mac screen into `recordings/`; Ctrl-C stops all of it. `--no-tunnel` runs it locally. The phone opens **Pick a take** (`/go`): each take starts a call with a script card, a "start your screen recording now" cue that waits for "I'm recording", and a "you can stop recording now" cue at the end (`public/takes.json`).
+
+## Deploy (one container, not used for the recordings)
 
 The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager and the spend already used passed in so the caps still count the account total:
 

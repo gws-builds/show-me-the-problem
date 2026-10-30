@@ -1,0 +1,17 @@
+{
+ "id": "stove", "title": "Kitchen stove and cooktop", "room": "kitchen", "primary": true,
+ "match": ["stove", "range", "cooktop", "burner", "oven", "kitchen", "spray can", "paper towel", "aerosol"],
+ "parts": [
+  {"id": "burner", "label": "Stove burner", "sam": "stove burner", "looks": "A gas burner under a metal grate, or a coil or glass ring on an electric cooktop.", "normal": "Clear area around it.", "abnormal": "Something that can burn sitting right next to it."},
+  {"id": "aerosol_can", "label": "Aerosol can", "sam": "spray can", "looks": "A metal spray can (cooking spray, cleaner, air freshener).", "normal": "Stored away from heat.", "abnormal": "Within about one metre of a burner or oven vent."},
+  {"id": "paper_towels", "label": "Paper towels", "sam": "paper towel roll", "looks": "A roll of paper towels or a pile of towels or rags.", "normal": "Away from the cooktop.", "abnormal": "Next to a burner."}
+ ],
+ "faults": [],
+ "hazards": [
+  {"id": "flammables_near_burner", "label": "Flammables next to a burner", "category": "flammables", "escalate": false, "threshold": "An aerosol can, paper towels, rags or another combustible within about one metre of a burner. A spoken warning, not an emergency, unless there is flame or smoke."}
+ ],
+ "may": ["Move the can and towels away from the stove.", "Turn the burner off."],
+ "must_not": ["Spray an aerosol near a flame."],
+ "tour": {"open": "Show me the stove top and the counter around it.", "checkpoints": [{"part": "burner", "hint": "Tilt down so I can see all the burners and the counter on both sides."}]},
+ "sources": ["nfpa-cooking", "usfa-cooking"]
+}

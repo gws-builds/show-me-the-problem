@@ -5,6 +5,7 @@
 //      (a point on a 0-1000 grid) handed to SAM as a point prompt.
 // The best record wins; the verifier still requires confidence >= 0.5 before any quote.
 import { maskGeometry, dataUrlSize } from './mask.js';
+import { samNounsFor } from './kb.js';
 
 export const MIN_SCORE = 0.5;
 export const TAP_FRESH_MS = 20_000;
@@ -25,7 +26,7 @@ export const ALT_NOUNS = {
   'water heater': ['tank', 'boiler'],
   'garbage disposal': ['disposal', 'sink drain'],
   disposal: ['garbage disposal'],
-  thermostat: ['wall display', 'control panel'],
+  thermostat: ['wall display', 'circuit board'],
   'sump pump': ['pump', 'pit'],
   'breaker panel': ['electrical panel', 'circuit breaker'],
   'air conditioner condenser': ['air conditioner', 'condenser'],
@@ -40,6 +41,7 @@ export function nounsFor(part) {
   const out = [plain];
   for (const key of [plain, ...plain.split(' ').reverse()]) for (const alt of ALT_NOUNS[key] ?? []) out.push(alt);
   if (plain.includes(' ')) out.push(plain.split(' ').pop());
+  out.push(...samNounsFor(plain)); // the knowledge-base card's SAM noun for this part, last
   return [...new Set(out.filter(Boolean))].slice(0, 3);
 }
 
@@ -69,7 +71,7 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
   if (!results.some((r) => ok(best(r.records)))) results.push(await attempt('text', nouns[0], () => client.segment(frame.dataUrl, nouns[0])));
   if (!results.some((r) => ok(best(r.records)))) {
     const parallel = [];
-    if (nouns[1]) parallel.push(attempt('alt noun', nouns[1], () => client.segment(frame.dataUrl, nouns[1])));
+    for (const noun of nouns.slice(1, 3)) parallel.push(attempt('alt noun', noun, () => client.segment(frame.dataUrl, noun)));
     if (size) {
       parallel.push(attempt('grounded', nouns[0], async () => {
         const pts = await client.ground(frame.dataUrl, nouns.slice(0, 2));

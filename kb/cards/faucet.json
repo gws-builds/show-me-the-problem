@@ -1,0 +1,17 @@
+{
+ "id": "faucet", "title": "Faucet (kitchen or bathroom tap)", "room": "under_sink",
+ "match": ["faucet", "tap", "spout", "drip", "dripping", "cartridge", "handle"],
+ "parts": [
+  {"id": "faucet", "label": "Faucet", "sam": "faucet", "looks": "Spout and one or two handles on the sink deck.", "normal": "No drip from the spout or base when off.", "abnormal": "Drip from the spout tip (usually cartridge or seats) or water at the base or under the handle (usually O-rings)."},
+  {"id": "aerator", "label": "Aerator", "sam": "faucet", "looks": "The screen at the tip of the spout.", "normal": "Even stream.", "abnormal": "Spraying sideways (mineral build-up)."}
+ ],
+ "faults": [
+  {"name": "Worn cartridge or seat", "evidence": "Drops forming at the spout tip with the handle off."},
+  {"name": "Worn O-ring", "evidence": "Water around the base or under the handle, seen from below with light."}
+ ],
+ "hazards": [],
+ "may": ["Close the shut-off valves under the sink (water only).", "Use the Light button for the underside."],
+ "must_not": [],
+ "tour": {"open": "Show me the whole faucet from about half a metre.", "checkpoints": [{"part": "faucet", "hint": "Tilt up to the underside of the spout and the handle base. Tap Light if it is dark."}]},
+ "sources": ["epa-leaks"]
+}

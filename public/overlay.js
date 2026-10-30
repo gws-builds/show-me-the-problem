@@ -3,6 +3,7 @@
 // and hazard outlines in red. Shared by the camera page, the console and the work order.
 window.Overlay = (() => {
   const COLORS = { part: '#22c3a6', locked: '#22c55e', hazard: '#ef4444', unconfirmed: '#f5a524' };
+  const TOUR = { normal: '#22c3a6', attention: '#f5a524', safety: '#ef4444', cant_tell: '#94a3b8' };
 
   // Where media of size mw x mh lands inside a box of size cw x ch with object-fit: contain.
   function fit(cw, ch, mw, mh) {
@@ -72,7 +73,7 @@ window.Overlay = (() => {
 
   /**
    * canvas: overlay canvas covering the media element; mw/mh: media pixel size.
-   * state: { records, part, guidance, hazards: [{label, geo, status}], showGuidance, ageMs }
+   * state: { records, part, guidance, hazards: [{label, geo, status}], tourItems: [{label, geo, status}], showGuidance, ageMs }
    */
   function draw(canvas, mw, mh, state = {}) {
     const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
@@ -84,6 +85,8 @@ window.Overlay = (() => {
     // Outlines come from the last analyzed frame: fade them as they age so they never pretend to be live.
     const age = state.ageMs ?? 0; const alpha = locked ? 1 : Math.max(0, 1 - Math.max(0, age - 1500) / 2500);
     (state.records ?? []).slice(0, 1).forEach((rec) => drawRecord(g, r, rec.geo, locked ? COLORS.locked : COLORS.part, `${state.part || 'part'} ${rec.score != null ? rec.score.toFixed(2) : ''}${locked ? ' · LOCKED' : ''}`, alpha));
+    // Guided tour: every part named on the latest tour frame, labelled with its status.
+    for (const t of state.tourItems ?? []) drawRecord(g, r, t.geo, TOUR[t.status] ?? TOUR.cant_tell, t.label, Math.max(0.35, alpha));
     for (const h of state.hazards ?? []) drawRecord(g, r, h.geo, h.status === 'found' ? COLORS.hazard : COLORS.unconfirmed, h.label, 1);
     if (state.showGuidance && gd) {
       if (gd.state === 'dark') banner(g, r, 'Too dark: turn on a light', '#fde047');

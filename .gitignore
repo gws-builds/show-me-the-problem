@@ -5,3 +5,4 @@ spend.json
 .data/
 eval/photos/*.jpg
 eval/frames/*.jpg
+recordings/

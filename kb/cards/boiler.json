@@ -1,0 +1,41 @@
+{
+ "id": "boiler", "title": "Home boiler (hot-water or steam heating)", "room": "boiler_room", "primary": true,
+ "match": ["boiler", "boiler room", "hydronic", "radiator heat", "radiators", "heating system", "furnace room", "expansion tank", "circulator", "no heat", "heat"],
+ "parts": [
+  {"id": "boiler", "label": "Boiler", "sam": "boiler", "looks": "A cabinet or cast-iron box, floor or wall mounted, with pipes going up from the top and a burner or control box on the front or side.", "normal": "Cabinet closed, no water under it, no soot around the burner door.", "abnormal": "Water pooling under it, rust streaks down the jacket, soot or scorch around the burner opening."},
+  {"id": "pressure_gauge", "label": "Pressure and temperature gauge", "sam": "gauge", "looks": "A round dial, often combined pressure (psi or bar) and temperature, on the front or top of the boiler.", "normal": "When the system is warm, residential hot-water boilers usually read about 12 to 25 psi (about 1 to 1.7 bar).", "abnormal": "Needle near zero, or near the relief valve rating (often 30 psi). Only judge with the dial face readable."},
+  {"id": "pressure_relief_valve", "label": "Pressure relief valve", "sam": "valve", "looks": "A brass valve with a small lever on top, on the boiler or its supply pipe, with a pipe running down toward the floor.", "normal": "Dry outlet pipe, no crust at the outlet.", "abnormal": "Dripping or wet discharge pipe, white or green crust at the outlet, or a cap or plug blocking the outlet."},
+  {"id": "expansion_tank", "label": "Expansion tank", "sam": "tank", "looks": "A small round tank (often red, grey, blue or white), hanging from a pipe or standing next to the boiler.", "normal": "Dry, no rust streaks.", "abnormal": "Rust on the bottom seam or the connection, water dripping from it."},
+  {"id": "circulator_pump", "label": "Circulator pump", "sam": "pump", "looks": "A small motor body (often red, green or grey) between two pipe flanges near the boiler.", "normal": "Dry flanges, no rust tracks below.", "abnormal": "Water or rust tracks at the flanges, corrosion on the pump body."},
+  {"id": "flue", "label": "Flue (vent pipe)", "sam": "pipe", "looks": "The metal or plastic pipe that leaves the top or back of the boiler and goes to a chimney or out through a wall.", "normal": "Joints fully pushed together and supported, no gaps.", "abnormal": "A visible gap or separated joint, a hole, heavy rust-through, or soot at the joints."},
+  {"id": "gas_shutoff", "label": "Gas shut-off valve", "sam": "valve", "looks": "A small valve with a flat lever on the gas pipe (often black iron or yellow flexible line) next to the boiler.", "normal": "Identified only. We never give gas valve steps.", "abnormal": "Not judged on camera."},
+  {"id": "supply_pipes", "label": "Supply and return pipes", "sam": "pipe", "looks": "Copper, steel or plastic pipes going up from the boiler to the radiators.", "normal": "Dry joints.", "abnormal": "Green or white crust at joints (corrosion from slow leaks), drips, wet insulation."},
+  {"id": "corrosion", "label": "Corrosion", "sam": "rust", "looks": "Orange-brown rust, green or white crust on metal.", "normal": "", "abnormal": "Say where it is; it is a sign of a past or slow leak, not proof of a current one."},
+  {"id": "debris", "label": "Stored items near the boiler", "sam": "box", "looks": "Boxes, paper, paint cans, laundry or rags close to the boiler.", "normal": "Clear space around the boiler.", "abnormal": "Combustible items stored against or next to the boiler or burner."}
+ ],
+ "faults": [
+  {"name": "Low system pressure", "evidence": "A readable gauge showing near zero to about 10 psi with the system cold or warm."},
+  {"name": "Relief valve discharging", "evidence": "Water dripping from or a wet discharge pipe under the relief valve."},
+  {"name": "Leaking expansion tank or fitting", "evidence": "Water drops or fresh rust trails on the tank or its pipe."},
+  {"name": "No heat", "evidence": "Cannot be seen on camera. Needs the caller's words (thermostat calling, boiler silent) and a technician."}
+ ],
+ "hazards": [
+  {"id": "flue_gap", "label": "Vent pipe disconnected or gapped", "category": "combustion", "escalate": true, "threshold": "A clearly visible gap, separated joint or hole in the vent pipe of a gas or oil boiler. Rust or dents alone are attention, not a hazard."},
+  {"id": "soot_scorch", "label": "Soot or scorch at the burner", "category": "scorch", "escalate": true, "threshold": "Black soot or scorch marks around the burner door or jacket openings. A dusty or dull surface is not soot."},
+  {"id": "combustibles", "label": "Combustibles stored at the boiler", "category": "flammables", "escalate": false, "threshold": "Paper, rags, boxes, paint or fuel cans touching or within about one metre of the boiler or burner."}
+ ],
+ "may": ["Read the pressure gauge from where they stand.", "Move stored boxes away from the boiler.", "Show the data plate on the front."],
+ "must_not": ["Open the burner door or any panel.", "Operate the gas valve.", "Lift the relief valve lever.", "Add water or bleed the system."],
+ "tour": {
+  "open": "Let's walk through the boiler room together. Stand in the doorway and show me the whole room, slowly, from left to right.",
+  "checkpoints": [
+   {"part": "boiler", "hint": "Step back so I can see the whole boiler, from the floor to the pipes on top."},
+   {"part": "pressure_gauge", "hint": "Move closer to the round gauge on the front of the boiler, so I can read the needle."},
+   {"part": "pressure_relief_valve", "hint": "Look along the side or top of the boiler for a brass valve with a pipe going down toward the floor."},
+   {"part": "expansion_tank", "hint": "Turn to the pipes above or beside the boiler: there is usually a small round tank."},
+   {"part": "circulator_pump", "hint": "Follow the pipes near the boiler for a small motor between two flanges."},
+   {"part": "flue", "hint": "Tilt up to the pipe that leaves the top or back of the boiler."}
+  ]
+ },
+ "sources": ["nfpa-heating", "usfa-heating", "cpsc-heating", "nfpa-co", "nrcan-maint"]
+}

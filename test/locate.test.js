@@ -97,8 +97,8 @@ test('a stale tap is ignored, and nothing found returns no records', async () =>
   assert.ok(!c.log.some((l) => l[0] === 'point'));
 });
 
-test('an unreadable frame skips grounding (no size to map the point) but still tries both nouns', async () => {
+test('an unreadable frame skips grounding (no size to map the point) but still tries every noun (primary and two alternatives)', async () => {
   const c = fakeClient({});
   await locate(c, { dataUrl: 'data:image/jpeg;base64,AAAA', at: 0 }, 'faucet');
-  assert.deepEqual(c.log.map((l) => l[0]), ['text', 'text']);
+  assert.deepEqual(c.log.map((l) => l[0]), ['text', 'text', 'text']);
 });

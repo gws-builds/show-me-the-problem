@@ -43,10 +43,13 @@ export function outputText(body) {
   return (body?.output ?? []).flatMap((o) => o.content ?? []).filter((c) => c.type === 'output_text').map((c) => c.text).join('');
 }
 
+import { PER_RUN_USD, MAX_RUN_USD } from './budget.js';
+
 export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.META_API_KEY, live = true } = {}) {
-  let runSpentUsd = 0;
+  let runSpentUsd = 0; let runCapUsd = PER_RUN_USD;
+  const can = () => ledger.assertCanSpend({ live, runSpentUsd, runCapUsd });
   const post = async (path, model, body, usageOf, { raw = null, accept = 'application/json' } = {}) => {
-    ledger.assertCanSpend({ live, runSpentUsd });
+    can();
     if (!apiKey) throw new Error('META_API_KEY is not set');
     const res = await fetchImpl(`${BASE}${path}`, {
       method: 'POST',
@@ -61,9 +64,12 @@ export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.M
   };
   return {
     spent: () => runSpentUsd,
-    assertCanSpend: () => ledger.assertCanSpend({ live, runSpentUsd }),
+    cap: () => runCapUsd,
+    /** A guided tour may raise this call's cap, never past MAX_RUN_USD. */
+    setCap(usd) { runCapUsd = Math.max(PER_RUN_USD, Math.min(MAX_RUN_USD, Number(usd) || PER_RUN_USD)); return runCapUsd; },
+    assertCanSpend: can,
     /** Prices usage that did not come through post() (the realtime voice stream) into the ledger and this call. */
-    recordUsage(model, usage) { ledger.assertCanSpend({ live, runSpentUsd }); runSpentUsd += ledger.record(model, usage); },
+    recordUsage(model, usage) { can(); runSpentUsd += ledger.record(model, usage); },
     /** One agent turn: the model picks one tool. */
     // Low reasoning effort keeps a tool step near 1-2 s (measured Oct 29: minimal 1.6 s, default 3.4 s).
     respond: ({ instructions, input, tools }) => post('/responses', MODELS.agent, { instructions, input, tools, parallel_tool_calls: false, store: false, reasoning: { effort: AGENT_EFFORT } }, (d) => d.usage ?? {}),

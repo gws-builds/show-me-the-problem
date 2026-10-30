@@ -1,0 +1,34 @@
+{
+ "id": "under_sink", "title": "Under a sink (kitchen or bathroom cabinet)", "room": "under_sink", "primary": true,
+ "match": ["under the sink", "under sink", "sink cabinet", "p-trap", "trap", "drain", "supply line", "shut-off valve", "garbage disposal", "cabinet", "leak under", "drip under"],
+ "parts": [
+  {"id": "p_trap", "label": "P-trap", "sam": "pipe", "looks": "The U-shaped bend of drain pipe (white plastic, chrome or black) under the sink, with slip nuts at each end.", "normal": "Dry nuts and pipe, no water on the cabinet floor below.", "abnormal": "Drops hanging from a nut or the bend, a wet or stained cabinet floor directly under it."},
+  {"id": "drain_pipe", "label": "Drain pipe", "sam": "drain pipe", "looks": "The tailpiece from the sink basket down to the trap, and the arm from the trap into the wall.", "normal": "Joints tight and dry.", "abnormal": "Water marks or drips at a joint."},
+  {"id": "supply_line", "label": "Supply lines", "sam": "hose", "looks": "Thin braided or plastic hoses from the shut-off valves up to the faucet.", "normal": "Braid intact, dry ends.", "abnormal": "Kinks, bulges, rust on the braid, drips at the nut."},
+  {"id": "shutoff_valve", "label": "Shut-off valves", "sam": "valve", "looks": "One or two small valves with oval or round handles where the pipes come out of the wall or floor.", "normal": "Dry, handle present.", "abnormal": "Green or white crust, drips at the stem, a missing handle."},
+  {"id": "garbage_disposal", "label": "Garbage disposal", "sam": "garbage disposal", "looks": "A round metal or plastic canister hanging under the sink drain, with a power cord or wiring.", "normal": "Dry body.", "abnormal": "Water dripping from the bottom or the side connection."},
+  {"id": "cabinet_floor", "label": "Cabinet floor", "sam": "shelf", "looks": "The base panel of the cabinet.", "normal": "Dry and flat.", "abnormal": "Swollen, warped or dark stained board, standing water."},
+  {"id": "debris", "label": "Debris or stored items", "sam": "bottle", "looks": "Cleaning bottles, sponges, bags.", "normal": "", "abnormal": "Only mention when it hides the pipes; ask the caller to move it."},
+  {"id": "corrosion", "label": "Corrosion", "sam": "rust", "looks": "Green or white crust on valves and nuts, rust on metal pipe.", "normal": "", "abnormal": "A sign of a past or slow leak, not proof of a current one."}
+ ],
+ "faults": [
+  {"name": "Trap or drain leak", "evidence": "Water drops on the trap or a joint, or a wet stain directly beneath it. Ask to run water for 10 seconds while the camera watches the joint."},
+  {"name": "Supply line or valve leak", "evidence": "Drops or crust at the valve stem or the line's nut."},
+  {"name": "Disposal leak", "evidence": "Water on the bottom or side of the disposal body."}
+ ],
+ "hazards": [
+  {"id": "water_on_electrical", "label": "Water on the disposal wiring or an outlet", "category": "water_electric", "escalate": true, "threshold": "Water visibly on or dripping onto a plugged-in cord, outlet or the disposal's wiring cover."}
+ ],
+ "may": ["Clear the stored items out of the cabinet.", "Turn the shut-off valves clockwise to stop a leak (water only).", "Put a bowl and towel under a drip.", "Use a phone flashlight or the Light button."],
+ "must_not": ["Put a hand into the disposal.", "Unplug or touch a wet cord or outlet."],
+ "tour": {
+  "open": "Let's look under the sink together. Open both doors and show me the whole cabinet from about an arm's length.",
+  "checkpoints": [
+   {"part": "p_trap", "hint": "Tilt down to the U-shaped bend in the drain pipe."},
+   {"part": "shutoff_valve", "hint": "Look at the back wall or floor of the cabinet for the small valves with handles."},
+   {"part": "supply_line", "hint": "Follow the thin hoses from the valves up toward the faucet."},
+   {"part": "cabinet_floor", "hint": "Tilt down to the floor of the cabinet so I can see if it is wet or stained."}
+  ]
+ },
+ "sources": ["epa-leaks", "osha-elec"]
+}

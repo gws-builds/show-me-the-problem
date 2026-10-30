@@ -1,0 +1,22 @@
+{
+ "id": "other_equipment", "title": "AC condenser, thermostat, sump pump, garbage disposal", "room": "other",
+ "match": ["air conditioner", "ac", "condenser", "outside unit", "thermostat", "sump pump", "sump", "disposal", "garbage disposal"],
+ "parts": [
+  {"id": "condenser", "label": "AC condenser", "sam": "air conditioner", "looks": "The outdoor box with a fan grille on top and fins on the sides.", "normal": "Fins mostly straight, nothing blocking the top.", "abnormal": "Fins crushed, debris or plants against it, fan blade damaged."},
+  {"id": "disconnect", "label": "AC disconnect box", "sam": "electrical box", "looks": "A small grey box on the wall near the condenser.", "normal": "Cover closed.", "abnormal": "Cover missing or wires visible."},
+  {"id": "thermostat", "label": "Thermostat", "sam": "thermostat", "looks": "A wall unit with a display or dial; with its cover off, a circuit board and a wall plate with small wires.", "normal": "Display lit.", "abnormal": "Blank display (caller's words help: batteries, breaker)."},
+  {"id": "sump_pump", "label": "Sump pump", "sam": "pump", "looks": "A pump in a pit in the basement floor, with a pipe going up and a float.", "normal": "Pit not overflowing.", "abnormal": "Water near the rim, float stuck against the wall."},
+  {"id": "garbage_disposal", "label": "Garbage disposal", "sam": "garbage disposal", "looks": "A canister under the sink drain.", "normal": "Dry.", "abnormal": "Leak from the bottom or side."}
+ ],
+ "faults": [
+  {"name": "Condenser fan not spinning", "evidence": "Caller's words while the unit should run; the camera only shows the fan and grille."},
+  {"name": "Disposal hums but does not spin", "evidence": "Caller's words; often a jam. Never put a hand inside."}
+ ],
+ "hazards": [
+  {"id": "ac_open_disconnect", "label": "Open disconnect with wiring visible", "category": "wiring", "escalate": true, "threshold": "Visible bare wire or terminals in the disconnect box or the unit's electrical compartment."}
+ ],
+ "may": ["Clear leaves and plants away from the condenser.", "Replace thermostat batteries."],
+ "must_not": ["Open the condenser or disconnect box.", "Put a hand in the disposal."],
+ "tour": {"open": "Show me the whole unit from a couple of steps back.", "checkpoints": []},
+ "sources": ["nrcan-maint", "osha-elec"]
+}

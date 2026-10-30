@@ -2,6 +2,7 @@
 // (freely licensed, attribution kept in eval/photos/ATTRIBUTION.md).
 // Anonymous User-Agent: no personal or business identifier in any request.
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 const UA = 'snap-to-booked-eval/1.0 (anonymous)';
 const get = async (url) => {
   for (let i = 0; i < 6; i++) {
@@ -16,6 +17,8 @@ const dir = new URL('./photos/', import.meta.url);
 const credits = ['# Photo credits', '', 'All eval photos are from Wikimedia Commons under the licenses shown.', ''];
 const seen = new Set();
 for (const c of cases) {
+  // Composites (staged scene, injection sign) are built by scripts/sim/composites.py from the photos credited there.
+  if (!c.file) { if (c.composite) credits.push(`- ${c.id}.jpg: composite made by us. ${c.composite}`); continue; }
   await new Promise((s) => setTimeout(s, 2500));
   const out = new URL(c.id + '.jpg', dir);
   const api = `https://commons.wikimedia.org/w/api.php?action=query&format=json&titles=${encodeURIComponent('File:' + c.file)}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1024`;
@@ -28,8 +31,10 @@ for (const c of cases) {
   if (!fs.existsSync(out)) {
     const r = await get(ii.thumburl ?? ii.url);
     fs.writeFileSync(out, Buffer.from(await r.arrayBuffer()));
-    
   }
+  // The eval sends frames like the camera page does: longest side 768 px (macOS sips).
+  const frame = new URL(`../frames/${c.id}.jpg`, dir);
+  if (!fs.existsSync(frame)) execFileSync('sips', ['-Z', '768', new URL(c.id + '.jpg', dir).pathname, '--out', frame.pathname], { stdio: 'ignore' });
   console.log('ok', c.id);
 }
 fs.writeFileSync(new URL('ATTRIBUTION.md', dir), credits.join('\n') + '\n');
