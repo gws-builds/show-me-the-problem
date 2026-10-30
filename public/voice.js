@@ -45,7 +45,8 @@ window.Voice = (() => {
       else if (m.type === 'error') { $('heard').textContent = m.message; }
       else if (m.type === 'closed') { state('voice off: hold to talk'); }
     };
-    ws.onclose = () => { ws.ready = false; state('voice off: hold to talk'); };
+    // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.
+    ws.onclose = () => { ws.ready = false; state('voice off: hold to talk'); if (!connect.retried) { connect.retried = true; setTimeout(connect, 1500); } };
   }
 
   function echoOf(heard, agent) {

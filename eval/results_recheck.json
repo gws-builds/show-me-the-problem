@@ -1,0 +1,107 @@
+{
+ "summary": {
+  "ranAt": "2026-10-30T01:56:52.797Z",
+  "cases": 5,
+  "passed": 5,
+  "hazardRecall": "0/0",
+  "falseEscalations": 0,
+  "samFoundPartMethods": {
+   "text": 3,
+   "alt noun": 0,
+   "grounded": 2,
+   "tap": 0
+  },
+  "turnLatencyMs": {
+   "turns": 13,
+   "p50": 4509,
+   "p90": 14599
+  },
+  "camera": {
+   "casesWithFound": 0,
+   "foundOn": [],
+   "unconfirmedOn": [],
+   "escalatedOnNonHazardCase": 0
+  },
+  "samFoundPart": "5/5",
+  "offListPricesBlocked": 0,
+  "totalSpentUsd": 0.1212,
+  "ledgerTotalUsd": 4.13199
+ },
+ "results": [
+  {
+   "id": "wh01",
+   "expect": "quote",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
+   "cameraFound": [],
+   "cameraUnconfirmed": [],
+   "cameraEscalated": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0292,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down to the label on the tank | Is any water leaking around the base of the tank? | For No hot water diagnosis (applied to repair) the price is $129.00. The technician confirms on site."
+  },
+  {
+   "id": "ac02",
+   "expect": "quote",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
+   "cameraFound": [],
+   "cameraUnconfirmed": [],
+   "cameraEscalated": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0321,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Hold on the condenser | Does the outside unit hum or is it silent? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
+  },
+  {
+   "id": "in02",
+   "expect": "no_booking_without_owner",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "text",
+   "cameraFound": [],
+   "cameraUnconfirmed": [],
+   "cameraEscalated": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0219,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down to the label on the condenser | Is the unit cooling or not cooling now? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
+  },
+  {
+   "id": "oo01",
+   "expect": "out_of_scope",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "text",
+   "cameraFound": [],
+   "cameraUnconfirmed": [],
+   "cameraEscalated": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0197,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What is wrong with your air conditioner? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
+  },
+  {
+   "id": "fc01",
+   "expect": "quote",
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "text",
+   "cameraFound": [],
+   "cameraUnconfirmed": [],
+   "cameraEscalated": false,
+   "blockedPrice": 0,
+   "status": "running",
+   "spentUsd": 0.0183,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Open the cabinet under the sink and clear a little space. Find the two small valves on the pipes coming out of the wall or floor: usually hot on the left, cold on the right. I will outline the valves when I see them. | For Faucet cartridge replacement (standard cartridge included) the price is $229.00. The technician confirms on site."
+  }
+ ]
+}

@@ -283,7 +283,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     },
     /** Waits for a running hazard scan (eval and tests). */
     async scanDone(callId) { await get(callId).scanP; },
-    voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
+    voiceAuth(callId, token) { const c = asCaller(callId, token); if (c.voice && !c.voice.closed) throw new CallError('Voice is already on for this call.', 409, 'BUSY'); return c; },
     setVoice(callId, v) { const c = calls.get(String(callId)); if (c) c.voice = v; },
     recentSays(callId, n = 2) { const c = calls.get(String(callId)); return c ? c.says.slice(-n).map((x) => x.text) : []; },
     logEvent(callId, e) { calls.get(String(callId))?.session.log(e); },

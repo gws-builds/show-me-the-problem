@@ -93,7 +93,7 @@ if (page === 'console') {
     if (r?.ok) {
       const v = await r.json(); render(v, true);
       const key = `${v.events.length}`;
-      if (v.hasFrame && key !== frameKey) { frameKey = key; $('still').onload = draw; $('still').src = `/api/calls/${id}/still?k=${key}`; } else draw();
+      if (v.hasFrame && key !== frameKey) { frameKey = key; $('still').onload = () => { $('still').hidden = false; draw(); }; $('still').src = `/api/calls/${id}/still?k=${key}`; } else draw();
       setTimeout(poll, 1500); return;
     }
     r = await fetch(`/api/runs/${id}`).catch(() => null);

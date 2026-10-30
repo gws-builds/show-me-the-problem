@@ -90,5 +90,6 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
     /** Half-close: no more audio, but keep reading until the service sends its last turn and closes. */
     finish() { if (closed) return; try { meter(true); } catch { /* recorded */ } try { if (ready) up.send(JSON.stringify({ type: 'endStream' })); } catch { /* gone */ } setTimeout(end, 8000).unref?.(); },
     get seconds() { return total / BYTES_PER_SECOND; },
+    get closed() { return closed; },
   };
 }
