@@ -107,6 +107,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       return;
     }
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
+    // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.
+    if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question from this and the current frame in one or two sentences, then the tour continues.` });
     c.history.push({ role: 'user', content: `Caller: ${line}` });
     try {
       afterAgent(c, await callerTurn(c.ctx, c.history));
