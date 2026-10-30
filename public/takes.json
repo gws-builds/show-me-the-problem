@@ -22,5 +22,13 @@
  {"id": "panel", "title": "Tour: electrical panel", "tour": "electrical_panel", "setup": "Open only the small panel door. Never remove the cover. Stand two steps back.",
   "point": "The whole panel, then the rows of breakers it asks for. Touch nothing.",
   "say": ["\"This is my breaker panel. I don't know what any of it is.\"", "Follow the voice. Never touch anything inside.", "At the end: \"Does anything look wrong?\""],
-  "end": ["tour", "booked", "awaiting_owner"]}
+  "end": ["tour", "booked", "awaiting_owner"]},
+ {"id": "plate", "title": "Read the water heater label (age from the serial)", "setup": "Water heater or furnace with its rating sticker visible. Lights on. Hide any house number or name on mail nearby.",
+  "point": "The whole unit first, then the rating sticker from a hand's width away, square on, until it is sharp.",
+  "say": ["\"Can you read the label and tell me how old my water heater is? I'd like it flushed.\"", "Hold the sticker steady until it reads it out.", "When you hear a price: \"Okay, book it.\""],
+  "end": ["booked", "awaiting_owner"]},
+ {"id": "spanish", "title": "Spanish call: dripping faucet (en español)", "setup": "Kitchen sink, lamp on. Clear the counter: no people, mail or house numbers.",
+  "point": "The whole faucet, then the underside of the spout and handle.",
+  "say": ["\"Hola. El grifo de mi cocina gotea por debajo de la manija.\"", "Conteste sus preguntas en pocas palabras.", "Cuando oiga un precio: \"Está bien, agéndelo.\""],
+  "end": ["booked", "awaiting_owner"]}
 ]
