@@ -60,6 +60,7 @@ if (page === 'console') {
       case 'tour_start': return line('code_gate', 'Guided tour', e.text);
       case 'tour_done': return line('say', 'Tour finished', e.text);
       case 'plate': return line(e.ok ? 'verify' : 'error', 'Rating plate', e.ok ? `${e.summary} (frame ${e.frame})` : 'no legible plate in this frame');
+      case 'lang': return line('verify', 'Language', e.lang === 'es' ? 'Spanish: the agent and every code line now speak Spanish' : 'English');
       case 'kb_ref': return line('tool', 'Trade manuals (local search)', e.refs.map((r) => r.cite).join('; '));
       case 'tour': return line(e.items.some((i) => i.status === 'safety') ? 'code_gate' : 'tool', `Tour step ${e.step}, frame ${e.frame} (${String(e.room).replace('_', ' ')})`, e.items.length ? e.items.map((i) => `${i.label}: ${i.status}${i.evidence ? ` (${i.evidence})` : ''}${i.score != null ? ` SAM ${i.score}` : ''}${i.note ? ` [${i.note}]` : ''}`).join('; ') : 'nothing named in this frame');
       case 'kb': return line('verify', 'Knowledge base', `cards in the agent's context: ${e.cards.join(', ') || 'none'}`);

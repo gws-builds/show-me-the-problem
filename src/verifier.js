@@ -35,7 +35,8 @@ function hazardInOne(text, skip = null) {
   for (const [i, re] of HAZARDS.entries()) {
     if (skip?.has(i)) continue;
     for (const m of t.matchAll(new RegExp(re.source, 'gi'))) {
-      if (!NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index)))) return true;
+      // "gas tank, no leak visible" (eval wh01, Oct 30): a negation inside the match negates it too.
+      if (!NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index))) && !NEGATED.test(m[0].split(/\s+/).slice(1).join(' '))) return true;
     }
   }
   return false;

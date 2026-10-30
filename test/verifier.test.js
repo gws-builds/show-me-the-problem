@@ -55,3 +55,10 @@ test('Spanish hazard words escalate in code; Spanish negations do not', () => {
     assert.equal(hazardIn(t), false, t);
   }
 });
+
+test('a negation inside the hazard words negates them ("gas tank, no leak visible"); real reports still escalate', async () => {
+  const { hazardIn, modelNoteHazardIn } = await import('../src/verifier.js');
+  assert.equal(modelNoteHazardIn('gas tank, no leak visible, problem started couple days ago'), false);
+  assert.equal(hazardIn('the gas line is not leaking'), false);
+  for (const t of ['I smell gas', 'there is a gas leak by the heater', 'gas smell in the basement', 'sparks from the outlet', 'huele a gas']) assert.equal(hazardIn(t), true, t);
+});

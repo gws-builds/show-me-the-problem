@@ -75,7 +75,7 @@ export function decodeSerial(brand, serial, { now = new Date() } = {}) {
       if (m) { const month = Number(m[1]); const year = fullYear(Number(m[2]), nowYear); if (notFuture(year, month)) return { year, month, week: null, rule, ruleLabel: label, alternative: null, basis: 'serial' }; }
     }
     if (rule === 'aosmith_yyww') {
-      const m = s.match(/^(\d{2})(\d{2})\d/);
+      const m = s.match(/^(\d{2})(\d{2})/);
       if (m) { const yy = Number(m[1]); const week = Number(m[2]); const year = 2000 + yy; if (yy >= 8 && week >= 1 && week <= 53 && year <= nowYear) return { year, month: Math.min(12, Math.floor((week - 1) / 4.35) + 1), week, rule, ruleLabel: label, alternative: null, basis: 'serial' }; }
     }
     if (rule === 'aosmith_pre2008') {
@@ -113,7 +113,7 @@ export function describePlate(plate, { now = new Date() } = {}) {
   const how = !date ? '' : date.basis === 'printed' ? 'printed on the plate' : `estimated from the serial (${date.ruleLabel})${date.alternative ? `; the code repeats every 20 years, so ${date.alternative} is also possible` : ''}`;
   const specs = [plate.capacityGal ? `${plate.capacityGal} gal` : '', plate.fuel !== 'unknown' ? plate.fuel : '', plate.inputBtu ? `${plate.inputBtu.toLocaleString('en-US')} BTU/h` : '', plate.kw ? `${plate.kw} kW` : '', plate.volts ? `${plate.volts} V` : '', plate.refrigerant].filter(Boolean).join(', ');
   const ident = [plate.brand, plate.model && `model ${plate.model}`, plate.serial && `serial ${plate.serial}`].filter(Boolean).join(', ');
-  const summary = `Rating plate: ${ident || 'partly legible'}${specs ? `; ${specs}` : ''}${when ? `. Made ${when} (${how}), about ${age} years old` : plate.serial ? '. No date rule for this brand on file: the technician dates it on site' : ''}.`;
+  const summary = `Rating plate: ${ident || 'partly legible'}${specs ? `; ${specs}` : ''}${when ? `. Made ${when} (${how}), about ${age} years old` : plate.serial ? `. ${brandKey(plate.brand) ? 'The serial does not fit a date rule on file' : 'No date rule for this brand on file'}: the technician dates it on site` : ''}.`;
   return { ...plate, date: date ?? null, age, when, summary: summary.slice(0, 400) };
 }
 

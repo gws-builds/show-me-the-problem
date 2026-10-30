@@ -30,7 +30,7 @@ export const DEFINITIONS = [
     box_ordinal: { type: 'integer', description: 'ordinal of the SAM box showing the equipment' }, notes: str('anything that affects safety or price'),
   }),
   fn('inspect_frame', 'Look at the current camera frame with Muse Spark vision and answer one question (faucet type, where water appears, corrosion). The answer is recorded as evidence with its frame.', { question: str('one short question about what is visible') }),
-  fn('read_plate', 'Read the rating plate or data label on the equipment in view (brand, model, serial, fuel, capacity). Code estimates the age from the serial with published rules and adds it for the technician. Ask the caller to show the label first (direct_camera) if it is not in view.', { equipment: str('what the plate is on, e.g. "water heater"') }),
+  fn('read_plate', 'Only when the caller asks how old the equipment is, or asks you to read its label or model: read the rating plate in view (brand, model, serial, fuel, capacity). Code estimates the age from the serial with published rules and adds it for the technician.', { equipment: str('what the plate is on, e.g. "water heater"') }),
   fn('lookup_manual', 'Search the public trade manuals (US Navy and Army courses, HUD, OSHA, EPA) for how a part works or what it looks like. Returns short cited excerpts. Use it to explain, never to decide a hazard or a price.', { question: str('a few plain words, e.g. "temperature and pressure relief valve purpose"') }),
   fn('record_hypothesis', 'Record the likely worn part, citing evidence ids (E1, E2...) from earlier tool outputs. Code refuses a hypothesis without cited evidence.', {
     part: { type: 'string', enum: HYPOTHESES, description: 'likely worn part' }, why: str('one short reason'), cites: { type: 'array', items: { type: 'string' }, description: 'evidence ids' },
@@ -128,7 +128,9 @@ export async function runTool(name, args, ctx) {
       const p = describePlate(cleanPlate(j), { now: new Date(ctx.now?.() ?? Date.now()) });
       if (!p) {
         session.log({ kind: 'plate', ok: false, frame: frame.n });
-        return { output: { read: false, note: 'No legible rating plate in this frame.' }, say: plateLine(null), status: 'waiting_camera' };
+        // No spoken line from code: the agent decides whether to ask for a closer view or carry on with the job
+        // (eval wh02, Oct 30: a forced "move closer to the sticker" derailed a plain water heater call).
+        return { output: { read: false, note: 'No legible rating plate in this frame. Carry on with the job; ask for a closer view of the label (direct_camera) only if the caller asked about it.' } };
       }
       const n = session.keepFrame(frame.n, frame.dataUrl);
       const entry = session.evidence.add({ kind: 'plate', claim: p.summary, frame: n, confidence: p.legible, support: `Muse Spark read the plate on this frame; ${p.date?.basis === 'printed' ? 'date printed on the plate' : p.date ? `age by code from ${p.date.ruleLabel} (kb/serials.json)` : 'no date rule'}` });
