@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { createLedger } from './budget.js';
 import { createClient } from './meta.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
+import { upgrade } from './ws.js';
+import { createVoiceSession } from './voice.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
@@ -37,6 +39,9 @@ const STATIC = {
   '/camera.js': ['camera.js', 'text/javascript'],
   '/console.js': ['console.js', 'text/javascript'],
   '/owner.js': ['owner.js', 'text/javascript'],
+  '/overlay.js': ['overlay.js', 'text/javascript'],
+  '/voice.js': ['voice.js', 'text/javascript'],
+  '/pcm-worklet.js': ['pcm-worklet.js', 'text/javascript'],
 };
 const HEADERS = {
   'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -73,7 +78,7 @@ async function route(req, res) {
     const staff = STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY;
     return send(res, 200, calls.create({ ip: clientIp(req), live: Boolean(staff) }));
   }
-  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|decision|still|annotated))?$/);
+  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|text|tap|decision|still|annotated))?$/);
   if (m) {
     const [, id, action] = m;
     const cam = String(req.headers['x-cam-token'] ?? ''); const owner = String(req.headers['x-owner-token'] ?? '');
@@ -89,11 +94,12 @@ async function route(req, res) {
       const [head, b64] = d.split(',');
       return send(res, 200, Buffer.from(b64, 'base64'), head.slice(5).split(';')[0]);
     }
-    if (req.method === 'POST' && action === 'frame') return send(res, 200, await calls.frame(id, cam, (await json(req, LIMITS.frameBytes + 200)).image));
+    if (req.method === 'POST' && action === 'frame') { const b = await json(req, LIMITS.frameBytes + 200); return send(res, 200, await calls.frame(id, cam, b.image, b.luma)); }
     if (req.method === 'POST' && action === 'speech') {
       if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
       return send(res, 200, await calls.speech(id, cam, await readBody(req, LIMITS.wavBytes)));
     }
+    if (req.method === 'POST' && action === 'tap') { const b = await json(req, 200); return send(res, 200, await calls.tap(id, cam, b.x, b.y)); }
     if (req.method === 'POST' && action === 'text') return send(res, 200, await calls.text(id, cam, (await json(req, 2000)).text));
     if (req.method === 'POST' && action === 'decision') return send(res, 200, await calls.decide(id, owner, (await json(req, 200)).approve === true));
   }
@@ -115,6 +121,33 @@ const server = http.createServer((req, res) => {
   });
 });
 server.requestTimeout = 60_000;
+
+// Voice: /api/calls/<id>/voice. The first message must be {"token": camToken}; then binary 16 kHz PCM.
+// The browser never sees the API key: this server opens the upstream socket and adds it.
+server.on('upgrade', (req, socket) => {
+  const m = new URL(req.url, 'http://x').pathname.match(/^\/api\/calls\/([a-f0-9]{32})\/voice$/);
+  const origin = String(req.headers.origin ?? ''); const host = String(req.headers.host ?? '');
+  if (!m || (origin && new URL(origin).host !== host)) { socket.destroy(); return; }
+  const ws = upgrade(req, socket); if (!ws) return;
+  const callId = m[1]; let session = null;
+  const toClient = (o) => ws.send(JSON.stringify(o));
+  const authTimer = setTimeout(() => { if (!session) ws.close(1008); }, 5000);
+  ws.onMessage((data, isBinary) => {
+    if (session) { if (isBinary) session.audio(data); else if (/"endStream"/.test(data)) session.finish(); return; }
+    if (isBinary) return ws.close(1008);
+    try {
+      const { token } = JSON.parse(data);
+      calls.voiceAuth(callId, String(token ?? ''));
+      session = createVoiceSession({
+        calls, callId, client: calls.clientOf(callId), apiKey: process.env.META_API_KEY,
+        openUpstream: (url) => new WebSocket(url), toClient,
+      });
+      calls.setVoice(callId, session);
+      clearTimeout(authTimer);
+    } catch (err) { toClient({ type: 'error', message: err instanceof CallError || err?.code ? err.message : 'Voice could not start.' }); ws.close(1008); }
+  });
+  ws.onClose(() => { clearTimeout(authTimer); if (session) { session.end(); calls.setVoice(callId, null); } });
+});
 const PORT = Number(process.env.PORT || 8642);
 const HOST = process.env.HOST || '127.0.0.1';
 server.listen(PORT, HOST, () => console.log(`snap-to-booked on http://${HOST}:${PORT} (${ledger.mode()})`));

@@ -30,3 +30,15 @@ input[type=text] { font: inherit; flex:1; min-width: 0; padding: 12px; border-ra
 .meter { height: 8px; background:#0d1526; border-radius: 99px; overflow:hidden; } .meter > i { display:block; height:100%; background: var(--accent); }
 .small { font-size: .82rem; color: var(--dim); }
 .consent { font-size: .85rem; }
+.stage .staged-label { position:absolute; top:10px; left:10px; right:10px; background:#fde047; color:#1a1400; font-weight:800; font-size:.85rem; padding:6px 10px; border-radius:8px; text-align:center; }
+.footage { color: var(--warn); }
+button.mini { min-height: 32px; padding: 4px 10px; font-size: .82rem; }
+.checks { list-style:none; padding:0; margin:0; font-size:.9rem; }
+.checks li { padding:6px 8px; border-bottom:1px solid var(--line); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.checks .st { font-weight:800; text-transform:uppercase; font-size:.72rem; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color: var(--dim); min-width: 5.5em; text-align:center; }
+.checks .clear .st { color: var(--ok); border-color: var(--ok); } .checks .found .st { color:#fff; background: var(--bad); border-color: var(--bad); }
+.checks .unconfirmed .st { color: var(--warn); border-color: var(--warn); }
+.checks img { width: 56px; height: 42px; object-fit: cover; border-radius: 4px; }
+.evidence { list-style:none; padding:0; margin:0; font-size:.88rem; } .evidence li { padding:6px 0; border-bottom:1px solid var(--line); }
+.evidence .unsupported { color: var(--warn); }
+main.call { max-width: 560px; }

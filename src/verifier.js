@@ -10,13 +10,20 @@ const HAZARDS = [
   /\b(exposed|live|bare|loose|hanging)\b.{0,6}\bwir(e|es|ing)\b|\b(got |getting )?(shocked|electrocuted)\b|\bshock(s|ed)? me\b/i,
   /\bwater\b.{0,25}\b(panel|breaker|outlet|socket|wiring|electrical)\b|\b(panel|breaker|outlet)\b.{0,20}\b(wet|water|flood)/i,
   /\bcarbon monoxide\b|\b(co|carbon) (alarm|detector)\b.{0,15}\b(going off|beep|sound|alarm)|\bceiling\b.{0,12}\b(sag|bulg|collaps)|\bstructural\b|\bcollaps(e|ed|ing)\b/i,
+  // Spanish (red team B4, Oct 29: "huele a gas" and "chispas" passed the gate). Muse Voice
+  // Transcribe hears Spanish, so the code gate must read it too.
+  /\b(huele|olor|oliendo|apesta)\b.{0,15}\bgas\b|\bfuga\w* de gas\b|\bgas\b.{0,15}\b(fuga|olor|huele|escap)\w*|\bhuevos? podridos?\b/i,
+  /\bchispa(s|zos)?\b|\bchisporrote\w*|\bchispea\w*|\bhumo\b|\bfuego\b|\bincendio\b|\bse (est[aá] )?quem(a|ó|ando)\b|\bquemad[oa]s?\b|\bderretid[oa]s?\b|\ben llamas\b/i,
+  /\bcables?\b.{0,15}\b(pelad|expuest|suelt|desnud|quemad)\w*|\b(me )?dio (una )?(descarga|toque|calambre)\b|\belectrocut\w*/i,
+  /\bagua\b.{0,25}\b(panel|tablero|breaker|enchufe|toma ?corriente|cables?|el[eé]ctric\w*)|\b(panel|tablero|enchufe)\b.{0,20}\b(mojad\w*|agua|inundad\w*)/i,
+  /\bmon[oó]xido\b|\b(alarma|detector)\b.{0,20}\b(mon[oó]xido|de co)\b|\btecho\b.{0,15}\b(hundi|colaps|cedi|cay)\w*|\bderrumb\w*/i,
 ];
 
 // "No burning or scorching" is the absence of a hazard. A match counts unless a
 // negation sits earlier in the same clause (red team Oct 29: the model's own note
 // "no burning or scorching per caller" escalated a plain tripping breaker).
-const NEGATED = /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|hasn'?t|can'?t|cannot)\b/i;
-const CLAUSE = /[.!?;,]|\b(but|and|so|though|although|yet|because|now|then|except)\b/gi;
+const NEGATED = /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|hasn'?t|can'?t|cannot|sin|nunca|nada|ni|tampoco)\b/i;
+const CLAUSE = /[.!?;,]|\b(but|and|so|though|although|yet|because|now|then|except|pero|y|porque|aunque|ahora)\b/gi;
 const lastClause = (s) => s.split(CLAUSE).filter((x) => x !== undefined).pop() ?? '';
 
 function hazardInOne(text) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verify } from '../src/verifier.js';
+import { verify, hazardIn } from '../src/verifier.js';
 
 const priceList = [{ id: 'wh-flush', label: 'Water heater flush', priceCents: 18900 }, { id: 'valve', label: 'Shut-off valve replacement', priceCents: 24500 }];
 const boxes = [{ id: 'b1', label: 'water heater', score: 0.91 }];
@@ -45,4 +45,13 @@ test('a negated hazard is not a hazard; an affirmed one still is (red team Oct 2
   const { hazardIn } = await import('../src/verifier.js');
   for (const t of ['single breaker, no burning or scorching per caller', 'nothing burnt, no smoke', "I don't smell gas", 'there are no sparks', 'without any exposed wiring']) assert.equal(hazardIn(t), false, t);
   for (const t of ['no idea why but it smells like gas', 'it is not working and there are sparks', "I don't know, the panel is wet", 'no hot water and smoke from the heater']) assert.equal(hazardIn(t), true, t);
+});
+
+test('Spanish hazard words escalate in code; Spanish negations do not', () => {
+  for (const t of ['Huele a gas en la cocina', 'Hay una fuga de gas', 'Salen chispas del enchufe', 'Hay humo saliendo del calentador', 'Los cables están pelados', 'Cae agua sobre el tablero eléctrico', 'La alarma de monóxido está sonando', 'El enchufe está quemado', 'La estufa está en llamas']) {
+    assert.equal(hazardIn(t), true, t);
+  }
+  for (const t of ['No huele a gas', 'Sin chispas ni humo', 'La llave gotea por debajo', 'Me llamas mañana', 'Nunca hubo humo']) {
+    assert.equal(hazardIn(t), false, t);
+  }
 });

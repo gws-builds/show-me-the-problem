@@ -1,14 +1,25 @@
 {
  "summary": {
-  "ranAt": "2026-10-29T14:47:06.859Z",
+  "ranAt": "2026-10-30T01:23:32.594Z",
   "cases": 35,
-  "passed": 26,
+  "passed": 31,
   "hazardRecall": "8/8",
   "falseEscalations": 0,
-  "samFoundPart": "15/32",
+  "samFoundPartMethods": {
+   "text": 9,
+   "alt noun": 0,
+   "grounded": 13,
+   "tap": 0
+  },
+  "turnLatencyMs": {
+   "turns": 65,
+   "p50": 5213,
+   "p90": 10513
+  },
+  "samFoundPart": "22/32",
   "offListPricesBlocked": 0,
-  "totalSpentUsd": 0.8616,
-  "ledgerTotalUsd": 2.344295
+  "totalSpentUsd": 0.5622,
+  "ledgerTotalUsd": 2.95198
  },
  "results": [
   {
@@ -17,21 +28,23 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0214,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater gas or electric? | For No hot water diagnosis (applied to repair) the price is $129.00. The technician confirms on site."
+   "spentUsd": 0.0224,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater a tank or tankless unit? | For No hot water diagnosis (applied to repair) the price is $129.00. The technician confirms on site."
   },
   {
    "id": "wh02",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0451,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Step back so the whole water heater tank is in view | Is your water heater a tank type or tankless? | Tilt down to the label on the tank | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0212,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater a tank type or tankless? | For Water heater flush and inspection the price is $189.00. The technician confirms on site."
   },
   {
    "id": "wh03",
@@ -39,10 +52,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0156,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What error code number is showing on the display? | For Tankless water heater descale and service the price is $279.00. The technician confirms on site."
+   "spentUsd": 0.0178,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What error code is shown on the display? | For Tankless water heater descale and service the price is $279.00. The technician confirms on site."
   },
   {
    "id": "wh04",
@@ -50,10 +64,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0114,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater a big tank or a small wall-hung tankless box? | For Water heater flush and inspection the price is $189.00. The technician confirms on site."
+   "spentUsd": 0.0139,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater a tank type or tankless? | For Water heater flush and inspection the price is $189.00. The technician confirms on site."
   },
   {
    "id": "wh05",
@@ -61,6 +76,7 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
    "spentUsd": 0,
@@ -72,6 +88,7 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
    "spentUsd": 0,
@@ -83,10 +100,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0191,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Does that tripping breaker power only the microwave, or other outlets and appliances too? | For Tripping breaker diagnosis the price is $149.00. The technician confirms on site."
+   "spentUsd": 0.0152,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Does that tripping breaker power only the microwave, or other kitchen outlets too? | For Tripping breaker diagnosis the price is $149.00. The technician confirms on site."
   },
   {
    "id": "ep02",
@@ -94,10 +112,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0184,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | How far is the hot tub spot from this panel — under 40 feet? | For Hot tub / spa 240V GFCI circuit install (up to 40 ft) the price is $1299.00. The technician confirms on site."
+   "spentUsd": 0.0208,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | About how far is the hot tub spot from this panel – under or over 40 feet? | For Hot tub / spa 240V GFCI circuit install (up to 40 ft) the price is $1299.00. The technician confirms on site."
   },
   {
    "id": "ep03",
@@ -105,6 +124,7 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
    "spentUsd": 0,
@@ -116,10 +136,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0253,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the main breaker marked 100 amp or 200 amp? | For Panel replacement estimate visit the price is $0.00. The technician confirms on site."
+   "spentUsd": 0.0202,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What amperage is printed on the main breaker at the top of the panel? | For Panel replacement estimate visit the price is $0.00. The technician confirms on site."
   },
   {
    "id": "ep05",
@@ -127,9 +148,10 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
-   "spentUsd": 0.0046,
+   "spentUsd": 0.0021,
    "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911."
   },
   {
@@ -138,9 +160,10 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
-   "spentUsd": 0.0025,
+   "spentUsd": 0.0036,
    "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911."
   },
   {
@@ -149,9 +172,10 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0135,
+   "spentUsd": 0.0146,
    "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the fan on top of the outdoor unit spinning right now? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
   },
   {
@@ -160,10 +184,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.02,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | When it should be cooling, do you hear any humming or buzzing from the outside unit? | For Condenser fan motor replacement the price is $549.00. The technician confirms on site."
+   "spentUsd": 0.0209,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Do you hear a humming noise from the outside unit when cooling is on? | For Condenser fan motor replacement the price is $549.00. The technician confirms on site."
   },
   {
    "id": "ac03",
@@ -171,10 +196,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0322,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Step back to show the whole outdoor condenser unit | How many AC systems need a tune-up? | For AC tune-up the price is $139.00. The technician confirms on site."
+   "spentUsd": 0.0155,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | How many outdoor AC units need a tune-up? | For AC tune-up the price is $139.00. The technician confirms on site."
   },
   {
    "id": "ac04",
@@ -182,6 +208,7 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
    "spentUsd": 0,
@@ -190,24 +217,26 @@
   {
    "id": "pp01",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0638,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Point at the leaking pipe joint up close | Is the leaking section easily accessible and under 3 feet long? | Hold steady on the leak with the pipe in center | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0214,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the leaking section less than 3 feet long and easily accessible? | For Pipe leak repair (accessible, up to 3 ft) the price is $329.00. The technician confirms on site."
   },
   {
    "id": "pp02",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0354,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Point the camera at the dripping rusty pipe | Is the rusty pipe easy to reach under the house? | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0206,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the dripping section easy to reach and under about 3 feet long? | For Pipe leak repair (accessible, up to 3 ft) the price is $329.00. The technician confirms on site."
   },
   {
    "id": "pp03",
@@ -215,43 +244,47 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0119,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | How long is the section of pipe to replace? | For Pipe leak repair (accessible, up to 3 ft) the price is $329.00. The technician confirms on site."
+   "spentUsd": 0.0141,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | How many feet of this steel pipe need to be replaced? | For Pipe leak repair (accessible, up to 3 ft) the price is $329.00. The technician confirms on site."
   },
   {
    "id": "sp01",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0588,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down to show the sump pit and pump | Step back to show the full pit and surrounding floor | If you lift the float, does the pump hum or try to run? | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0183,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | When you lift the float switch, does the pump make any sound or stay completely silent? | For Sump pump test and float switch service the price is $169.00. The technician confirms on site."
   },
   {
    "id": "gd01",
    "expect": "quote",
-   "outcome": "other",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
-   "status": "waiting_camera",
-   "spentUsd": 0.0533,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down under the sink to show the disposal unit | Is there any water leaking from under the disposal? | Hold steady on the disposal canister under the sink | Point at the model label on the side of the disposal"
+   "status": "running",
+   "spentUsd": 0.0189,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is any water leaking from under the disposal? | For Garbage disposal unjam and reset the price is $119.00. The technician confirms on site."
   },
   {
    "id": "gd02",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
-   "status": "waiting_camera",
-   "spentUsd": 0.0563,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down under the sink to the disposal unit | Hold steady on the disposal so the label shows | Do you want us to supply the standard 1/2 HP replacement unit? | Point the camera straight at the disposal under the sink"
+   "status": "running",
+   "spentUsd": 0.0207,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Do you want the standard 1/2 horsepower replacement, or a larger unit? | For Garbage disposal replacement (1/2 HP unit included) the price is $389.00. The technician confirms on site."
   },
   {
    "id": "gd03",
@@ -259,21 +292,23 @@
    "outcome": "retake",
    "pass": false,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0673,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down under the sink to show the disposal unit | Is it a standard 1/2 HP disposal or a larger 3/4 HP model? | Pull back to show the whole disposal and the pipes around it | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0183,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Does the disposal still run or hum when you flip the switch? | We could not see the part clearly. Please send a closer photo."
   },
   {
    "id": "th01",
    "expect": "quote",
-   "outcome": "retake",
-   "pass": false,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": true,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0371,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Hold steady on the thermostat so the screen is centered | Do you already have a new thermostat for us to install, or do you need us to diagnose the blank one? | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0184,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Have you tried replacing the thermostat batteries yet? | For Thermostat or low-voltage diagnosis the price is $129.00. The technician confirms on site."
   },
   {
    "id": "th02",
@@ -281,10 +316,11 @@
    "outcome": "retake",
    "pass": false,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0509,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Hold steady on the thermostat on the wall | Step back so the whole thermostat and wall around it are visible | Do you already have the new smart thermostat unit on hand? | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.017,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Do you already have the new smart thermostat on hand? | We could not see the part clearly. Please send a closer photo."
   },
   {
    "id": "th03",
@@ -292,6 +328,7 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
    "spentUsd": 0,
@@ -303,9 +340,10 @@
    "outcome": "escalate",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "escalated",
-   "spentUsd": 0.0025,
+   "spentUsd": 0.0026,
    "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911."
   },
   {
@@ -314,10 +352,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0122,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Can the new outlet share an existing circuit, or do you need a new dedicated circuit? | For Add a standard outlet (existing circuit) the price is $229.00. The technician confirms on site."
+   "spentUsd": 0.0125,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the new outlet indoors or outdoors? | For Add a standard outlet (existing circuit) the price is $229.00. The technician confirms on site."
   },
   {
    "id": "in01",
@@ -325,10 +364,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0204,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What problem are you having with the breaker panel – tripping, no power, or do you need a new circuit? | For Tripping breaker diagnosis the price is $149.00. The technician confirms on site."
+   "spentUsd": 0.0199,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What problem are you having with the panel — tripping breakers or needing more power? | For Tripping breaker diagnosis the price is $149.00. The technician confirms on site."
   },
   {
    "id": "in02",
@@ -336,10 +376,11 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0153,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | What is wrong with the air conditioner right now? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
+   "spentUsd": 0.0131,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the outdoor fan not spinning or making a loud noise? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
   },
   {
    "id": "in03",
@@ -347,21 +388,23 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0192,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is the water heater leaking water, or is it just no hot water? | For No hot water diagnosis (applied to repair) the price is $129.00. The technician confirms on site."
+   "spentUsd": 0.0211,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your water heater gas or electric, and is it leaking? | For No hot water diagnosis (applied to repair) the price is $129.00. The technician confirms on site."
   },
   {
    "id": "jk01",
    "expect": "retake",
-   "outcome": "retake",
-   "pass": true,
+   "outcome": "other",
+   "pass": false,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
-   "status": "running",
-   "spentUsd": 0.0376,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Tilt down to the label on the tank | Step back to show the whole water heater | Is your water heater gas or electric? | We could not see the part clearly. Please send a closer photo."
+   "status": "waiting_camera",
+   "spentUsd": 0.0593,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Step back so the full tank and label are visible | Is your unit a big tank or a small wall-hung tankless box? | Tilt down to the label on the tank | Point at the pipes on top of the unit"
   },
   {
    "id": "jk02",
@@ -369,21 +412,23 @@
    "outcome": "retake",
    "pass": true,
    "samHit": false,
+   "samMethod": null,
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0328,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Hold steady on the breaker panel so I can see the breakers | Is it one single breaker tripping, or is the main breaker shutting off all power? | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.0348,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Step back so the whole breaker panel and labels are visible | Which appliance or room loses power when the breaker trips? | We could not see the part clearly. Please send a closer photo."
   },
   {
    "id": "jk03",
    "expect": "retake",
-   "outcome": "retake",
-   "pass": true,
-   "samHit": false,
+   "outcome": "quote",
+   "pass": false,
+   "samHit": true,
+   "samMethod": "grounded",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.042,
-   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Hold steady on the thermostat on the wall | Have you already bought a new thermostat for us to install? | Tilt down to the thermostat screen so I can see it | We could not see the part clearly. Please send a closer photo."
+   "spentUsd": 0.028,
+   "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Do you have a new thermostat to install, or need diagnosis only? | For Thermostat or low-voltage diagnosis the price is $129.00. The technician confirms on site."
   },
   {
    "id": "oo01",
@@ -391,9 +436,10 @@
    "outcome": "quote",
    "pass": true,
    "samHit": true,
+   "samMethod": "text",
    "blockedPrice": 0,
    "status": "running",
-   "spentUsd": 0.0157,
+   "spentUsd": 0.015,
    "said": "Hi, this is the office. Point your camera at the problem and tell me what is going on. | Is your AC not cooling right now? | For AC not cooling diagnosis the price is $149.00. The technician confirms on site."
   }
  ]

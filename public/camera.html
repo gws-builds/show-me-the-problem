@@ -1,16 +1,25 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Show Me the Problem: call</title><link rel="stylesheet" href="/app.css"></head>
-<body><main>
+<body><main class="call">
 <div class="row"><strong>Northside Plumbing &amp; Heating</strong><span class="pill" id="status">connecting</span><span class="small">demo business</span></div>
 <div class="card consent" id="consent">
   <p>This call uses your camera and microphone so the office can see the problem. Frames and audio are used for this call only: they are not stored after it ends. Don't point the camera at people or house numbers.</p>
+  <p class="small footage" id="footageNote" hidden>Footage mode: a clip recorded earlier plays here, and its frames and sound go to the models live, right now. Nothing on this page is pre-computed.</p>
   <button id="go">Turn on camera and microphone</button> <span id="err" class="small"></span>
 </div>
-<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas></div>
+<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas><div class="staged-label" id="staged" hidden>STAGED SCENE · arranged by us for this demo; the detection is live</div></div>
+<div class="row small"><span id="luma"></span><button class="secondary mini" id="torch" hidden>Flashlight on</button><span id="torchNote"></span></div>
 <div class="card">
   <div class="agent-line" id="line" aria-live="polite">…</div>
-  <button class="talk" id="talk" disabled>Tap to talk</button>
+  <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>
+  <button class="talk" id="talk" disabled>Hold to talk</button>
   <form class="row" id="typed" style="margin-top:10px"><input type="text" id="t" maxlength="300" placeholder="Or type here" autocomplete="off"><button class="secondary" type="submit">Send</button></form>
   <p class="small" id="heard"></p>
+  <p class="small" id="lat"></p>
+  <p class="small">Tap the part on screen to point at it.</p>
 </div>
+<div class="card"><h2>Safety and inspection checks</h2><ul class="checks" id="checks"></ul>
+  <label class="small"><input type="checkbox" id="stagedToggle"> This is a staged scene (shows a label on screen and in the console)</label></div>
+<script src="/overlay.js"></script>
+<script src="/voice.js"></script>
 <script src="/camera.js"></script>
 </main></body></html>

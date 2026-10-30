@@ -23,7 +23,7 @@ function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips
     if (url.endsWith('/asr/transcribe')) { counts.asr++; return new Response(heard); }
     if (url.endsWith('/images/edits')) { counts.image++; return new Response(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgo=' }] })); }
     const body = JSON.parse(init.body);
-    if (body.model === 'sam-3.1') { counts.sam++; const n = sam(counts.sam); return new Response(JSON.stringify({ output_text: Array.from({ length: n }, (_, i) => `<0f>${i + 1}<|box;x1=10;y1=20;x2=300;y2=600;w=640;h=640;c=0.9|>`).join('') })); }
+    if (body.model === 'sam-3.1') { counts.sam++; const n = sam(counts.sam); return new Response(JSON.stringify({ output_text: Array.from({ length: n }, (_, i) => `<0f>${i + 1}<|box;x1=170;y1=100;x2=470;y2=540;w=640;h=640;c=0.9|>`).join('') })); }
     counts.spark++;
     const next = agent.shift();
     const output = next ? [{ type: 'function_call', call_id: `c${counts.spark}`, name: next[0], arguments: JSON.stringify(next[1]) }] : [{ type: 'message', content: [{ type: 'output_text', text: 'hi' }] }];
@@ -195,4 +195,17 @@ test('pages never render model or caller text as HTML', () => {
     const src = fs.readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/, f);
   }
+});
+
+test('tap-to-point: only the caller can tap, coordinates are bounded, and a tap segments the latest frame', async () => {
+  const { calls, counts } = setup();
+  const c = calls.create({ ip: '1.1.9.1' });
+  await assert.rejects(calls.tap(c.id, c.ownerToken, 0.5, 0.5), { code: 'FORBIDDEN' });
+  await assert.rejects(calls.tap(c.id, c.camToken, 2, 0.5), { code: 'BAD_REQUEST' });
+  await assert.rejects(calls.tap(c.id, c.camToken, '0.5', 0.5), { code: 'BAD_REQUEST' });
+  await calls.frame(c.id, c.camToken, JPEG);
+  const r = await calls.tap(c.id, c.camToken, 0.4, 0.6);
+  assert.equal(r.outlined, 1);
+  assert.ok(counts.sam >= 1);
+  assert.ok(calls.view(c.id).events.some((e) => e.kind === 'tap'));
 });

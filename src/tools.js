@@ -3,6 +3,7 @@
 // the model's own words: propose_quote goes through the verifier, and
 // book_visit only queues a request for the owner's tap.
 import { verify, hazardIn } from './verifier.js';
+import { locate } from './locate.js';
 
 const fn = (name, description, properties, required = Object.keys(properties)) => ({
   type: 'function', name, description, strict: true,
@@ -11,7 +12,7 @@ const fn = (name, description, properties, required = Object.keys(properties)) =
 const str = (description) => ({ type: 'string', description });
 
 export const DEFINITIONS = [
-  fn('find_part', 'Look for a part in the live camera view with SAM 3.1. Use plain nouns, e.g. "water heater", "pressure relief valve", "breaker panel".', { part: str('what to find') }),
+  fn('find_part', 'Look for a part in the live camera view. SAM 3.1 segments it; on a miss, code retries with an alternative noun and with a Muse Spark grounding point. Use plain object nouns, e.g. "faucet", "shut-off valve", "water heater", "breaker panel" (not states like "leak").', { part: str('what to find') }),
   fn('direct_camera', 'Tell the caller how to move the camera so the part or its label is visible.', { instruction: str('one short instruction, e.g. "Tilt down to the label on the tank"') }),
   fn('ask_caller', 'Ask the caller ONE question whose answer changes the price or urgency.', { question: str('one short question') }),
   fn('price_list', 'Read the owner\'s price list rows that match a job type.', { job_type: str('e.g. "water heater", "drain", "ac"') }),
@@ -21,7 +22,7 @@ export const DEFINITIONS = [
     box_ordinal: { type: 'integer', description: 'ordinal of the SAM box showing the equipment' }, notes: str('anything that affects safety or price'),
   }),
   fn('escalate', 'A hazard or something outside the price list: stop quoting and page the owner.', { reason: str('why') }),
-  fn('request_booking', 'Ask the owner to approve a visit in a slot. The owner taps approve; only then is it booked in Jobber.', { slot_id: str('slot id from check_calendar'), brief: str('tech brief: equipment, issue, parts to bring') }),
+  fn('request_booking', 'Ask the owner to approve a visit in a slot. The owner taps approve; only then is the visit booked (demo calendar in memory).', { slot_id: str('slot id from check_calendar'), brief: str('tech brief: equipment, issue, parts to bring') }),
 ];
 
 /**
@@ -35,11 +36,9 @@ export async function runTool(name, args, ctx) {
       const frame = session.latestFrame();
       if (!frame) return { output: { error: 'no camera frame yet' }, say: 'Can you open the camera link I texted you?' };
       const part = String(args.part ?? '').slice(0, 60);
-      // SAM 3.1 sometimes answers an identical request with no boxes, so an empty result gets one retry.
-      let boxes = await ctx.client.segment(frame.dataUrl, part);
-      if (!boxes.length) boxes = await ctx.client.segment(frame.dataUrl, part);
-      session.setBoxes(part, boxes, frame.at);
-      return { output: { part, boxes: boxes.map(({ ordinal, x1, y1, x2, y2, width, height, score }) => ({ ordinal, x1, y1, x2, y2, width, height, score })) } };
+      const found = await locate(ctx.client, frame, part, { tap: session.tap?.() ?? null, now: ctx.now?.() ?? Date.now() });
+      session.setBoxes(part, found.records, frame.at, { method: found.method, noun: found.noun, tries: found.tries, frameN: frame.n, luma: frame.luma ?? null });
+      return { output: { part, method: found.method, noun: found.noun, boxes: found.records.map(({ ordinal, x1, y1, x2, y2, width, height, score, geo }) => ({ ordinal, x1, y1, x2, y2, width, height, score, area: Number(geo.area.toFixed(3)) })), guidance: session.guidance()?.state ?? null } };
     }
     case 'direct_camera':
       return { output: { said: args.instruction }, say: String(args.instruction).slice(0, 200), status: 'waiting_camera' };

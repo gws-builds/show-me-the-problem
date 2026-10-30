@@ -69,7 +69,9 @@ On the start page, open **Start a call**. That gives three links:
 - 3 junk photos;
 - 1 out-of-scope request.
 
-`eval/results.json` is the latest run (Oct 29): 26 of 35 cases passed, all 8 hazard cases escalated, 0 false escalations, and SAM found the named part in 15 of 32 photos (when it misses, the agent asks for a better angle instead of guessing). We report what was measured, never a perfect score.
+`eval/results.json` is the latest run (Oct 30, after the grounded handoff): **31 of 35 cases passed**, all 8 spoken-hazard cases escalated, 0 false escalations. **SAM outlined the named part with confidence 0.5 or more in 22 of 32 photos** (9 by text prompt, 13 by a Muse Spark grounding point handed to SAM as a point prompt). The previous run (Oct 29, text prompts only) found the part in 15 of 32, counting any box. Median typed-turn latency was 5.2 s (p90 10.5 s, 65 turns), because one turn can take several tool steps.
+
+What failed, so you know the limits: a disposal and a thermostat photo were still not outlined (the agent asked for a closer photo); on one junk photo (an AC unit, asked to find a thermostat) the grounding point landed on a real object that was not a thermostat, and the agent quoted a diagnosis visit. Point prompts make SAM outline whatever is under the point, so the confidence score alone does not prove the object's identity. We report what was measured, never a perfect score.
 
 ## New during the hackathon vs pre-existing
 
