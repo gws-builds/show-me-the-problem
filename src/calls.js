@@ -15,6 +15,7 @@ import { hazardIn } from './verifier.js';
 import { guide, DARK_LUMA } from './guidance.js';
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
+import { workOrder } from './evidence.js';
 
 export const LIMITS = {
   frameBytes: 400_000, // data URL length, ~300 KB JPEG
@@ -77,6 +78,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   const p50 = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
   const waitIdle = async (c, ms) => { const end = Date.now() + ms; while (c.busy && Date.now() < end) await new Promise((r) => setTimeout(r, 100)); };
 
+  // The agent's line is spoken; "move the camera" (or the shut-off guide) starts tracking a part.
+  function afterAgent(c, r) {
+    say(c, r.say, r.status);
+    if (r.status === 'waiting_camera') c.tracking = { part: r.track || c.session.lastPart() || '', checks: 0, lastAt: 0 };
+  }
+
   async function turn(c, line) {
     if (c.status === 'escalated') { say(c, 'The owner has been paged and is calling you. If you smell gas or see smoke or fire, leave the house now and call 911.', 'escalated'); return; }
     if (c.status === 'booked' || c.status === 'declined') { say(c, 'This visit is already settled. The office will text you.', c.status); return; }
@@ -95,9 +102,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
     c.history.push({ role: 'user', content: `Caller: ${line}` });
     try {
-      const r = await callerTurn(c.ctx, c.history);
-      say(c, r.say, r.status);
-      if (r.status === 'waiting_camera') c.tracking = { part: c.session.lastPart() || '', checks: 0, lastAt: 0 };
+      afterAgent(c, await callerTurn(c.ctx, c.history));
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
       say(c, err.code === 'RUN_CAP' || err.code === 'READ_ONLY' || err.code === 'HARD_STOP' ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', err.code ? 'handoff' : c.status);
@@ -120,7 +125,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       if (!ready) { if (!good && t.checks >= LIMITS.trackChecks) { c.tracking = null; say(c, 'I still cannot see it. Could you tap it on your screen, or describe what you see?', 'waiting_caller'); } return; }
       c.tracking = null;
       c.history.push({ role: 'user', content: `[camera] The caller moved the camera. SAM now outlines "${t.part}" (${good} confident object(s), guidance: ${g?.state ?? 'n/a'}). Continue.` });
-      try { const res = await callerTurn(c.ctx, c.history); say(c, res.say, res.status); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
+      try { afterAgent(c, await callerTurn(c.ctx, c.history)); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
     });
   }
 
@@ -250,7 +255,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         if (n && c.tracking) {
           c.tracking = null;
           c.history.push({ role: 'user', content: `[camera] The caller tapped the part on screen. SAM now outlines ${n} object(s) for "${part}" (method: tap). Continue.` });
-          try { const res = await callerTurn(c.ctx, c.history); say(c, res.say, res.status); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
+          try { afterAgent(c, await callerTurn(c.ctx, c.history)); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
         }
         return { ok: true, outlined: n };
       });
@@ -303,11 +308,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       if (!p) throw new CallError('Nothing is waiting for approval.', 409, 'NOTHING_PENDING');
       if (c.status === 'escalated') throw new CallError('This call was escalated as a hazard. Call the customer first.', 409, 'HAZARD');
       if (c.booking) throw new CallError('Already decided.', 409, 'DECIDED');
-      c.booking = { approved: Boolean(approve), slot: p.slot, brief: p.brief, quote: p.quote, at: now() };
+      c.booking = { approved: Boolean(approve), slot: p.slot, brief: p.brief, quote: p.quote, at: now(), workOrder: approve ? workOrder(c.session, { slot: p.slot, quote: p.quote }) : null };
       c.session.log({ kind: 'owner_decision', approved: Boolean(approve), slot: p.slot.label });
       if (!approve) { say(c, 'The office could not take that slot. They will text you another time.', 'declined'); return { ok: true }; }
       say(c, `You're booked for ${p.slot.label}. The technician will bring what's in the brief.`, 'booked');
-      // Muse Image marks the part on the still that goes with the visit. Best effort: a failure never blocks the booking.
+      // The evidence stills are drawn in code from SAM masks (owner page). Muse Image adds a separate,
+      // clearly labelled illustration; it is never used as evidence. Best effort: a failure never blocks the booking.
       const frame = c.session.latestFrame(); const box = c.session.boxes()[0];
       if (frame && box) {
         try {
@@ -324,8 +330,9 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const p = c.session.pendingBooking();
       return {
         id: c.id, now: now(), status: c.status, turns: c.turns, spentUsd: Math.round(c.client.spent() * 10000) / 10000,
-        says: c.says, events: c.session.events(), pages: c.pages.map(({ reason, at }) => ({ reason, at })),
-        pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote } : null,
+        says: c.says, events: c.session.events(), pages: c.pages.map(({ reason, at, urgent }) => ({ reason, at, urgent })),
+        pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote, workOrder: c.booking ? null : workOrder(c.session, { slot: p.slot, quote: p.quote }) } : null,
+        evidence: c.session.evidence.list(),
         booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
         boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: c.session.guidance(), latency: { p50: p50(c.latencies), n: c.latencies.length },
       };

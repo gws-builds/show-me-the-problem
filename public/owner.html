@@ -8,7 +8,17 @@
   <p id="slot"></p><p id="quote"></p><p id="brief"></p>
   <div class="row"><button id="yes">Approve and book</button><button class="secondary" id="no">Decline</button></div>
 </div>
-<div class="card" id="doneCard" hidden><h2 id="doneH"></h2><img id="ann" alt="The part marked on the caller's photo" style="max-width:100%;border-radius:10px" hidden></div>
+<div class="card" id="woCard" hidden>
+  <h2 id="woH">Technician work order</h2>
+  <div class="ev-still" id="woStill" hidden><img id="woImg" alt="Evidence frame with the SAM outline drawn in code"><canvas id="woOv"></canvas></div>
+  <p class="small" id="woStillNote"></p>
+  <dl class="workorder" id="wo"></dl>
+</div>
+<div class="card" id="doneCard" hidden><h2 id="doneH"></h2>
+  <img id="ann" alt="AI illustration of the part" style="max-width:100%;border-radius:10px" hidden>
+  <p class="small" id="annNote" hidden>AI illustration by Muse Image. It is not evidence: the generated image can differ from the real photo. The evidence still above is the real frame with the outline drawn in code.</p>
+</div>
 <p class="small" id="idle">Waiting for the call…</p>
+<script src="/overlay.js"></script>
 <script src="/owner.js"></script>
 </main></body></html>

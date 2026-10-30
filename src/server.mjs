@@ -25,7 +25,7 @@ const calls = createCalls({
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
     if (!c.turns) return;
-    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, staged: c.staged, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking, checklist: c.session.checklist.list().map(({ geo, ...x }) => x), latency: c.latencies })); } catch { /* replay is optional */ }
+    try { fs.writeFileSync(path.join(DATA, 'runs', `${c.id}.json`), JSON.stringify({ id: c.id, at: c.createdAt, status: c.status, staged: c.staged, spentUsd: c.client.spent(), says: c.says, events: c.session.events(), booking: c.booking, checklist: c.session.checklist.list().map(({ geo, ...x }) => x), evidence: c.session.evidence.list().map(({ geo, ...x }) => x), latency: c.latencies })); } catch { /* replay is optional */ }
   },
 });
 setInterval(() => calls.sweep(), 60_000).unref();

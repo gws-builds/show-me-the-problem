@@ -126,6 +126,41 @@
    "trade": "electrical",
    "label": "Hot tub / spa 240V GFCI circuit install (up to 40 ft)",
    "priceCents": 129900
+  },
+  {
+   "id": "fc-diag",
+   "jobType": "faucet",
+   "trade": "plumbing",
+   "label": "Faucet leak diagnosis (applied to repair)",
+   "priceCents": 9900
+  },
+  {
+   "id": "fc-cart",
+   "jobType": "faucet",
+   "trade": "plumbing",
+   "label": "Faucet cartridge replacement (standard cartridge included)",
+   "priceCents": 22900
+  },
+  {
+   "id": "fc-oring",
+   "jobType": "faucet",
+   "trade": "plumbing",
+   "label": "Faucet O-ring and seal repair",
+   "priceCents": 15900
+  },
+  {
+   "id": "fc-replace",
+   "jobType": "faucet",
+   "trade": "plumbing",
+   "label": "Kitchen faucet replacement (customer-supplied faucet)",
+   "priceCents": 24900
+  },
+  {
+   "id": "sv-replace",
+   "jobType": "shut-off valve",
+   "trade": "plumbing",
+   "label": "Under-sink shut-off valve replacement (each)",
+   "priceCents": 18900
   }
  ]
 }

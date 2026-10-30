@@ -3,15 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeOneBit, encodeOneBit, parseSam, maskGeometry, jpegSize } from '../src/mask.js';
 import { locate, nounsFor } from '../src/locate.js';
-
-// A tiny valid JPEG header (SOI + SOF0 with 640x480) is enough for jpegSize.
-export const JPEG_640x480 = (() => {
-  const b = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9]);
-  return `data:image/jpeg;base64,${b.toString('base64')}`;
-})();
+import { JPEG_640x480 } from './helpers.js';
 
 const disc = (w, h, cx, cy, r) => { const a = new Uint8Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) a[y * w + x] = (x - cx) ** 2 + (y - cy) ** 2 < r * r ? 1 : 0; return a; };
-export function samText(records) {
+function samText(records) {
   return records.map(({ id = 0, x1, y1, x2, y2, w = 640, h = 480, c = 0.9, mask }) => {
     let t = `<0f>${id}<|box;x1=${x1};y1=${y1};x2=${x2};y2=${y2};w=${w};h=${h};c=${c}|>`;
     if (mask) t += `<|mask;x=0;y=0;c=${c};data=${mask.h},${mask.w},${encodeOneBit(mask.raster, mask.w, mask.h)}|>`;

@@ -42,3 +42,6 @@ button.mini { min-height: 32px; padding: 4px 10px; font-size: .82rem; }
 .evidence { list-style:none; padding:0; margin:0; font-size:.88rem; } .evidence li { padding:6px 0; border-bottom:1px solid var(--line); }
 .evidence .unsupported { color: var(--warn); }
 main.call { max-width: 560px; }
+.staged-pill { background:#fde047; color:#1a1400; border-color:#fde047; font-weight:800; }
+.workorder dt { color: var(--text); font-weight: 700; margin-top: 8px; } .workorder dd { margin: 2px 0 0; color: var(--dim); }
+.ev-still { position: relative; display:inline-block; width: 100%; max-width: 360px; } .ev-still img { width:100%; display:block; border-radius:8px; } .ev-still canvas { position:absolute; inset:0; width:100%; height:100%; }
