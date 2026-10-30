@@ -3,11 +3,10 @@
 #   1. the server on 127.0.0.1 with a fresh access code and a hard Meta spend stop for this run;
 #   2. a Cloudflare quick tunnel to it, so the iPhone gets an https link (no account, no cloud deploy);
 #   3. the phone link (with the code) printed as text and as a terminal QR code;
-#   4. the Agent Console in its own Chrome window, following the newest call, and a screen capture of
-#      the Mac into recordings/;
+#   4. the Agent Console recorded in the background (headless, nothing opens on screen) into recordings/;
 #   Ctrl-C (or --duration) stops all of it: capture, console window, tunnel, server.
 #
-# Usage: scripts/record_session.sh [--no-tunnel] [--no-capture] [--no-open] [--spend-stop USD] [--port N] [--duration S]
+# Usage: scripts/record_session.sh [--no-tunnel] [--no-capture] [--open] [--spend-stop USD] [--port N] [--duration S]
 #   --no-tunnel   local only (http://127.0.0.1): for testing the script, the phone cannot use it
 #   --duration S  stop by itself after S seconds (tests)
 # The Meta key is read from META_API_KEY or from META_ENV_FILE (default ../.secrets/meta_model_api.env)
@@ -25,6 +24,7 @@ while [[ $# -gt 0 ]]; do
     --no-tunnel) TUNNEL=0 ;;
     --no-capture) CAPTURE=0 ;;
     --no-open) OPEN=0 ;;
+    --open) OPEN=2 ;;
     --spend-stop) STOP="$2"; shift ;;
     --port) PORT="$2"; shift ;;
     --duration) DURATION="$2"; shift ;;
@@ -51,7 +51,7 @@ cleanup() {
   for pid in "$CHROME_PID" "$TUNNEL_PID" "$SERVER_PID"; do [[ -n "$pid" ]] && wait "$pid" 2>/dev/null || true; done
   rm -f "$HDR" "$LINKFILE" .data/tunnel.log
   rm -rf .data/console-chrome
-  if [[ -n "$MOVIE" && -s "$MOVIE" ]]; then echo "Console recording: $ROOT/$MOVIE ($(du -h "$MOVIE" | cut -f1))"; elif [[ -n "$MOVIE" ]]; then echo "No console recording was saved (allow Screen Recording for this terminal in System Settings > Privacy & Security)."; fi
+  if [[ -n "$MOVIE" && -s "$MOVIE" ]]; then echo "Console recording: $ROOT/$MOVIE ($(du -h "$MOVIE" | cut -f1))"; elif [[ -n "$MOVIE" ]]; then echo "No console recording was saved (see .data/capture.log)."; fi
   echo "Stopped: capture, console window, tunnel and server."
 }
 trap cleanup EXIT
@@ -107,34 +107,24 @@ echo "  $LINK"
 node scripts/qr.mjs "$LINK"
 echo
 
-# --- 4. console window and screen capture ---
-if [[ "$OPEN" == 1 ]]; then
-  if [[ -x "$CHROME" ]]; then
-    # A separate, throwaway Chrome profile: never the founder's own browser profiles.
-    "$CHROME" --user-data-dir="$ROOT/.data/console-chrome" --no-first-run --no-default-browser-check --window-position=0,0 --window-size=1280,900 \
-      --app="http://127.0.0.1:$PORT/k/$CODE?to=console" > /dev/null 2>&1 &
-    CHROME_PID=$!
-    echo "Agent Console: open in its own window (follows the newest call)"
-  else
-    echo "Agent Console: open http://127.0.0.1:$PORT/console#latest in a browser on this Mac"
-  fi
+# --- 4. Agent Console: recorded in the background, nothing opens on screen ---
+# A headless Chrome nobody sees renders the console and scripts/console_capture.mjs records only
+# that page (no screen-recording permission, nothing else on the Mac is captured).
+# --open also shows it in its own window, for watching live.
+if [[ "$CAPTURE" == 1 ]]; then
+  MOVIE="recordings/console_$(date +%Y%m%d_%H%M%S).mp4"
+  node scripts/console_capture.mjs "http://127.0.0.1:$PORT/k/$CODE?to=console" "$MOVIE" > .data/capture.log 2>&1 &
+  CAPTURE_PID=$!
+  echo "Agent Console: recording in the background to $MOVIE"
+fi
+if [[ "$OPEN" == 2 && -x "$CHROME" ]]; then
+  # A separate, throwaway Chrome profile: never the founder's own browser profiles.
+  "$CHROME" --user-data-dir="$ROOT/.data/console-chrome" --no-first-run --no-default-browser-check --window-size=1280,900 \
+    --app="http://127.0.0.1:$PORT/k/$CODE?to=console" > /dev/null 2>&1 &
+  CHROME_PID=$!
+  echo "Agent Console: also open in its own window"
 fi
 unset CODE LINK
-if [[ "$CAPTURE" == 1 ]]; then
-  sleep 2
-  if command -v ffmpeg >/dev/null; then
-    # The main display ("Capture screen 0"), 30 fps, hardware H.264; stopped with TERM so the file is complete.
-    SCREEN="$(ffmpeg -hide_banner -f avfoundation -list_devices true -i '' 2>&1 | sed -n 's/.*\[\([0-9]*\)\] Capture screen 0.*/\1/p' | head -1 || true)"
-    MOVIE="recordings/console_$(date +%Y%m%d_%H%M%S).mp4"
-    ffmpeg -hide_banner -loglevel error -nostdin -f avfoundation -capture_cursor 1 -framerate 30 -pixel_format uyvy422 -i "${SCREEN:-1}:none" \
-      -c:v h264_videotoolbox -b:v 8M -pix_fmt yuv420p "$MOVIE" > .data/capture.log 2>&1 &
-  else
-    MOVIE="recordings/console_$(date +%Y%m%d_%H%M%S).mov"
-    screencapture -v -k -D 1 "$MOVIE" > .data/capture.log 2>&1 &
-  fi
-  CAPTURE_PID=$!
-  echo "Screen capture: recording the main display to $MOVIE"
-fi
 
 if [[ "$DURATION" != 0 ]]; then
   echo "Stops by itself in ${DURATION}s."
