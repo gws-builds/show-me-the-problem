@@ -22,21 +22,29 @@ function browserSay(text) {
   try {
     const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; if (lastView?.lang === 'es') u.lang = 'es-US';
     u.onstart = () => { Speech.speaking = true; Speech.current = text; };
-    u.onend = u.onerror = () => { Speech.speaking = false; };
+    u.onend = u.onerror = () => { Speech.speaking = false; Speech.next(); };
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   } catch { /* text is on screen anyway */ }
 }
 const Speech = {
-  speaking: false, current: '', natural: true,
-  async say(text) {
-    const n = ++sayN; Speech.stop(); Speech.speaking = true; Speech.current = text;
+  speaking: false, current: '', natural: true, isFiller: false, heardN: 0, lang: 'en', queue: [],
+  // A new agent line never cuts the agent's previous line short (founder 10/30: a tour step must not
+  // talk over its answer): it waits its turn. Fillers and guidance are cut by anything real; hazard
+  // lines and the caller's own voice (barge-in) cut everything.
+  later(text, { urgent = false } = {}) {
+    if (urgent || !Speech.speaking || Speech.isFiller) { Speech.queue = []; return Speech.say(text); }
+    Speech.queue.push(text); if (Speech.queue.length > 2) Speech.queue.shift();
+  },
+  next() { const t = Speech.queue.shift(); if (t) Speech.say(t); },
+  async say(text, { filler = false } = {}) {
+    const n = ++sayN; Speech.stop(); Speech.speaking = true; Speech.current = text; Speech.isFiller = filler;
     if (Speech.natural) {
       try {
         const r = await api('/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
         if (n !== sayN) return; // a newer line arrived while this one was being made
         if (r.ok) {
           const url = URL.createObjectURL(await r.blob()); if (n !== sayN) { URL.revokeObjectURL(url); return; }
-          player.onended = player.onerror = () => { URL.revokeObjectURL(url); if (n === sayN) Speech.speaking = false; };
+          player.onended = player.onerror = () => { URL.revokeObjectURL(url); if (n === sayN) { Speech.speaking = false; Speech.next(); } };
           player.src = url; await player.play(); return;
         }
         if (r.status === 503) Speech.natural = false; // no key or cap reached: browser voice from now on
@@ -46,6 +54,8 @@ const Speech = {
     browserSay(text);
   },
   stop() { try { player.pause(); speechSynthesis.cancel(); } catch { /* none */ } Speech.speaking = false; },
+  /** Barge-in: the caller talks, so the agent stops and drops what it was about to say. */
+  hush() { Speech.queue = []; Speech.stop(); },
 };
 document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;
@@ -130,7 +140,8 @@ async function poll() {
     $('status').textContent = view.status.replace('_', ' '); $('status').className = `pill ${view.status}`;
     const last = view.says[view.says.length - 1];
     if (last) $('line').textContent = last.text;
-    for (const s of view.says) if (s.n > spoken) { spoken = s.n; if (started) Speech.say(s.text); }
+    Speech.lang = view.lang === 'es' ? 'es' : 'en';
+    for (const s of view.says) if (s.n > spoken) { spoken = s.n; Speech.heardN = s.n; if (started) Speech.later(s.text, { urgent: s.status === 'escalated' }); }
     speakGuidance(view.guidance, view.tracking);
     $('staged').hidden = !view.staged; $('stagedToggle').checked = Boolean(view.staged);
     renderChecklist(view.checklist);

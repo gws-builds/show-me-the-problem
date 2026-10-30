@@ -7,7 +7,10 @@ window.Voice = (() => {
   const $ = (s) => document.getElementById(s);
   let ctx = null; let node = null; let ws = null; let callId = null; let camToken = null; let fillerTimer = null; let lastSays = 0;
   let ptt = null; // { chunks: [] } while holding to talk
-  const FILLERS = ['Let me look.', 'One moment.', 'Checking that now.'];
+  // Founder 10/30: "on it" at once, "one moment" if it takes longer, never dead air. Any real line
+  // cuts a filler off (Speech.say stops whatever is playing), so an early answer is never held back.
+  const FILLERS = { en: [[900, 'On it.'], [4500, 'One moment.'], [10000, 'Still on it, almost there.']], es: [[900, 'Ya voy.'], [4500, 'Un momento.'], [10000, 'Sigo en ello, casi listo.']] };
+  let fillerTimers = [];
   const state = (t) => { $('vstate').textContent = t; };
 
   async function setup(sourceNode) {
@@ -34,11 +37,11 @@ window.Voice = (() => {
     ws.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.type === 'ready') { ws.ready = true; state('listening (hands-free)'); }
-      else if (m.type === 'speechStart') { if (window.Speech?.speaking) window.Speech.stop(); state('hearing you'); }
+      else if (m.type === 'speechStart') { if (window.Speech?.speaking) window.Speech.hush(); state('hearing you'); }
       else if (m.type === 'partial') {
         $('partial').textContent = m.text;
         // Barge-in on words that are not the agent's own line coming back through the speaker.
-        if (window.Speech?.speaking && !echoOf(m.text, window.Speech.current)) window.Speech.stop();
+        if (window.Speech?.speaking && !echoOf(m.text, window.Speech.current)) window.Speech.hush();
       } else if (m.type === 'final') { $('heard').textContent = `You said: "${m.text}"`; $('partial').textContent = ''; }
       else if (m.type === 'thinking') { state('thinking'); armFiller(); }
       else if (m.type === 'ignored') { $('partial').textContent = ''; }
@@ -46,7 +49,9 @@ window.Voice = (() => {
       else if (m.type === 'closed') { state('voice off: hold to talk'); }
     };
     // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.
-    ws.onclose = () => { ws.ready = false; state('voice off: hold to talk'); if (!connect.retried) { connect.retried = true; setTimeout(connect, 1500); } };
+    // Self-repair: reconnect after every drop (1.5 s, then slower), hold-to-talk works meanwhile.
+    ws.onopen = ((open) => () => { connect.tries = 0; open(); })(ws.onopen);
+    ws.onclose = () => { ws.ready = false; state('voice off: hold to talk'); connect.tries = (connect.tries ?? 0) + 1; if (connect.tries <= 20) setTimeout(connect, Math.min(10000, 1500 * connect.tries)); };
   }
 
   function echoOf(heard, agent) {
@@ -57,12 +62,15 @@ window.Voice = (() => {
 
   // Filler while tools run: if the agent has not answered within 0.9 s, say a short line.
   function armFiller() {
-    clearTimeout(fillerTimer);
-    lastSays = document.getElementById('line').textContent;
-    fillerTimer = setTimeout(() => {
-      if (document.getElementById('line').textContent === lastSays && !window.Speech?.speaking) window.Speech?.say(FILLERS[Math.floor(Math.random() * FILLERS.length)]);
+    fillerTimers.forEach(clearTimeout); clearTimeout(fillerTimer);
+    lastSays = window.Speech?.heardN ?? 0;
+    const lines = FILLERS[window.Speech?.lang === 'es' ? 'es' : 'en'];
+    fillerTimers = lines.map(([ms, text]) => setTimeout(() => {
+      // Only while nothing new has been said; a filler never talks over the agent's own line.
+      if ((window.Speech?.heardN ?? 0) !== lastSays) { fillerTimers.forEach(clearTimeout); return; }
+      if (!window.Speech?.speaking || window.Speech?.isFiller) window.Speech?.say(text, { filler: true });
       state('listening (hands-free)');
-    }, 900);
+    }, ms));
   }
 
   // Push-to-talk fallback: hold the button, release to send one WAV to /speech.

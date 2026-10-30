@@ -37,7 +37,13 @@ export const LIMITS = {
   scanEveryMs: 10_000,
   tourSteps: TOUR.steps, // guided-tour steps per call (Spark names parts, SAM outlines them)
   tourEveryMs: TOUR.everyMs,
+  // Founder 10/30: "it should never fail or freeze". A caller turn that runs longer than this
+  // is answered with a retry line instead of silence; a late result is dropped, never spoken over a newer line.
+  turnMs: 20_000,
+  voiceWaitMs: 25_000, // a line said while the agent is still answering waits its turn instead of being refused
 };
+// About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
+export const speakMs = (text) => Math.min(15_000, 1200 + String(text ?? '').split(/\s+/).length * 380);
 const STOP_CODES = new Set(['RUN_CAP', 'READ_ONLY', 'HARD_STOP', 'SESSION_STOP']);
 
 const id = (n = 16) => randomBytes(n).toString('hex');
@@ -92,6 +98,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // The agent's line is spoken; "move the camera" (or the shut-off guide) starts tracking a part.
   function afterAgent(c, r) {
     say(c, r.say, r.status);
+    // The tour waits for the answer to be heard, then picks up where it was (founder 10/30).
+    if (c.tour && !c.tour.done) { c.holdTourUntil = now() + speakMs(r.say); c.tourResume = true; }
     if (r.status === 'waiting_camera') c.tracking = { part: r.track || c.session.lastPart() || '', checks: 0, lastAt: 0 };
   }
 
@@ -114,12 +122,19 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.
     if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question from this and the current frame in one or two sentences, then the tour continues.` });
     c.history.push({ role: 'user', content: `Caller: ${line}` });
+    const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
+    let timer;
     try {
-      afterAgent(c, await callerTurn(c.ctx, c.history));
+      const r = await Promise.race([
+        callerTurn(c.ctx, c.history),
+        new Promise((_, no) => { timer = setTimeout(() => no(new Error(`turn took over ${LIMITS.turnMs / 1000} s`)), LIMITS.turnMs); }),
+      ]);
+      if (seq === c.turnSeq) afterAgent(c, r);
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
+      if (seq !== c.turnSeq) return;
       say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', err.code ? 'handoff' : c.status);
-    }
+    } finally { clearTimeout(timer); }
   }
 
   // While the agent waits for the caller to move the camera, SAM re-checks the
@@ -202,7 +217,9 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       }
       for (const it of [...r.escalate, ...r.warn]) await raise(c, { category: it.hazard.category, object: it.label.toLowerCase(), near: '', why: it.evidence, score: it.confirmScore ?? it.score ?? 0, geo: it.geo ?? null }, n, `tour: ${it.hazard.label}`);
       if (c.status === 'escalated') return;
-      if (r.say) say(c, r.say, r.done ? 'waiting_caller' : 'touring');
+      // A step that finished while the caller was being answered keeps its labels but not its line.
+      const held = !r.done && (c.busy || now() < (c.holdTourUntil ?? 0));
+      if (r.say && !held) { say(c, `${c.tourResume && !r.done ? 'Back to the tour. ' : ''}${r.say}`, r.done ? 'waiting_caller' : 'touring'); c.tourResume = false; }
       if (r.done) {
         c.history.push({ role: 'user', content: tourMemo(c.tour) });
         say(c, 'Would you like a price for a visit to look at any of this?', 'waiting_caller');
@@ -286,7 +303,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         else if (c.session.checklist.get('lighting').status !== 'clear' || n % 10 === 0) c.session.checklist.set('lighting', 'clear', c.session.keepFrame(n), `Light ${l}/255`);
       }
       if (!dark && !c.scanning && c.scans < LIMITS.hazardScans && (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs)) c.scanP = scan(c);
-      if (!dark && c.tour && !c.tour.done && !c.touring && c.status !== 'escalated' && (!c.lastTourAt || now() - c.lastTourAt >= LIMITS.tourEveryMs)) c.tourP = tourTick(c);
+      if (!dark && c.tour && !c.tour.done && !c.touring && !c.busy && now() >= (c.holdTourUntil ?? 0) && c.status !== 'escalated' && (!c.lastTourAt || now() - c.lastTourAt >= LIMITS.tourEveryMs)) c.tourP = tourTick(c);
       await track(c).catch(() => {});
       return { ok: true };
     },
@@ -332,7 +349,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const c = get(callId);
       const line = String(text ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, LIMITS.textChars);
       if (!line) return { heard: '' };
-      await waitIdle(c, 15_000);
+      await waitIdle(c, LIMITS.voiceWaitMs);
       return exclusive(c, async () => {
         const before = c.says.length;
         await turn(c, line);

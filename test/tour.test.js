@@ -194,3 +194,42 @@ test('direct_camera after a miss says honestly that the part is not seen yet', a
   const r2 = await runTool('direct_camera', { instruction: 'Tilt up.' }, { session: { ...session, boxes: () => [{ score: 0.8 }] } });
   assert.equal(r2.say, 'Tilt up.');
 });
+
+test('tour: a question mid-tour is answered first, then the tour picks up where it was ("Back to the tour.")', async () => {
+  const steps = [
+    { room: 'boiler_room', items: [{ part: 'boiler', status: 'normal', x: 500, y: 500 }], move: 'pan_right' },
+    { room: 'boiler_room', items: [{ part: 'expansion_tank', status: 'normal', x: 200, y: 300 }], move: 'closer' },
+  ];
+  const { calls, c } = setup({ tour: (i) => steps[Math.min(i, steps.length - 1)] });
+  calls.tour(c.id, c.camToken, 'boiler_room');
+  await frames(calls, c, 1);
+  await calls.voiceTurn(c.id, "What's that pipe on the left?");
+  const answeredAt = calls.view(c.id).says.length;
+  await frames(calls, c, 4);
+  const after = calls.view(c.id).says.slice(answeredAt).map((s) => s.text);
+  assert.ok(after.length, 'the tour went on after the question');
+  assert.match(after[0], /^Back to the tour\. /);
+  assert.equal(after.filter((t) => t.startsWith('Back to the tour.')).length, 1, 'said once, not on every step');
+});
+
+test('a caller turn that hangs is answered with a retry line, and its late result is never spoken', async () => {
+  const { createCalls: make, LIMITS } = await import('../src/calls.js');
+  const old = LIMITS.turnMs; LIMITS.turnMs = 50;
+  try {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-hang-'));
+    const ledger = createLedger(path.join(dir, 'l.json'));
+    let release; const hang = new Promise((r) => { release = r; });
+    const fetchImpl = async (url, init) => {
+      const body = JSON.parse(init.body);
+      if (body.tools) { await hang; return new Response(JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'A late answer.' }] }], usage: { input_tokens: 10, output_tokens: 5 } })); }
+      return new Response(JSON.stringify({ output_text: '{"findings":[]}', usage: { input_tokens: 10, output_tokens: 5 } }));
+    };
+    const calls = make({ ledger, priceList: [], makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 't', live }) });
+    const c = calls.create({ ip: 'h', live: true });
+    await calls.voiceTurn(c.id, 'My faucet drips');
+    assert.match(calls.view(c.id).says.at(-1).text, /Sorry, I lost that/);
+    await calls.voiceTurn(c.id, 'Hello?'); // the line is never refused as "still thinking"
+    release(); await new Promise((r) => setTimeout(r, 30));
+    assert.ok(!calls.view(c.id).says.some((s) => s.text === 'A late answer.' && s.n < 3), 'a stale answer is dropped');
+  } finally { LIMITS.turnMs = old; }
+});
