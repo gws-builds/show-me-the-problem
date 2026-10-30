@@ -1,0 +1,18 @@
+{
+ "note": "Water heater serial-number date conventions, in our own words. Source: City of Palo Alto Utilities, 'Check Your Water Heater's Age', read 2026-10-30 (kb/SOURCES.md). A date code is a manufacturer convention, not a guarantee: results are 'estimated' and the technician confirms. A manufacture date printed on the plate always wins.",
+ "source": "City of Palo Alto Utilities, Check Your Water Heater's Age (read 2026-10-30)",
+ "brands": {
+  "rheem": { "aliases": ["rheem", "ruud", "richmond"], "rules": ["rheem_mmyy"] },
+  "ao_smith": { "aliases": ["a.o. smith", "ao smith", "a o smith", "aosmith", "a. o. smith"], "rules": ["aosmith_yyww", "aosmith_pre2008"] },
+  "bradford_white": { "aliases": ["bradford white", "bradford-white", "bradfordwhite"], "rules": ["bw_letters"] }
+ },
+ "rules": {
+  "rheem_mmyy": { "label": "Rheem/Ruud: first four digits are month then year (MMYY)", "example": "1209D01234 = December 2009" },
+  "aosmith_yyww": { "label": "A.O. Smith (2008 on): first four digits are year then week (YYWW)", "example": "2037... = week 37 of 2020" },
+  "aosmith_pre2008": { "label": "A.O. Smith (before 2008): second character is a month letter (A = January, I skipped), next two digits the year", "example": "2C06... = March 2006" },
+  "bw_letters": { "label": "Bradford White: first letter is the year, second the month; letters repeat every 20 years (I, O, Q, R, U, V not used)", "example": "HK... = October 2011 (or 1991)" }
+ },
+ "bw_year_letters": { "A": 2004, "B": 2005, "C": 2006, "D": 2007, "E": 2008, "F": 2009, "G": 2010, "H": 2011, "J": 2012, "K": 2013, "L": 2014, "M": 2015, "N": 2016, "P": 2017, "S": 2018, "T": 2019, "W": 2020, "X": 2021, "Y": 2022, "Z": 2023 },
+ "bw_month_letters": { "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "J": 9, "K": 10, "L": 11, "M": 12 },
+ "aos_month_letters": { "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "J": 9, "K": 10, "L": 11, "M": 12 }
+}
