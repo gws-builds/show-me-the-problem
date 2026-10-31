@@ -44,6 +44,8 @@ const calls = createCalls({
   },
 });
 setInterval(() => calls.sweep(), 60_000).unref();
+// Stopping the server (end of a recording session) keeps the calls still open as replays.
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => { try { calls.endAll(); } finally { process.exit(0); } });
 
 const STATIC = {
   '/': ['index.html', 'text/html'],

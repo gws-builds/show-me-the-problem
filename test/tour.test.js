@@ -105,7 +105,7 @@ test('tour: parts are named with a status and an outline label, the room list bu
   assert.equal(found.pressure_gauge.status, 'cant_tell');
   const said = v.says.map((s) => s.text).join(' | ');
   assert.match(said, /Expansion tank: needs attention, rust on the bottom seam/);
-  assert.match(said, /can't tell the pressure and temperature gauge's condition from here\. Move closer to the gauge face\./i);
+  assert.match(said, /can't tell the condition of the pressure and temperature gauge from here\. Move closer to the gauge face\./i);
   assert.ok(seen.points >= 2);
   assert.ok(v.evidence.some((e) => e.kind === 'tour' && /Expansion tank/.test(e.claim)));
   assert.ok(!JSON.stringify(v).includes(c.camToken));

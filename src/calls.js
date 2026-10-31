@@ -254,6 +254,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   return {
     sweep,
     size: () => calls.size,
+    /** Ends every call (the server is stopping), so each keeps its replay. */
+    endAll() { for (const c of [...calls.values()]) { calls.delete(c.id); c.voice?.end(); onEnd?.(c); } },
     /** Ends a call now (the caller hung up, or a test run finished); keeps its replay. */
     end(callId) { const c = calls.get(String(callId)); if (c) { calls.delete(c.id); c.voice?.end(); onEnd?.(c); } },
 

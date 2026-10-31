@@ -13,6 +13,9 @@ import { corpusContext } from './corpus.js';
 import { maskGeometry, dataUrlSize } from './mask.js';
 import { AGREE_SCORE } from './hazards.js';
 
+// "move closer to doorway" -> "Move closer to the doorway.": a capital and a full stop on model-made directions.
+const sentence = (t) => { const x = String(t ?? '').trim().replace(/\.?$/, '.'); return x.charAt(0).toUpperCase() + x.slice(1); };
+
 export const TOUR = { steps: 16, everyMs: 4500, samPerStep: 4, itemsPerStep: 6, runCapUsd: 0.6 };
 export const STATUS = ['normal', 'attention', 'safety', 'cant_tell'];
 const RANK = { cant_tell: 0, normal: 1, attention: 2, safety: 3 };
@@ -179,7 +182,7 @@ export async function tourStep(client, tour, frame) {
   const checkpoints = tour.cards[0]?.tour?.checkpoints ?? [];
   const missing = checkpoints.find((c) => !tour.found.has(c.part));
   let direction;
-  if (unsure) { tour.said.add(`${unsure.id}:better`); direction = `I can't tell the ${unsure.label.toLowerCase()}'s condition from here. ${unsure.better.replace(/\.?$/, '.')}`; }
+  if (unsure) { tour.said.add(`${unsure.id}:better`); direction = `I can't tell the condition of the ${unsure.label.toLowerCase()} from here. ${sentence(unsure.better)}`; }
   else if (missing) direction = missing.hint;
   else direction = MOVES[j?.move] ?? MOVES.pan_right;
   tour.done = tour.step >= TOUR.steps || (checkpoints.length > 0 && !missing && tour.step >= 3);
