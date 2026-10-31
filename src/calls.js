@@ -34,6 +34,7 @@ export const LIMITS = {
   frameEveryMs: 800,
   speechEveryMs: 1500,
   callTtlMs: 15 * 60_000,
+  idleMs: 2 * 60_000, // no frame, speech or tap for this long ends the call
   maxLiveCalls: 10,
   callsPerIpPerHour: 6,
   trackChecks: 8, // SAM re-checks while the caller moves the camera (each updates the guidance arrow)
@@ -141,6 +142,13 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // Every agent turn (the caller's words, the camera catching up, a tap) runs here: on its own copy of
   // the history, kept only if it finishes in time and is still the latest (red team 10/30), and stopped
   // when it times out, so a late turn neither interleaves with the next one nor keeps spending (10/31).
+  // A note from the camera checks or the tour, written while a turn runs, would be lost when that turn
+  // saves its own copy of the history (red team 10/31); it waits and is added after the turn.
+  function note(c, content) {
+    if (c.turnAbort) (c.pendingNotes ??= []).push({ role: 'user', content });
+    else c.history.push({ role: 'user', content });
+  }
+
   async function runTurn(c) {
     const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
     c.turnAbort?.abort();
@@ -157,7 +165,10 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
       throw err;
-    } finally { clearTimeout(timer); if (c.turnAbort === ac) c.turnAbort = null; }
+    } finally {
+      clearTimeout(timer);
+      if (c.turnAbort === ac) { c.turnAbort = null; if (c.pendingNotes?.length) c.history.push(...c.pendingNotes.splice(0)); }
+    }
   }
 
   // The camera and tap continue the conversation without the caller speaking; each counts toward a
@@ -210,7 +221,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       c.session.log({ kind: 'code_gate', name: 'camera attention', text: `${f.object}: bare wire on a cord that is not connected to power. Needs attention, not escalated (knowledge-base threshold).` });
       say(c, `I can see bare wire on ${article(f.object)} that does not look plugged in. Please keep it unplugged and don't use it; the technician should replace it.`, c.status);
       // The agent hears the code's judgement, so it does not escalate the same sign again without new evidence.
-      c.history.push({ role: 'user', content: `[camera check, code] ${f.object}: bare wire on a loose cord or strip that is NOT connected to power (frame ${n}). Knowledge-base threshold: needs attention, not an emergency. Do not escalate this sign again unless you see it plugged in, in a wall box or panel, or the caller reports sparks, heat or smoke. Advise not to use it; the technician replaces it.` });
+      note(c, `[camera check, code] ${f.object}: bare wire on a loose cord or strip that is NOT connected to power (frame ${n}). Knowledge-base threshold: needs attention, not an emergency. Do not escalate this sign again unless you see it plugged in, in a wall box or panel, or the caller reports sparks, heat or smoke. Advise not to use it; the technician replaces it.`);
     } else {
       await c.ctx.notifyOwner({ urgent: false, reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.` });
       c.session.log({ kind: 'code_gate', name: 'camera warning', text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.` });
@@ -251,7 +262,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const held = !r.done && (c.busy || now() < (c.holdTourUntil ?? 0));
       if (r.say && !held) { say(c, `${c.tourResume && !r.done ? 'Back to the tour. ' : ''}${r.say}`, r.done ? 'waiting_caller' : 'touring'); c.tourResume = false; }
       if (r.done) {
-        c.history.push({ role: 'user', content: tourMemo(c.tour) });
+        note(c, tourMemo(c.tour));
         say(c, 'Would you like a price for a visit to look at any of this?', 'waiting_caller');
         c.session.log({ kind: 'tour_done', text: `Tour of the ${c.tour.room.replace('_', ' ')} finished after ${c.tour.step} steps.` });
       }
@@ -275,7 +286,13 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   }
 
   function sweep() {
-    for (const [k, c] of calls) if (now() - c.createdAt > LIMITS.callTtlMs) { calls.delete(k); c.voice?.end(); onEnd?.(c); }
+    for (const [k, c] of calls) {
+      // A closed tab sends no frames, speech or taps: after idleMs its live slot is freed (red team 10/31).
+      // A call waiting for the owner's tap is kept until the TTL, so the owner can still decide.
+      const last = Math.max(c.createdAt, c.lastFrameAt ?? 0, c.lastSpeechAt ?? 0, c.lastTapAt ?? 0);
+      const idle = now() - last > LIMITS.idleMs && !c.voice && c.status !== 'awaiting_owner';
+      if (idle || now() - c.createdAt > LIMITS.callTtlMs) { calls.delete(k); c.voice?.end(); onEnd?.(c); }
+    }
     for (const [ip, hits] of ipHits) { const keep = hits.filter((t) => now() - t < 3_600_000); if (keep.length) ipHits.set(ip, keep); else ipHits.delete(ip); }
   }
 
@@ -449,6 +466,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       say(c, `You're booked for ${p.slot.label}. The technician will bring what's in the brief.`, 'booked');
       // Muse Wonder reviews the approved work order for the technician, beside the booking, never blocking it.
       c.booking.review = { status: 'running' };
+      // Its own allowance on top of what the call spent, so a long call still gets its plan (red team 10/31); never past MAX_RUN_USD.
+      c.client.setCap(c.client.spent() + 0.1);
       reviewWorkOrder(c.client, c.booking.workOrder, c.session.evidence.list())
         .then((r) => { c.booking.review = { status: 'done', ...r }; c.session.log({ kind: 'wonder_review', steps: r.steps.length, gaps: r.gaps.length, dropped: r.dropped }); })
         .catch((err) => { c.booking.review = { status: 'failed' }; c.session.log({ kind: 'error', text: `review: ${String(err.message).slice(0, 160)}` }); });

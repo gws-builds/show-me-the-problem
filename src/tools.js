@@ -50,7 +50,19 @@ function speakable(session, line) {
   if (panel.blocked) session.log({ kind: 'code_gate', name: 'no panel opening', text: 'A line asking to open an electrical cover or touch inside was replaced in code.' });
   const price = noPrice(panel.text);
   if (price.blocked) session.log({ kind: 'code_gate', name: 'no model prices', text: 'A price in the agent\'s own words was removed in code; only the verifier quotes.' });
-  return price.text;
+  const contact = noContact(price.text);
+  if (contact.blocked) session.log({ kind: 'code_gate', name: 'no links or payments', text: 'A link, email, phone number or payment request in the agent\'s own words was removed in code.' });
+  return contact.text;
+}
+
+// Injected text (a sign on camera, a label, the caller) must not make the business voice read out a
+// link, an email, a phone number or a payment request (red team 10/31). The office sends those itself.
+const CONTACT = /\b(?:https?:\/\/|www\.)\S+|\b[\w.+-]+@[\w-]+\.[\w.]+\b|\b[\w-]+\.(?:com|net|org|io|co|info|biz|xyz|app|link|ly|me)\b|(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b|\b(?:deposit|wire|venmo|zelle|cash ?app|paypal|gift card|bitcoin|crypto|card number|pay (?:now|first|upfront|up front|in advance|the technician|us))\b/i;
+export function noContact(text) {
+  const parts = String(text ?? '').split(/(?<=[.!?])\s+/);
+  const kept = parts.filter((p) => !CONTACT.test(p));
+  if (kept.length === parts.length) return { text: String(text ?? ''), blocked: false };
+  return { text: [...kept, 'The office will text you the details.'].join(' ').trim(), blocked: true };
 }
 
 /**
@@ -112,6 +124,7 @@ export async function runTool(name, args, ctx) {
         { priceList: ctx.priceList, boxes, outlines: session.evidence.list().filter((e) => e.kind === 'outline'), callerText: session.callerText(), cameraHazard: session.checklist?.foundEscalating() ?? false, wiringSettled: session.checklist?.get('wiring')?.status === 'attention' },
       );
       session.log({ kind: 'verify', result: v });
+      session.lastVerify = v.action;
       if (v.action === 'escalate') { await ctx.notifyOwner?.({ urgent: true, reason: v.reason, transcript: session.callerText() }); return { output: v, say: v.reason, status: 'escalated' }; }
       if (v.action === 'quote') {
         session.setQuote(v);
@@ -178,10 +191,12 @@ export async function runTool(name, args, ctx) {
       return { output: { escalated: true }, say: 'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.', status: 'escalated' };
     case 'request_booking': {
       if (hazardIn(session.callerText()) || session.checklist?.foundEscalating()) return { output: { refused: 'hazard on this call' }, say: 'The owner is calling you about this now. No visit is booked until they do.', status: 'escalated' };
+      // A visit is requested only after the price check ran: a list price, or "the technician confirms" (red team 10/31, eval pp03).
+      if (!session.quote() && session.lastVerify !== 'tech_confirms') return { output: { refused: 'no price decision yet: call propose_quote first' } };
       const slot = ctx.calendar.find((s) => s.id === args.slot_id);
       if (!slot) return { output: { error: 'unknown slot' } };
       const plate = session.plate?.();
-      session.setPendingBooking({ slot, brief: `${String(args.brief).slice(0, 800)}${plate ? ` | ${plate.summary} [${plate.evidence}]` : ''}`, quote: session.quote() });
+      session.setPendingBooking({ slot, brief: `${noContact(noPrice(String(args.brief).slice(0, 800)).text).text}${plate ? ` | ${plate.summary} [${plate.evidence}]` : ''}`, quote: session.quote() });
       return { output: { pending_owner_approval: true }, say: `I have asked the owner to confirm ${slot.label}. You will get a text when it is booked.`, status: 'awaiting_owner' };
     }
     default:

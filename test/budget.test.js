@@ -13,21 +13,32 @@ test('unknown models are refused, not treated as free', () => {
   assert.throws(() => costOf('mystery-model', {}), BudgetExceeded);
 });
 test('read-only cuts off public visitors at $80, hard stop cuts everyone at $100', () => {
-  const f = tmp(); const l = createLedger(f);
+  const f = tmp();
   fs.writeFileSync(f, JSON.stringify({ spentUsd: 80, calls: 1 }));
+  const l = createLedger(f);
   assert.throws(() => l.assertCanSpend({ live: false }), /replay/);
   l.assertCanSpend({ live: true });
   fs.writeFileSync(f, JSON.stringify({ spentUsd: 100, calls: 1 }));
-  assert.throws(() => l.assertCanSpend({ live: true }), /budget reached/);
+  assert.throws(() => createLedger(f).assertCanSpend({ live: true }), /budget reached/);
 });
 test('a single run cannot pass its cap', () => {
   const l = createLedger(tmp());
   assert.throws(() => l.assertCanSpend({ runSpentUsd: 0.25 }), /run reached/);
 });
-test('spend survives a restart', () => {
+test('spend survives a restart', async () => {
   const f = tmp();
-  createLedger(f).record('sam-3.1', { images: 2 });
+  const l = createLedger(f); l.record('sam-3.1', { images: 2 }); await l.saved();
   assert.equal(createLedger(f).state().spentUsd, 0.005);
+});
+
+test('a crash or restart does not hand out a fresh session allowance; SESSION_RESET does (red team 10/31)', async () => {
+  const f = tmp();
+  const a = createLedger(f, { sessionStopUsd: 0.004 }); a.record('sam-3.1', { images: 2 }); await a.saved();
+  assert.equal(a.session().stopped, true);
+  const b = createLedger(f, { sessionStopUsd: 0.004 }); await b.saved();
+  assert.throws(() => b.assertCanSpend(), { code: 'SESSION_STOP' });
+  const c = createLedger(f, { sessionStopUsd: 0.004, reset: true }); await c.saved();
+  c.assertCanSpend();
 });
 
 test('a fresh ledger starts from SPENT_BASELINE_USD (container restarts keep the account total)', async () => {

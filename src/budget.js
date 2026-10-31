@@ -40,17 +40,33 @@ export function costOf(model, usage = {}) {
 }
 
 /**
- * sessionStopUsd: a hard stop for this process (one recording session or one eval run), counted from
- * the ledger total when it starts. Past it, nothing calls the API until a restart with a new limit.
+ * sessionStopUsd: a hard stop for one recording session, judging window or eval run, counted from the
+ * ledger total when that session began. The start is kept in the ledger file, so a crash or a new
+ * container does not hand out a fresh allowance (red team 10/31); SESSION_RESET=1 or a different
+ * stop amount starts a new session. Past the stop, nothing calls the API.
+ *
+ * The ledger lives in memory and is written to disk in the background, one write at a time with
+ * the latest totals: a synchronous file write per model call cost up to a second on a mounted
+ * bucket (red team 10/31, latency). A crash loses at most the last unsaved call's cents.
  */
-export function createLedger(file, { sessionStopUsd = Number(process.env.SPEND_STOP_USD) || null } = {}) {
+export function createLedger(file, { sessionStopUsd = Number(process.env.SPEND_STOP_USD) || null, reset = process.env.SESSION_RESET === '1' } = {}) {
   // A fresh container has no ledger file: SPENT_BASELINE_USD starts it at the spend already on the
   // account, so the $80 and $100 lines still mean the account total, not this container's.
   const baseline = Math.max(0, Number(process.env.SPENT_BASELINE_USD) || 0);
-  const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { spentUsd: baseline, calls: 0 }; } };
-  const save = (s) => { fs.writeFileSync(`${file}.tmp`, JSON.stringify(s)); fs.renameSync(`${file}.tmp`, file); };
-  const startUsd = load().spentUsd;
-  const sessionSpent = () => load().spentUsd - startUsd;
+  let s;
+  try { s = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { s = { spentUsd: baseline, calls: 0 }; }
+  let writing = false; let dirty = false;
+  const flush = () => {
+    if (writing) { dirty = true; return; }
+    writing = true; dirty = false;
+    fs.promises.writeFile(`${file}.tmp`, JSON.stringify(s)).then(() => fs.promises.rename(`${file}.tmp`, file))
+      .catch((err) => console.error('ledger write failed', err?.message))
+      .finally(() => { writing = false; if (dirty) flush(); });
+  };
+  if (reset || !s.session || s.session.stopUsd !== sessionStopUsd) { s.session = { startUsd: s.spentUsd, stopUsd: sessionStopUsd, at: new Date().toISOString() }; flush(); }
+  const load = () => s;
+  const startUsd = s.session.startUsd;
+  const sessionSpent = () => s.spentUsd - startUsd;
   const sessionStopped = () => sessionStopUsd != null && sessionStopUsd >= 0 && sessionSpent() >= sessionStopUsd;
   return {
     state: load,
@@ -65,9 +81,11 @@ export function createLedger(file, { sessionStopUsd = Number(process.env.SPEND_S
       if (runSpentUsd >= Math.min(MAX_RUN_USD, runCapUsd)) throw new BudgetExceeded('This run reached its spending limit.', 'RUN_CAP');
     },
     record(model, usage) {
-      const s = load(); const usd = costOf(model, usage);
-      s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6; s.calls += 1; save(s);
+      const usd = costOf(model, usage);
+      s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6; s.calls += 1; flush();
       return usd;
     },
+    /** Waits for the background write (tests, shutdown). */
+    async saved() { while (writing) await new Promise((r) => setTimeout(r, 5)); },
   };
 }

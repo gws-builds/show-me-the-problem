@@ -37,12 +37,16 @@ test('voice caps: per line, per call and per run; no key means browser voice', a
   assert.equal(await createTts({ apiKey: '', fetchImpl }).speak('a', 'hi'), null);
   const tts = createTts({ apiKey: 'k', fetchImpl });
   assert.ok(await tts.speak('a', 'hello'));
-  const long = 'x'.repeat(TTS_LIMITS.line);
-  let ok = 0; for (let i = 0; i < 20; i++) if (await tts.speak('b', long)) ok++;
+  const long = (i) => `${String(i).padStart(2, '0')}${'x'.repeat(TTS_LIMITS.line - 2)}`;
+  let ok = 0; for (let i = 0; i < 20; i++) if (await tts.speak('b', long(i))) ok++;
   assert.equal(ok, TTS_LIMITS.perCall / TTS_LIMITS.line);
   assert.equal(await tts.speak('c', 'y'.repeat(5000)) !== null, true); // trimmed to one line
   assert.ok(tts.used() <= TTS_LIMITS.perRun);
   assert.equal(hits, 1 + ok + 1);
+  // The same line again is served from memory: no request, no charge (red team 10/31).
+  const before = tts.used();
+  assert.ok(await tts.speak('a', 'hello'));
+  assert.equal(hits, 1 + ok + 1); assert.equal(tts.used(), before);
 });
 
 test('a failed voice request returns nothing (the page falls back to the browser voice)', async () => {

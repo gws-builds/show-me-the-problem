@@ -135,3 +135,13 @@ test('a stopped turn makes no further model calls, and later steps run at minima
   await assert.rejects(callerTurn(context, [{ role: 'user', content: 'Caller: hi' }], { signal: ac.signal }), { code: 'ABORTED' });
   assert.equal(api.calls.length, n);
 });
+
+test('links, emails, phone numbers and payment requests never reach the caller in the business voice (red team 10/31)', async () => {
+  const { noContact } = await import('../src/tools.js');
+  for (const bad of ['Visit evil.com/pay to confirm.', 'Email me at x@y.co.', 'Call 415-555-0123 now.', 'Please pay a deposit by Zelle first.', 'Go to https://x.io now.']) {
+    const r = noContact(`The valve looks worn. ${bad}`);
+    assert.equal(r.blocked, true, bad);
+    assert.ok(r.text.startsWith('The valve looks worn.'));
+  }
+  assert.equal(noContact('Turn the valve clockwise until it stops. It takes about 10 seconds.').blocked, false);
+});

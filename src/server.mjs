@@ -213,10 +213,15 @@ server.requestTimeout = 60_000;
 
 // Voice: /api/calls/<id>/voice. The first message must be {"token": camToken}; then binary 16 kHz PCM.
 // The browser never sees the API key: this server opens the upstream socket and adds it.
+// Anything a stranger sends before the gate is untrusted: a throw here would take the whole server
+// down (red team 10/31), so every failure closes this one socket instead.
 server.on('upgrade', (req, socket) => {
+  try { voiceUpgrade(req, socket); } catch (err) { console.error('voice upgrade refused', err?.message); socket.destroy(); }
+});
+function voiceUpgrade(req, socket) {
   const m = new URL(req.url, 'http://x').pathname.match(/^\/api\/calls\/([a-f0-9]{32})\/voice$/);
   const origin = String(req.headers.origin ?? ''); const host = String(req.headers.host ?? '');
-  if (!m || (origin && new URL(origin).host !== host)) { socket.destroy(); return; }
+  if (!m || (origin && (!URL.canParse(origin) || new URL(origin).host !== host))) { socket.destroy(); return; }
   if (!gate.check(cookieValue(req.headers.cookie), clientIp(req), { count: false })) { socket.destroy(); return; }
   const ws = upgrade(req, socket); if (!ws) return;
   const callId = m[1]; let session = null;
@@ -240,7 +245,7 @@ server.on('upgrade', (req, socket) => {
     } catch (err) { toClient({ type: 'error', message: err instanceof CallError || err?.code ? err.message : 'Voice could not start.' }); ws.close(1008); }
   });
   ws.onClose(() => { clearTimeout(authTimer); if (session) { session.end(); calls.setVoice(callId, null); } });
-});
+}
 const PORT = Number(process.env.PORT || 8642);
 const HOST = process.env.HOST || '127.0.0.1';
 server.listen(PORT, HOST, () => console.log(`snap-to-booked on http://${HOST}:${PORT} (${ledger.mode()}; access code in ${path.relative(ROOT, path.join(DATA, 'access_code'))}; spend stop $${ledger.session().stopUsd} this run)`));

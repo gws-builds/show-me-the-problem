@@ -57,6 +57,25 @@ const SENTENCE = /[.;!?\n]+|\b(but|and|so|though|although)\b/i;
 export function modelNoteHazardIn(...texts) {
   return modelNoteHazard(texts);
 }
+// What SAM outlines for each price-list job type (nouns used by find_part and the KB cards).
+const JOB_PARTS = {
+  'water heater': ['water heater', 'heater', 'tank', 'relief', 'valve', 'pipe', 'anode'],
+  'breaker panel': ['panel', 'breaker'],
+  'air conditioner': ['air conditioner', 'condenser', 'unit', 'fan', 'disconnect'],
+  pipe: ['pipe', 'valve', 'fitting', 'joint'],
+  'sump pump': ['sump', 'pump', 'pit'],
+  'garbage disposal': ['disposal', 'sink'],
+  thermostat: ['thermostat'],
+  outlet: ['outlet', 'receptacle', 'cord', 'plug', 'switch', 'strip'],
+  faucet: ['faucet', 'tap', 'spout', 'handle', 'aerator', 'sink'],
+  'shut-off valve': ['valve', 'pipe'],
+  toilet: ['toilet', 'tank', 'flapper', 'fill valve', 'valve'],
+  furnace: ['furnace', 'filter', 'vent'],
+  'heat pump': ['heat pump', 'air conditioner', 'condenser', 'unit', 'filter'],
+  lights: ['lamp', 'light', 'fixture', 'switch', 'dimmer'],
+  'smoke alarm': ['smoke', 'detector', 'alarm'],
+};
+
 /** wiringSettled: the camera's wiring finding was already judged in code, so the model restating it is not new evidence. */
 function modelNoteHazard(texts, { wiringSettled = false } = {}) {
   const skip = wiringSettled ? WIRING : null;
@@ -90,6 +109,13 @@ export function verify(proposal, { priceList = [], boxes = [], outlines = [], ca
   // Price: only an exact row from the owner's list, with the list's own amount.
   const row = priceList.find((r) => r.id === proposal?.priceListId);
   if (!pass('price is on the owner\'s list', Boolean(row), row ? row.label : `model chose ${proposal?.priceListId ?? 'nothing'}`)) {
+    return { action: 'tech_confirms', reason: 'The technician confirms the price on site.', checks };
+  }
+  // The row must be for equipment seen on this call: a caller or a sign cannot steer a faucet call to
+  // the dearest water-heater row (red team 10/31). Job types without a mapping are not blocked.
+  const seen = [box.label, ...outlines.filter((o) => (o.confidence ?? 0) >= 0.5).map((o) => o.part)].map((x) => String(x ?? '').toLowerCase());
+  const words = JOB_PARTS[row.jobType];
+  if (!pass('price row matches the equipment seen', !words || seen.some((s) => words.some((w) => s.includes(w))), `${row.jobType} vs ${[...new Set(seen)].join(', ') || 'nothing'}`)) {
     return { action: 'tech_confirms', reason: 'The technician confirms the price on site.', checks };
   }
   return { action: 'quote', priceCents: row.priceCents, label: row.label, equipment: box.label, checks };

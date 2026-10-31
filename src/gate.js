@@ -34,7 +34,8 @@ const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.lengt
 export function cookieValue(header, name = COOKIE) {
   for (const part of String(header ?? '').split(';')) {
     const i = part.indexOf('=');
-    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+    // A malformed cookie (e.g. "%") is no cookie, never an exception (red team 10/31: it crashed the server).
+    if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
   }
   return '';
 }

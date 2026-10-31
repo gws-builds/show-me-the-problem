@@ -76,7 +76,7 @@ The caller's language is detected from their words. The model writes its lines i
 - **Hypotheses need evidence.** `record_hypothesis` is refused unless it cites ledger entries from a frame observation, an outline or the caller's words.
 - **Water shut-off steps are fixed text in code.** Anything about gas is refused in code.
 - **Nothing is booked by the model.** Only the owner's token approves, and never on a hazard call. The demo calendar is in memory; this repository does not book into Jobber.
-- **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call ($0.60 for a guided tour); each server run has a hard **session spend stop** (`SPEND_STOP_USD`, $5 by default) counted from the ledger when it starts; the public demo switches to replays at $80 of the credit; everything stops at $100.
+- **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call ($0.60 for a guided tour); each session has a hard **session spend stop** (`SPEND_STOP_USD`, $5 by default) counted from the ledger when the session began and kept in the ledger, so a crash or restart does not reset it (`SESSION_RESET=1` starts a new one; the recording script does); the public demo switches to replays at $80 of the credit; everything stops at $100.
 - **Access code on every page and API.** A random code is made at each server start and written to `.data/access_code` (mode 600), never logged or committed. `/k/<code>` sets an HttpOnly, SameSite=Strict cookie and redirects, so the code leaves the address bar; without it, pages redirect to a code-entry page, APIs answer 401 and the voice WebSocket is closed before any model call. 20 wrong codes in 10 minutes lock that client out. This sits on top of the per-call tokens.
 - **Bounds for strangers:** frame and audio size and rate, one message at a time, 6 calls per IP per hour, 10 live calls at once, 15-minute calls, a WebSocket origin check, and voice tokens sent in the first message, never in a URL.
 - **Untrusted text stays text.** Text on equipment and caller words are data. Pages render with `textContent` under a strict CSP. Frames are kept in memory for the call only (up to 24 evidence frames); a recorded call keeps events and lines, never media.
@@ -89,7 +89,7 @@ The caller's language is detected from their words. The model writes its lines i
 ## Run it
 
 ```bash
-npm test                              # 148 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
+npm test                              # 152 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
 ```
@@ -102,13 +102,13 @@ The phone camera needs HTTPS. For a recording session, `scripts/record_session.s
 
 ## Deploy (one container, not used for the recordings)
 
-The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager. The spend ledger, access code and replays live in `DATA_DIR`, mounted from a Cloud Storage bucket so a restart or a new revision keeps the spend caps counting from the real total; `--min-instances 1` keeps the one instance warm, so a judge's first call does not wait for a cold start:
+The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager. The spend ledger, access code and replays live in `DATA_DIR`, mounted from a Cloud Storage bucket so a restart or a new revision keeps the spend caps counting from the real total; `--min-instances 1` keeps the one instance warm, so a judge's first call does not wait for a cold start; `TRUST_PROXY=1` makes the per-person call limit use the caller's address (the last X-Forwarded-For entry, which Cloud Run appends) instead of Google's front end, so judges do not share one limit:
 
 ```bash
 gcloud run deploy show-me-the-problem --source . --region us-east1 --allow-unauthenticated \
   --min-instances 1 --max-instances 1 --session-affinity --timeout 900 \
   --add-volume name=data,type=cloud-storage,bucket=<bucket> --add-volume-mount volume=data,mount-path=/data \
-  --set-env-vars DATA_DIR=/data --set-secrets META_API_KEY=meta-api-key:latest
+  --set-env-vars DATA_DIR=/data,TRUST_PROXY=1 --set-secrets META_API_KEY=meta-api-key:latest
 ```
 
 ## Eval

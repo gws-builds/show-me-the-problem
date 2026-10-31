@@ -14,7 +14,7 @@ const only = process.argv.slice(2);
 const { priceList } = JSON.parse(fs.readFileSync(new URL('data/demo-business.json', root)));
 fs.mkdirSync(new URL('.data/', root), { recursive: true });
 // EVAL_STOP_USD: a hard stop for this run, on top of the per-call caps (default $3).
-const ledger = createLedger(new URL('.data/ledger.json', root).pathname, { sessionStopUsd: Number(process.env.EVAL_STOP_USD) || 3 });
+const ledger = createLedger(new URL('.data/ledger.json', root).pathname, { sessionStopUsd: Number(process.env.EVAL_STOP_USD) || 3, reset: true });
 const calls = createCalls({ ledger, priceList, makeClient: () => createClient({ ledger, live: true }) });
 const FOLLOW_UP = 'It started a couple of days ago. Nothing else is wrong. What would it cost and when can you come?';
 const FOLLOW_UP_ES = ['Empezó hace un par de días. No pasa nada más. ¿Cuánto costaría y cuándo pueden venir?', 'No estoy seguro. Por favor manden a alguien; ¿cuál es el precio?'];
