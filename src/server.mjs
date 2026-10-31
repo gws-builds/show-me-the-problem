@@ -1,6 +1,8 @@
 // HTTP for the live demo. No framework: a handful of routes, every body size
 // capped before it is read, static files from a fixed list, strict CSP.
 //   node src/server.mjs            (PORT, HOST=127.0.0.1 by default; META_API_KEY from env)
+import { createGlimmer } from './afterBooking.js';
+import { CALL_ROUTE } from './routes.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,7 +40,7 @@ const tts = createTts();
 setImmediate(() => { const l = loadCorpus(); console.log(l.error ? `trade library NOT loaded: ${l.error}` : `trade library: ${l.index.size} passages (${l.loadMs} ms)`); });
 
 const calls = createCalls({
-  ledger, priceList,
+  ledger, priceList, glimmer: createGlimmer(),
   makeClient: (live) => createClient({ ledger, live }),
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
@@ -153,7 +155,7 @@ async function route(req, res) {
     if (!staff) alerts.callStarted({ ...ledger.session(), footage: Boolean(footage) }).catch(() => undefined);
     return send(res, 200, made);
   }
-  const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|say|text|tap|staged|tour|decision|still|annotated|frames\/\d{1,6}))?$/);
+  const m = p.match(CALL_ROUTE);
   if (m) {
     const [, id, action] = m;
     const cam = String(req.headers['x-cam-token'] ?? ''); const owner = String(req.headers['x-owner-token'] ?? '');
@@ -190,6 +192,7 @@ async function route(req, res) {
     if (req.method === 'POST' && action === 'staged') return send(res, 200, calls.setStaged(id, cam, (await json(req, 200)).staged === true));
     if (req.method === 'POST' && action === 'tap') { const b = await json(req, 200); return send(res, 200, await calls.tap(id, cam, b.x, b.y)); }
     if (req.method === 'POST' && action === 'text') return send(res, 200, await calls.text(id, cam, (await json(req, 2000)).text));
+    if (req.method === 'POST' && action === 'confirmation') return send(res, 200, calls.sendConfirmation(id, owner, (await json(req, 200)).send === true));
     if (req.method === 'POST' && action === 'decision') return send(res, 200, await calls.decide(id, owner, (await json(req, 200)).approve === true));
   }
   const r = p.match(/^\/api\/runs\/([a-f0-9]{32})$/);

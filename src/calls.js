@@ -24,6 +24,7 @@ import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
 import { reviewWorkOrder } from './review.js';
+import { draftFollowUp } from './afterBooking.js';
 import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
 import { toLang } from './i18n.js';
 
@@ -77,7 +78,7 @@ function nextSlots(now) {
 /**
  * deps: { ledger, makeClient(live) -> Meta client, priceList, now?, onEnd?(call) }
  */
-export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null }) {
+export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null }) {
   const calls = new Map();
   const ipHits = new Map();
 
@@ -92,7 +93,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // Every line the caller hears goes through here: on a Spanish call, code-composed lines are translated
   // from a fixed table (i18n.js); the model's own lines are already Spanish.
   const labelEs = (label) => priceList.find((r) => r.label === label)?.labelEs ?? label;
-  const say = (c, text, status) => { c.says.push({ n: c.says.length + 1, text: toLang(text, c.session.lang?.(), { labelEs }), status, at: now() }); c.status = status ?? c.status; };
+  const say = (c, text, status) => {
+    c.says.push({ n: c.says.length + 1, text: toLang(text, c.session.lang?.(), { labelEs }), status, at: now() }); c.status = status ?? c.status;
+    // A booking now waits for the owner: start the Glimmer GPU so the follow-up draft is not a cold start.
+    if (status === 'awaiting_owner') glimmer?.warm?.();
+  };
 
   async function exclusive(c, fn) {
     if (c.busy) throw new CallError('Still thinking about the last thing you said.', 409, 'BUSY');
@@ -290,7 +295,9 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       // A closed tab sends no frames, speech or taps: after idleMs its live slot is freed (red team 10/31).
       // A call waiting for the owner's tap is kept until the TTL, so the owner can still decide.
       const last = Math.max(c.createdAt, c.lastFrameAt ?? 0, c.lastSpeechAt ?? 0, c.lastTapAt ?? 0);
-      const idle = now() - last > LIMITS.idleMs && !c.voice && c.status !== 'awaiting_owner';
+      // So is a booking whose Glimmer draft is still being written or waiting for Send (red team #3).
+      const drafting = ['running', 'draft'].includes(c.booking?.followUp?.status);
+      const idle = now() - last > LIMITS.idleMs && !c.voice && c.status !== 'awaiting_owner' && !drafting;
       if (idle || now() - c.createdAt > LIMITS.callTtlMs) { calls.delete(k); c.voice?.end(); onEnd?.(c); }
     }
     for (const [ip, hits] of ipHits) { const keep = hits.filter((t) => now() - t < 3_600_000); if (keep.length) ipHits.set(ip, keep); else ipHits.delete(ip); }
@@ -468,18 +475,38 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       c.booking.review = { status: 'running' };
       // Its own allowance on top of what the call spent, so a long call still gets its plan (red team 10/31); never past MAX_RUN_USD.
       c.client.setCap(c.client.spent() + 0.1);
+      const t0 = Date.now(); const spent0 = c.client.spent?.() ?? null;
       reviewWorkOrder(c.client, c.booking.workOrder, c.session.evidence.list())
-        .then((r) => { c.booking.review = { status: 'done', ...r }; c.session.log({ kind: 'wonder_review', steps: r.steps.length, gaps: r.gaps.length, dropped: r.dropped }); })
+        .then((r) => { c.booking.review = { status: 'done', ...r }; c.session.log({ kind: 'wonder_review', steps: r.steps.length, gaps: r.gaps.length, dropped: r.dropped, ms: Date.now() - t0, costUsd: spent0 == null ? null : Math.max(0, c.client.spent() - spent0) }); })
         .catch((err) => { c.booking.review = { status: 'failed' }; c.session.log({ kind: 'error', text: `review: ${String(err.message).slice(0, 160)}` }); });
+      // Muse Glimmer (open weights, the business's own GPU) drafts the truck list and the customer's
+      // confirmation text; the text waits for the owner's Send. Skipped when no endpoint is configured.
+      if (glimmer) {
+        c.booking.followUp = { status: 'running' };
+        draftFollowUp(glimmer, c.booking.workOrder, c.session.evidence.list(), c.session.latestFrame()?.dataUrl ?? null, { now, lang: c.session.lang?.() ?? 'en' })
+          .then((r) => { c.booking.followUp = { status: 'draft', ...r }; c.session.log({ kind: 'glimmer_followup', parts: r.parts.length, dropped: r.dropped, ms: r.ms, costUsd: r.costUsd }); })
+          .catch((err) => { c.booking.followUp = { status: 'failed' }; c.session.log({ kind: 'error', text: `follow-up: ${String(err.message).slice(0, 160)}` }); });
+      }
       // The evidence stills are drawn in code from SAM masks (owner page). Muse Image adds a separate,
       // clearly labelled illustration; it is never used as evidence. Best effort: a failure never blocks the booking.
       const frame = c.session.latestFrame(); const box = c.session.boxes()[0];
+      // In the background, like Wonder and Glimmer: the owner's tap returns at once (red team #3).
       if (frame && box) {
-        try {
-          c.annotated = await c.client.annotate(frame.dataUrl, `Draw a bright red rectangle around the ${c.session.lastPart()} (pixels x ${box.x1}-${box.x2}, y ${box.y1}-${box.y2}) and a short label "${c.session.lastPart()}". Change nothing else.`);
-          c.session.log({ kind: 'annotated', ok: Boolean(c.annotated) });
-        } catch (err) { c.session.log({ kind: 'error', text: `annotate: ${String(err.message).slice(0, 160)}` }); }
+        c.client.annotate(frame.dataUrl, `Draw a bright red rectangle around the ${c.session.lastPart()} (pixels x ${box.x1}-${box.x2}, y ${box.y1}-${box.y2}) and a short label "${c.session.lastPart()}". Change nothing else.`)
+          .then((img) => { c.annotated = img; c.session.log({ kind: 'annotated', ok: Boolean(img) }); })
+          .catch((err) => c.session.log({ kind: 'error', text: `annotate: ${String(err.message).slice(0, 160)}` }));
       }
+      return { ok: true };
+    },
+
+    /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
+    sendConfirmation(callId, token, send) {
+      const c = asOwner(callId, token);
+      const f = c.booking?.followUp;
+      if (!f || f.status !== 'draft') throw new CallError('No confirmation is waiting.', 409, 'NO_DRAFT');
+      f.status = send ? 'sent' : 'dropped';
+      c.session.log({ kind: 'confirmation', sent: Boolean(send) });
+      if (send) say(c, f.confirmation, c.status);
       return { ok: true };
     },
 

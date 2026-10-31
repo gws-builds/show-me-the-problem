@@ -55,7 +55,7 @@ if (page === 'console') {
       case 'booking_requested': return line('verify', 'Booking waits for the owner', `slot ${e.slot}`);
       case 'owner_decision': return line(e.approved ? 'say' : 'error', e.approved ? 'Owner approved' : 'Owner declined', e.slot);
       case 'annotated': return line('tool', 'Muse Image', e.ok ? 'illustration made (labelled, not evidence)' : 'no image returned');
-      case 'say': return line('say', `Agent says (${e.status})`, e.text);
+      case 'say': return line('say', `Muse Spark 1.3 says (${e.status})`, e.text);
       case 'error': return line('error', 'Error', e.text);
       case 'tour_start': return line('code_gate', 'Guided tour', e.text);
       case 'tour_done': return line('say', 'Tour finished', e.text);
@@ -63,6 +63,9 @@ if (page === 'console') {
       case 'lang': return line('verify', 'Language', e.lang === 'es' ? 'Spanish: the agent and every code line now speak Spanish' : 'English');
       case 'kb_ref': return line('tool', 'Trade manuals (local search)', e.refs.map((r) => r.cite).join('; '));
       case 'tour': return line(e.items.some((i) => i.status === 'safety') ? 'code_gate' : 'tool', `Tour step ${e.step}, frame ${e.frame} (${String(e.room).replace('_', ' ')})`, e.items.length ? e.items.map((i) => `${i.label}: ${i.status}${i.evidence ? ` (${i.evidence})` : ''}${i.score != null ? ` SAM ${i.score}` : ''}${i.note ? ` [${i.note}]` : ''}`).join('; ') : 'nothing named in this frame');
+      case 'wonder_review': return line('tool', 'Muse Wonder 1.0 (harder reasoning)', `technician's order of checks: ${e.steps} step(s), ${e.gaps} gap(s); ${e.dropped ?? 0} dropped by code for citing no real evidence${e.ms ? `, ${(e.ms / 1000).toFixed(1)} s` : ''}${e.costUsd != null ? `, $${Number(e.costUsd).toFixed(3)}` : ''}`);
+      case 'glimmer_followup': return line('tool', 'Muse Glimmer 30B (open weights, own GPU)', `truck list: ${e.parts} item(s), ${e.dropped} dropped for citing no evidence; customer text drafted, waiting for the owner. ${(e.ms / 1000).toFixed(1)} s, about $${Number(e.costUsd).toFixed(3)} GPU`);
+      case 'confirmation': return line('code_gate', 'Owner', e.sent ? 'sent the confirmation text' : 'chose not to send the confirmation text');
       case 'kb': return line('verify', 'Knowledge base', `cards in the agent's context: ${e.cards.join(', ') || 'none'}`);
       default: return line('', e.kind, JSON.stringify(e).slice(0, 200));
     }

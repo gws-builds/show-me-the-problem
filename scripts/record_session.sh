@@ -70,6 +70,13 @@ if [[ -z "${DEEPGRAM_API_KEY:-}" && -f "$DG_FILE" ]]; then
   DEEPGRAM_API_KEY="$(sed -n 's/^MEMBER_DEEPGRAM_API_TOKEN[[:space:]]*=[[:space:]]*//p' "$DG_FILE" | tr -d "\"'" | head -1)"; export DEEPGRAM_API_KEY
 fi
 [[ -n "${DEEPGRAM_API_KEY:-}" ]] && echo "Natural voice: on" || echo "Natural voice: off (browser voice)"
+# Muse Glimmer follow-up (open weights on our Modal GPU, modal/glimmer.py): endpoint URL, vLLM key and Modal
+# proxy-auth pair all come from ../.secrets/glimmer_modal.env, never from this public repo.
+GL_FILE="${GLIMMER_ENV_FILE:-$ROOT/../.secrets/glimmer_modal.env}"
+if [[ -z "${GLIMMER_API_KEY:-}" && -f "$GL_FILE" ]]; then
+  set -a; . "$GL_FILE"; set +a
+fi
+[[ -n "${GLIMMER_API_KEY:-}" && -n "${GLIMMER_URL:-}" ]] && echo "Glimmer follow-up: on (the GPU starts when a booking waits for the owner)" || echo "Glimmer follow-up: off"
 
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then die "port $PORT is already in use (another server?)"; fi
 

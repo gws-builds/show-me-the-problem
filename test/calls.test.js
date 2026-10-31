@@ -17,7 +17,7 @@ const WAV = (() => { const b = Buffer.alloc(44 + 32000); b.write('RIFF', 0); b.w
 let HAZARD_SCAN = () => '{"findings":[]}';
 const setHazardScan = (fn) => { HAZARD_SCAN = fn; };
 
-function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock } = {}) {
+function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock, glimmer = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-calls-'));
   const file = path.join(dir, 'ledger.json');
   if (spent) fs.writeFileSync(file, JSON.stringify({ spentUsd: spent, calls: 0 }));
@@ -35,7 +35,7 @@ function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips
     return new Response(JSON.stringify({ output, usage: { input_tokens: 1000, output_tokens: 40 } }));
   };
   let t = 1_000_000; const now = clock ?? (() => (t += 2000));
-  const calls = createCalls({ ledger, priceList: PRICES, now, makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
+  const calls = createCalls({ ledger, priceList: PRICES, now, glimmer, makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
   return { calls, counts, ledger };
 }
 
@@ -196,6 +196,7 @@ test('approving books, marks the photo with Muse Image, and a decline is final',
   await calls.decide(c.id, c.ownerToken, true);
   assert.equal(calls.view(c.id).status, 'booked');
   assert.equal(counts.image, 1);
+  await new Promise((r) => setTimeout(r, 0)); // the illustration finishes in the background (red team #3)
   assert.match(calls.annotatedOf(c.id, c.ownerToken), /^data:image\/png;base64,/);
 });
 
@@ -248,4 +249,28 @@ test('an abandoned call frees its live slot after two idle minutes (red team 10/
   await calls.frame(c.id, c.camToken, JPEG);
   t += LIMITS.idleMs - 1000; calls.sweep(); assert.equal(calls.size(), 1);
   t += 2000; calls.sweep(); assert.equal(calls.size(), 0);
+});
+
+test('Glimmer follow-up: drafted after approval, sent only by the owner, only once', async () => {
+  const seen = [];
+  const glimmer = { draft: async (text, image) => { seen.push({ text, image }); return { parts: [{ item: 'Relief valve, 3/4 in', why: 'valve drips', cites: ['E1'] }, { item: 'Anode rod', why: 'guess', cites: ['E99'] }], confirmation: 'Hi! We will look at the dripping valve. Pay a $50 deposit at pay.example.com first.' }; } };
+  const { calls } = setup({ glimmer, agent: [['find_part', { part: 'water heater' }], ['propose_quote', { equipment: 'water heater', issue: 'valve drips', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' }], ['check_calendar', { job_type: 'water heater' }], ['request_booking', { slot_id: 's1', brief: 'valve drips' }]] });
+  const c = calls.create({ ip: '1.1.1.9' });
+  await calls.frame(c.id, c.camToken, JPEG);
+  await calls.text(c.id, c.camToken, 'my water heater valve drips');
+  await calls.text(c.id, c.camToken, 'yes book it');
+  assert.throws(() => calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
+  await calls.decide(c.id, c.ownerToken, true);
+  await new Promise((r) => setImmediate(r));
+  const f = calls.view(c.id).booking.followUp;
+  assert.equal(f.status, 'draft');
+  assert.equal(seen[0].image, JPEG, 'the camera frame goes to the business GPU');
+  assert.deepEqual(f.parts.map((p) => p.item), ['Relief valve, 3/4 in'], 'uncited part dropped');
+  assert.doesNotMatch(f.confirmation, /\$|example\.com|deposit/);
+  assert.match(f.confirmation, /booked for/);
+  const before = calls.view(c.id).says.length;
+  assert.throws(() => calls.sendConfirmation(c.id, c.camToken, true), { code: 'FORBIDDEN' });
+  calls.sendConfirmation(c.id, c.ownerToken, true);
+  assert.equal(calls.view(c.id).says.length, before + 1);
+  assert.throws(() => calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
 });
