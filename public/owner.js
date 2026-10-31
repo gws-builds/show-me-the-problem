@@ -32,6 +32,13 @@ function renderWorkOrder(wo, evidence) {
   add('Caller said', wo.callerSaid.join(' · '));
   if (wo.references?.length) add('Manual references', wo.references.map((r) => `${r.cite} [${r.evidence}]`).join(' · '));
   add('Note', wo.note);
+  // Muse Wonder's order of checks: each step cites the evidence it rests on; code dropped any that did not.
+  const rv = wo.review;
+  if (rv?.status === 'running') add('Technician plan', 'Muse Wonder is reviewing the evidence…');
+  if (rv?.status === 'done') {
+    rv.steps.forEach((s, i) => add(i ? '' : 'Technician plan (Muse Wonder)', `${i + 1}. ${s.step} [${s.cites.join(', ')}]`));
+    if (rv.gaps.length) add('Not established on the call', rv.gaps.join(' · '));
+  }
   $('wo').replaceChildren(...rows);
   const ev = wo.equipment ? byId[wo.equipment.evidence] : null;
   if (ev?.frame && ev.geo) {
@@ -62,7 +69,7 @@ async function poll() {
     if (v.booking) {
       $('doneCard').hidden = false; $('doneH').textContent = v.booking.approved ? `Booked: ${v.booking.slot.label}` : 'Declined';
       $('woH').textContent = 'Technician work order';
-      renderWorkOrder(v.booking.workOrder, v.evidence);
+      renderWorkOrder(v.booking.workOrder && { ...v.booking.workOrder, review: v.booking.review }, v.evidence);
       if (v.annotated && !annShown) {
         const a = await fetch(`/api/calls/${id}/annotated`, { headers: { 'x-owner-token': owner } });
         if (a.ok) { $('ann').src = URL.createObjectURL(await a.blob()); $('ann').hidden = false; $('annNote').hidden = false; annShown = true; }

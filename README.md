@@ -30,6 +30,7 @@ The camera is a sensor inside an agent that talks, decides, verifies and acts. M
 | **SAM 3.1** | Segments the named part in the live frame (text prompt), or the object under a point (point prompt). Returns a mask and a confidence. Code decodes the one_bit mask and computes centroid and area for the guidance arrows and the lock. SAM must also outline every camera hazard before it counts. |
 | **Muse Spark 1.3** | The agent (function tools, `parallel_tool_calls: false`, at most 6 tool steps per caller turn and 12 turns per call). Also: grounding points (0–1000 grid) when SAM's text prompt misses, a hazard scan of the frame every 10 s, and `inspect_frame` (faucet type, where the water appears). |
 | **Muse Voice Transcribe 1.0** | Realtime over `wss://api.meta.ai/v1/asr/realtime` in ENDPOINTING mode (turn detection), English and Spanish. Our server relays 16 kHz PCM and adds the key; the browser never sees it. Push-to-talk WAV is the fallback. |
+| **Muse Wonder 1.0** | The slower reasoning model, used for the one step where time is not short: after the owner approves, it reads the whole work order and evidence ledger and writes the technician's order of checks and what the call could not establish (`src/review.js`). Code keeps only steps that cite evidence ids that exist and drops any line with a price. It runs beside the booking (about 11 s, $0.04 measured Oct 31), so it never slows the caller. |
 | **Muse Image 1.0** | After approval, an illustration for the technician, labelled "not evidence". The evidence still is the real frame with the SAM outline drawn in code. |
 
 **The voice is the only part that is not Meta.** Meta's catalogue has no text-to-speech model, so the agent's finished lines are read out by Deepgram Aura-2 (`src/tts.js`), with the browser's built-in speech synthesis as the fallback. Deepgram only turns the agent's own words into sound: all listening, seeing, deciding and answering is done by the Meta models above.
@@ -88,7 +89,7 @@ The caller's language is detected from their words. The model writes its lines i
 ## Run it
 
 ```bash
-npm test                              # 146 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
+npm test                              # 148 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
 ```

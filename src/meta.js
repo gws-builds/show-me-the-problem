@@ -6,7 +6,7 @@
 export const BASE = process.env.META_API_BASE || 'https://api.meta.ai/v1';
 const SAM_META = { include_confidence: 'true', mask_encoding: 'one_bit' };
 const AGENT_EFFORT = process.env.AGENT_EFFORT || 'low';
-export const MODELS = { agent: 'muse-spark-1.3', sam: 'sam-3.1', image: 'muse-image-1.0', transcribe: 'muse-voice-transcribe-1.0' };
+export const MODELS = { agent: 'muse-spark-1.3', reviewer: 'muse-wonder-1.0', sam: 'sam-3.1', image: 'muse-image-1.0', transcribe: 'muse-voice-transcribe-1.0' };
 
 // SAM 3.1 answers in text, one record per object: a box token, then a mask token
 // (we always ask for one_bit masks). Parsing and mask decoding live in mask.js.
@@ -114,6 +114,11 @@ export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.M
         input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }, { type: 'input_image', image_url: imageDataUrl }] }],
         store: false, reasoning: { effort },
       }, (x) => x.usage ?? {});
+      return firstJson(outputText(d));
+    },
+    /** Muse Wonder, the slower reasoning model, for the one hard step: reviewing the finished work order. Text in, JSON out. */
+    review: async (instructions, text) => {
+      const d = await post('/responses', MODELS.reviewer, { instructions, input: [{ role: 'user', content: [{ type: 'input_text', text }] }], store: false, reasoning: { effort: 'medium' } }, (x) => x.usage ?? {});
       return firstJson(outputText(d));
     },
     /** Muse Voice Transcribe on one push-to-talk WAV clip. Returns the caller's words. */

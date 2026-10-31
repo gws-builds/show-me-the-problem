@@ -23,6 +23,7 @@ export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
+import { reviewWorkOrder } from './review.js';
 import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
 import { toLang } from './i18n.js';
 
@@ -446,6 +447,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       c.session.log({ kind: 'owner_decision', approved: Boolean(approve), slot: p.slot.label });
       if (!approve) { say(c, 'The office could not take that slot. They will text you another time.', 'declined'); return { ok: true }; }
       say(c, `You're booked for ${p.slot.label}. The technician will bring what's in the brief.`, 'booked');
+      // Muse Wonder reviews the approved work order for the technician, beside the booking, never blocking it.
+      c.booking.review = { status: 'running' };
+      reviewWorkOrder(c.client, c.booking.workOrder, c.session.evidence.list())
+        .then((r) => { c.booking.review = { status: 'done', ...r }; c.session.log({ kind: 'wonder_review', steps: r.steps.length, gaps: r.gaps.length, dropped: r.dropped }); })
+        .catch((err) => { c.booking.review = { status: 'failed' }; c.session.log({ kind: 'error', text: `review: ${String(err.message).slice(0, 160)}` }); });
       // The evidence stills are drawn in code from SAM masks (owner page). Muse Image adds a separate,
       // clearly labelled illustration; it is never used as evidence. Best effort: a failure never blocks the booking.
       const frame = c.session.latestFrame(); const box = c.session.boxes()[0];

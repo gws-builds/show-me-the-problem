@@ -8,6 +8,7 @@ import fs from 'node:fs';
 // List prices, dev.meta.ai/models, read 2026-10-27 (USD).
 export const PRICES = {
   'muse-spark-1.3': { inPerM: 1.25, cachedInPerM: 0.15, outPerM: 4.25 },
+  'muse-wonder-1.0': { inPerM: 4, cachedInPerM: 0.2, outPerM: 20 },
   'sam-3.1': { perImage: 2.5 / 1000 },
   'muse-image-1.0': { perImage: 0.01 },
   'muse-voice-transcribe-1.0': { perHour: 0.18 },
