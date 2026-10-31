@@ -7,9 +7,16 @@ window.Voice = (() => {
   const $ = (s) => document.getElementById(s);
   let ctx = null; let node = null; let ws = null; let callId = null; let camToken = null; let fillerTimer = null; let lastSays = 0;
   let ptt = null; // { chunks: [] } while holding to talk
-  // Founder 10/30: "on it" at once, "one moment" if it takes longer, never dead air. Any real line
-  // cuts a filler off (Speech.say stops whatever is playing), so an early answer is never held back.
-  const FILLERS = { en: [[900, 'On it.'], [4500, 'One moment.'], [10000, 'Still on it, almost there.']], es: [[900, 'Ya voy.'], [4500, 'Un momento.'], [10000, 'Sigo en ello, casi listo.']] };
+  // Founder 10/30: never dead air, but no fixed script either: a short, varied acknowledgement only when
+  // the answer is slow (1.2 s), a "one moment" kind of line if it is slower, a last reassurance after
+  // 11 s. Never the same line twice in a row. Any real line cuts a filler off (Speech.say stops
+  // whatever is playing), so an early answer is never held back.
+  const FILLERS = {
+    en: [[1200, ['Sure.', 'Okay.', 'Got it.', 'Let me look.', 'On it.', 'Let me check.']], [5000, ['One moment.', 'Just a second.', 'Give me a moment.', 'Still looking.']], [11000, ['Almost there.', 'Nearly done, thanks for waiting.', 'Still on it, almost there.']]],
+    es: [[1200, ['Claro.', 'Vale.', 'Entendido.', 'Déjame ver.', 'Ya voy.']], [5000, ['Un momento.', 'Un segundo.', 'Sigo mirando.']], [11000, ['Casi listo.', 'Ya casi, gracias por esperar.']]],
+  };
+  let lastFiller = '';
+  const pick = (lines) => { const pool = lines.filter((l) => l !== lastFiller); lastFiller = pool[Math.floor(Math.random() * pool.length)]; return lastFiller; };
   let fillerTimers = [];
   const state = (t) => { $('vstate').textContent = t; };
 
@@ -60,12 +67,13 @@ window.Voice = (() => {
     return h.length > 0 && h.filter((x) => a.has(x)).length / h.length >= 0.7;
   }
 
-  // Filler while tools run: if the agent has not answered within 0.9 s, say a short line.
+  // Filler while tools run: if the agent has not answered within 1.2 s, say a short line.
   function armFiller() {
     fillerTimers.forEach(clearTimeout); clearTimeout(fillerTimer);
     lastSays = window.Speech?.heardN ?? 0;
     const lines = FILLERS[window.Speech?.lang === 'es' ? 'es' : 'en'];
-    fillerTimers = lines.map(([ms, text]) => setTimeout(() => {
+    fillerTimers = lines.map(([ms, choices]) => setTimeout(() => {
+      const text = pick(choices);
       // Only while nothing new has been said; a filler never talks over the agent's own line.
       if ((window.Speech?.heardN ?? 0) !== lastSays) { fillerTimers.forEach(clearTimeout); return; }
       if (!window.Speech?.speaking || window.Speech?.isFiller) window.Speech?.say(text, { filler: true });
