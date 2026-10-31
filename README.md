@@ -52,7 +52,7 @@ For a caller who has never been in the room. The caller taps **Guided tour** (or
 
 ## Knowledge base (`kb/`, `src/kb.js`)
 
-Eight short equipment cards (boiler, water heater, under the sink, electrical panel, faucet, stove, outlets and cords, AC/thermostat/sump/disposal), written in our own words from public safety sources listed in `kb/SOURCES.md` (NFPA, U.S. Fire Administration, CPSC, EPA WaterSense, Natural Resources Canada, OSHA). Each card has the parts and what they look like, normal and abnormal signs, common faults and the evidence each needs, hazards with the evidence threshold to escalate, what a homeowner may do, and what we never ask. Retrieval is plain and auditable: the tour room picks its card; otherwise the equipment words heard or outlined on the call pick at most two cards, which go into the agent's context labelled as data. Code reads the thresholds directly (for example: bare wire on a cord that is visibly not plugged in is "needs attention", not an emergency).
+Thirteen short equipment cards across plumbing, HVAC and electrical (boiler, gas furnace, water heater, heat pump and ductless mini-split, under the sink, toilet, faucet, electrical panel, GFCI outlets/switches/lights/smoke alarms, outlets and cords, stove, AC/thermostat/sump/disposal, commercial equipment), written in our own words from public safety sources listed in `kb/SOURCES.md` (NFPA, U.S. Fire Administration, CPSC, EPA WaterSense, Natural Resources Canada, OSHA). Each card has the parts and what they look like, normal and abnormal signs, common faults and the evidence each needs, hazards with the evidence threshold to escalate, what a homeowner may do, and what we never ask. Retrieval is plain and auditable: the tour room picks its card; otherwise the equipment words heard or outlined on the call pick at most two cards, which go into the agent's context labelled as data. Code reads the thresholds directly (for example: bare wire on a cord that is visibly not plugged in is "needs attention", not an emergency). The agent hears words, not sounds, so the cards map the noises callers describe ("hissing after a flush", "clicks and shuts off", "squeal when the fan runs") to the fault and the view that would confirm it, and say a noise alone is a description, not proof.
 
 ## Trade library (`kb/corpus/`, `src/corpus.js`)
 
@@ -88,7 +88,7 @@ The caller's language is detected from their words. The model writes its lines i
 ## Run it
 
 ```bash
-npm test                              # 143 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
+npm test                              # 146 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
 ```
@@ -101,12 +101,13 @@ The phone camera needs HTTPS. For a recording session, `scripts/record_session.s
 
 ## Deploy (one container, not used for the recordings)
 
-The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager and the spend already used passed in so the caps still count the account total:
+The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager. The spend ledger, access code and replays live in `DATA_DIR`, mounted from a Cloud Storage bucket so a restart or a new revision keeps the spend caps counting from the real total; `--min-instances 1` keeps the one instance warm, so a judge's first call does not wait for a cold start:
 
 ```bash
 gcloud run deploy show-me-the-problem --source . --region us-east1 --allow-unauthenticated \
-  --max-instances 1 --session-affinity --timeout 900 \
-  --set-env-vars SPENT_BASELINE_USD=<ledger total> --set-secrets META_API_KEY=meta-api-key:latest
+  --min-instances 1 --max-instances 1 --session-affinity --timeout 900 \
+  --add-volume name=data,type=cloud-storage,bucket=<bucket> --add-volume-mount volume=data,mount-path=/data \
+  --set-env-vars DATA_DIR=/data --set-secrets META_API_KEY=meta-api-key:latest
 ```
 
 ## Eval

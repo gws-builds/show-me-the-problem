@@ -184,6 +184,86 @@
    "label": "Under-sink shut-off valve replacement (each)",
    "priceCents": 18900,
    "labelEs": "Cambio de llave de paso bajo el fregadero (cada una)"
+  },
+  {
+   "id": "tl-fill",
+   "jobType": "toilet",
+   "label": "Toilet repair: fill valve and flapper replacement (parts included)",
+   "priceCents": 18900,
+   "trade": "plumbing",
+   "labelEs": "Reparación del inodoro: cambio de válvula de llenado y sapito (piezas incluidas)"
+  },
+  {
+   "id": "tl-reset",
+   "jobType": "toilet",
+   "label": "Toilet reset with new wax ring (leak at the base)",
+   "priceCents": 28900,
+   "trade": "plumbing",
+   "labelEs": "Reinstalación del inodoro con anillo de cera nuevo (fuga en la base)"
+  },
+  {
+   "id": "tl-clog",
+   "jobType": "toilet",
+   "label": "Toilet clog clearing",
+   "priceCents": 14900,
+   "trade": "plumbing",
+   "labelEs": "Destape del inodoro"
+  },
+  {
+   "id": "fn-noheat",
+   "jobType": "furnace",
+   "label": "No heat diagnosis, gas furnace (applied to repair)",
+   "priceCents": 12900,
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de calefacción sin calor, horno a gas (se descuenta de la reparación)"
+  },
+  {
+   "id": "fn-tune",
+   "jobType": "furnace",
+   "label": "Furnace tune-up and safety check",
+   "priceCents": 15900,
+   "trade": "hvac",
+   "labelEs": "Mantenimiento y revisión de seguridad del horno"
+  },
+  {
+   "id": "hp-clean",
+   "jobType": "heat pump",
+   "label": "Mini-split indoor unit cleaning and drain clearing",
+   "priceCents": 17900,
+   "trade": "hvac",
+   "labelEs": "Limpieza de la unidad interior mini-split y destape del drenaje"
+  },
+  {
+   "id": "hp-ice",
+   "jobType": "heat pump",
+   "label": "Heat pump icing diagnosis (applied to repair)",
+   "priceCents": 12900,
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de congelamiento de la bomba de calor (se descuenta de la reparación)"
+  },
+  {
+   "id": "el-gfci",
+   "jobType": "outlet",
+   "label": "GFCI outlet replacement",
+   "priceCents": 14900,
+   "trade": "electrical",
+   "labelEs": "Cambio de tomacorriente GFCI"
+  },
+  {
+   "id": "el-flicker",
+   "jobType": "lights",
+   "label": "Flickering lights or warm switch diagnosis",
+   "priceCents": 12900,
+   "trade": "electrical",
+   "labelEs": "Diagnóstico de luces que parpadean o interruptor caliente"
+  },
+  {
+   "id": "el-alarm",
+   "jobType": "smoke alarm",
+   "label": "Smoke and CO alarm replacement, per alarm",
+   "priceCents": 8900,
+   "trade": "electrical",
+   "labelEs": "Cambio de alarma de humo y CO, por alarma"
   }
  ]
 }

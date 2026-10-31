@@ -1,0 +1,29 @@
+{
+ "id": "toilet", "title": "Toilet (tank, fill valve, flapper, base)", "room": "bathroom", "primary": true,
+ "match": ["toilet", "tank", "flush", "flushing", "flapper", "fill valve", "float", "running", "keeps running", "phantom flush", "hissing", "whistling", "gurgling", "wax ring", "rocking", "bowl", "overflow tube", "commode"],
+ "parts": [
+  {"id": "toilet", "label": "Toilet", "sam": "toilet", "looks": "Bowl on the floor with a tank behind it and a handle on the tank.", "normal": "Fills and stops within about a minute after a flush; no water on the floor.", "abnormal": "Water still running into the bowl long after a flush, or water on the floor around the base."},
+  {"id": "toilet_tank", "label": "Tank (lid off)", "sam": "toilet tank", "looks": "The box behind the seat; with the lid off you see the fill valve on one side and the flush valve in the middle.", "normal": "Water level steady, about an inch below the top of the overflow tube.", "abnormal": "Water spilling into the overflow tube, or the level dropping by itself."},
+  {"id": "fill_valve", "label": "Fill valve", "sam": "fill valve", "looks": "The tall plastic column on the left of the tank with a float cup or a float ball on an arm.", "normal": "Stops filling when the float rises; silent once full.", "abnormal": "Keeps hissing or whistling, or fills past the overflow tube."},
+  {"id": "flapper", "label": "Flapper", "sam": "flapper", "looks": "The rubber cap at the bottom of the tank, over the drain hole, lifted by a chain from the handle.", "normal": "Sits flat and seals; chain has a little slack.", "abnormal": "Warped, slimy or cracked rubber, a chain too tight to let it close, or it closes crooked."},
+  {"id": "overflow_tube", "label": "Overflow tube", "sam": "overflow tube", "looks": "The open pipe standing up in the middle of the tank, next to the flapper.", "normal": "Water stays below its top.", "abnormal": "Water pouring into its top (fill level set too high or a fill valve that will not shut)."},
+  {"id": "toilet_supply_line", "label": "Supply line and stop valve", "sam": "valve", "looks": "The small valve on the wall or floor behind the toilet, left side, and the flexible line up to the tank.", "normal": "Dry; braided line without kinks.", "abnormal": "Drips at the nut or valve stem, a bulging or rusty line."},
+  {"id": "toilet_base", "label": "Base and floor", "sam": "toilet", "looks": "Where the bowl meets the floor, with two bolt caps on the sides.", "normal": "Dry floor; the toilet does not move when pushed gently.", "abnormal": "Water seeping out at the base after a flush, stained or soft flooring, or the toilet rocks."}
+ ],
+ "faults": [
+  {"name": "Flapper not sealing (running toilet, phantom flush)", "evidence": "Water trickling into the bowl with the level dropping, or the tank refilling by itself every few minutes; a few drops of food colouring in the tank show in the bowl within 15 minutes without flushing."},
+  {"name": "Fill valve not shutting off (hissing or whistling)", "evidence": "Hissing or whistling that goes on after the tank is full, with water running into the overflow tube."},
+  {"name": "Water level set too high", "evidence": "Water running into the overflow tube while the fill valve is otherwise working; the float sits high on its column."},
+  {"name": "Chain too short or tangled", "evidence": "Flapper held slightly open by a tight chain, seen with the lid off."},
+  {"name": "Failed wax ring at the base", "evidence": "Water at the base after a flush (not condensation), or the toilet rocking when pushed gently."},
+  {"name": "Supply line or stop valve leak", "evidence": "Drops forming at the line's nut or the valve stem, seen with light."},
+  {"name": "Partial clog or blocked vent (gurgling, weak flush)", "evidence": "Bowl water level rising high then draining slowly, or gurgling in this toilet when another fixture drains; a noise alone is a description, not proof."}
+ ],
+ "hazards": [
+  {"id": "toilet_water_outlet", "label": "Water reaching electrics", "category": "water_electric", "escalate": true, "threshold": "Standing water on the floor visibly touching an outlet, a power strip, a cord or an electric heater."}
+ ],
+ "may": ["Lift the tank lid and set it down flat on a towel to look inside.", "Close the stop valve behind the toilet by turning it clockwise (water only), then flush once to empty the tank.", "Put a few drops of food colouring in the tank and wait 15 minutes without flushing.", "Describe the noise in words: hissing, whistling, gurgling, banging, or a refill every few minutes."],
+ "must_not": ["Use a chemical drain cleaner in a toilet.", "Stand on the toilet or the tank."],
+ "tour": {"open": "Show me the whole toilet and the floor around it from about a metre back.", "checkpoints": [{"part": "toilet_supply_line", "hint": "Look behind the toilet on the left, low down, for the small valve and the line going up to the tank."}, {"part": "toilet_tank", "hint": "If you can, lift the tank lid, set it on a towel, and point the camera into the tank."}, {"part": "toilet_base", "hint": "Point at the floor where the bowl meets it. Tap Light if it is dark."}]},
+ "sources": ["epa-leaks", "epa-fix-leak"]
+}

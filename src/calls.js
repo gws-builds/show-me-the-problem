@@ -44,6 +44,8 @@ export const LIMITS = {
   // Founder 10/30: "it should never fail or freeze". A caller turn that runs longer than this
   // is answered with a retry line instead of silence; a late result is dropped, never spoken over a newer line.
   turnMs: 20_000,
+  autoTurns: 10, // agent turns started by the camera or a tap, per call
+  taps: 40, // SAM point prompts from taps, per call
   voiceWaitMs: 25_000, // a line said while the agent is still answering waits its turn instead of being refused
 };
 // About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
@@ -127,22 +129,42 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.
     if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question with answer_caller, from this and the current frame, in one or two sentences; the tour then continues.` });
     c.history.push({ role: 'user', content: `Caller: ${line}` });
+    try {
+      await runTurn(c);
+    } catch (err) {
+      if (err.code === 'STALE') return;
+      say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', isStop(err) ? 'handoff' : c.status);
+    }
+  }
+
+  // Every agent turn (the caller's words, the camera catching up, a tap) runs here: on its own copy of
+  // the history, kept only if it finishes in time and is still the latest (red team 10/30), and stopped
+  // when it times out, so a late turn neither interleaves with the next one nor keeps spending (10/31).
+  async function runTurn(c) {
     const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
-    // The turn works on its own copy of the history, kept only if it finishes in time: a turn that
-    // timed out and finishes later can no longer interleave its tool steps with the next turn's (red team 10/30).
+    c.turnAbort?.abort();
+    const ac = (c.turnAbort = new AbortController());
     const history = [...c.history];
     let timer;
     try {
       const r = await Promise.race([
-        callerTurn(c.ctx, history),
-        new Promise((_, no) => { timer = setTimeout(() => no(new Error(`turn took over ${LIMITS.turnMs / 1000} s`)), LIMITS.turnMs); }),
+        callerTurn(c.ctx, history, { signal: ac.signal }),
+        new Promise((_, no) => { timer = setTimeout(() => { ac.abort(); no(new Error(`turn took over ${LIMITS.turnMs / 1000} s`)); }, LIMITS.turnMs); }),
       ]);
-      if (seq === c.turnSeq) { c.history = history; afterAgent(c, r); }
+      if (seq !== c.turnSeq) throw Object.assign(new Error('a newer turn replaced this one'), { code: 'STALE' });
+      c.history = history; afterAgent(c, r);
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
-      if (seq !== c.turnSeq) return;
-      say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', isStop(err) ? 'handoff' : c.status);
-    } finally { clearTimeout(timer); }
+      throw err;
+    } finally { clearTimeout(timer); if (c.turnAbort === ac) c.turnAbort = null; }
+  }
+
+  // The camera and tap continue the conversation without the caller speaking; each counts toward a
+  // per-call cap so a moving camera cannot buy unbounded agent turns (red team 10/31, finding 8).
+  async function autoTurn(c, note) {
+    if ((c.autoTurns = (c.autoTurns ?? 0) + 1) > LIMITS.autoTurns) { say(c, 'Tell me what you see, and I will take it from there.', 'waiting_caller'); return; }
+    c.history.push({ role: 'user', content: note });
+    try { await runTurn(c); } catch (err) { if (err.code !== 'STALE' && isStop(err)) say(c, 'Let me get the owner to call you back.', 'handoff'); }
   }
 
   // While the agent waits for the caller to move the camera, SAM re-checks the
@@ -160,8 +182,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const ready = good && (g?.state === 'locked' || g?.state === 'hold' || t.checks >= LIMITS.trackChecks);
       if (!ready) { if (!good && t.checks >= LIMITS.trackChecks) { c.tracking = null; say(c, 'I still cannot see it. Could you tap it on your screen, or describe what you see?', 'waiting_caller'); } return; }
       c.tracking = null;
-      c.history.push({ role: 'user', content: `[camera] The caller moved the camera. SAM now outlines "${t.part}" (${good} confident object(s), guidance: ${g?.state ?? 'n/a'}). Continue.` });
-      try { afterAgent(c, await callerTurn(c.ctx, c.history)); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
+      await autoTurn(c, `[camera] The caller moved the camera. SAM now outlines "${t.part}" (${good} confident object(s), guidance: ${g?.state ?? 'n/a'}). Continue.`);
     });
   }
 
@@ -339,6 +360,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const c = asCaller(callId, token);
       if (![x, y].every((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1)) throw new CallError('Tap must be x and y between 0 and 1.');
       if (c.lastTapAt && now() - c.lastTapAt < LIMITS.speechEveryMs) throw new CallError('One tap at a time.', 429, 'RATE_LIMIT');
+      if ((c.taps = (c.taps ?? 0) + 1) > LIMITS.taps) throw new CallError('That is enough taps for this call. Tell me what you see instead.', 429, 'RATE_LIMIT');
       c.lastTapAt = now();
       c.session.setTap(x, y);
       if (!c.session.latestFrame()) return { ok: true };
@@ -348,8 +370,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         const n = r.output?.boxes?.length ?? 0;
         if (n && c.tracking) {
           c.tracking = null;
-          c.history.push({ role: 'user', content: `[camera] The caller tapped the part on screen. SAM now outlines ${n} object(s) for "${part}" (method: tap). Continue.` });
-          try { afterAgent(c, await callerTurn(c.ctx, c.history)); } catch (err) { c.session.log({ kind: 'error', text: String(err.message).slice(0, 200) }); }
+          await autoTurn(c, `[camera] The caller tapped the part on screen. SAM now outlines ${n} object(s) for "${part}" (method: tap). Continue.`);
         }
         return { ok: true, outlined: n };
       });

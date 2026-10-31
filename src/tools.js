@@ -38,7 +38,7 @@ export const DEFINITIONS = [
   }),
   fn('shutoff_guide', 'Read the caller fixed, safe steps to shut off WATER to a fixture (sink, toilet, main) and outline the valves. Never for gas.', { fixture: str('e.g. "kitchen sink", "toilet", "main"') }),
   fn('start_tour', 'Start a guided tour when the caller has never been in this space, does not know what the equipment is, or asks you to look around or walk them through it. Code then leads the camera and names each part on screen with a status.', {
-    room: { type: 'string', enum: ROOMS, description: 'the space: boiler_room, under_sink, electrical_panel, kitchen, commercial (rooftop units, plant rooms, switchgear in a business or building), or other' },
+    room: { type: 'string', enum: ROOMS, description: 'the space: boiler_room (also furnaces), under_sink, bathroom (toilets), electrical_panel, kitchen, commercial (rooftop units, plant rooms, switchgear in a business or building), or other' },
   }),
   fn('escalate', 'A hazard or something outside the price list: stop quoting and page the owner.', { reason: str('why') }),
   fn('request_booking', 'Ask the owner to approve a visit in a slot. The owner taps approve; only then is the visit booked (demo calendar in memory).', { slot_id: str('slot id from check_calendar'), brief: str('tech brief: equipment, issue, parts to bring') }),

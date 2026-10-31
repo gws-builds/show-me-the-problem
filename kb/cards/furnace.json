@@ -1,0 +1,29 @@
+{
+ "id": "furnace", "title": "Gas furnace (forced air)", "room": "boiler_room",
+ "match": ["furnace", "no heat", "heat not working", "blower", "air filter", "filter", "vent", "ductwork", "pilot", "igniter", "short cycling", "clicks", "shuts off", "squealing", "rattling", "booming", "clicking", "condensate", "forced air"],
+ "parts": [
+  {"id": "furnace_cabinet", "label": "Furnace", "sam": "furnace", "looks": "A tall metal cabinet with ducts at top and bottom, often next to the water heater.", "normal": "Doors on, quiet hum while running, no soot.", "abnormal": "Soot or scorch on the front, a missing door, or water pooling under it."},
+  {"id": "air_filter", "label": "Air filter", "sam": "air filter", "looks": "A flat cardboard-framed filter in a slot between the return duct and the furnace, or behind a return grille.", "normal": "Light grey, air passes through.", "abnormal": "Dark grey or caked with dust; a clogged filter can make the furnace shut off on high limit."},
+  {"id": "furnace_vent", "label": "Vent pipe", "sam": "vent pipe", "looks": "Metal pipe from the top of the furnace to the chimney, or white plastic pipes on a high-efficiency furnace.", "normal": "Joints tight, no gaps, pipe slopes up to the chimney.", "abnormal": "Gap at a joint, a pipe pulled out of the chimney, or rust holes."},
+  {"id": "furnace_switch", "label": "Furnace power switch", "sam": "light switch", "looks": "A light-switch-style switch on or near the furnace, often with a red cover plate.", "normal": "On.", "abnormal": "Off (someone mistook it for a light switch)."},
+  {"id": "condensate_line", "label": "Condensate line", "sam": "pipe", "looks": "A small plastic tube from a high-efficiency furnace to a drain or a small pump.", "normal": "Water drips into the drain or pump.", "abnormal": "Water on the floor under the furnace, or a pump full of water."},
+  {"id": "gas_shutoff_furnace", "label": "Gas valve", "sam": "valve", "looks": "A valve with a lever handle on the gas pipe going into the furnace.", "normal": "Handle in line with the pipe.", "abnormal": "Look only. Never ask the caller to touch it."}
+ ],
+ "faults": [
+  {"name": "Clogged air filter", "evidence": "A dark, dust-caked filter seen in its slot."},
+  {"name": "Furnace switched off", "evidence": "The furnace power switch in the off position."},
+  {"name": "Thermostat setting or batteries", "evidence": "Thermostat set to cool or off, set below room temperature, or a blank screen."},
+  {"name": "Blocked condensate (high-efficiency furnace stops)", "evidence": "Water under the furnace or a full condensate pump."},
+  {"name": "Ignition or flame sensor fault", "evidence": "Caller says it clicks or tries to light and stops after a few seconds, repeatedly; diagnosis is the technician's on site."},
+  {"name": "Worn blower belt or bearing", "evidence": "Caller describes a squeal or rattle when the fan runs; a noise alone is a description, not proof."}
+ ],
+ "hazards": [
+  {"id": "furnace_flue_gap", "label": "Vent pipe disconnected", "category": "combustion", "escalate": true, "threshold": "A visible gap or separated joint in the furnace vent pipe, or the pipe out of the chimney."},
+  {"id": "furnace_soot", "label": "Soot or scorch at the furnace", "category": "scorch", "escalate": true, "threshold": "Black soot or scorch marks around the burner door or on the front panel."},
+  {"id": "furnace_combustibles", "label": "Combustibles at the furnace", "category": "flammables", "escalate": false, "threshold": "Paint, fuel, rags, laundry or boxes against or on top of the furnace."}
+ ],
+ "may": ["Check the thermostat is set to heat and above room temperature.", "Check the furnace power switch is on.", "Slide out the air filter to look at it, and slide it back in the same way (arrow toward the furnace)."],
+ "must_not": ["Remove the burner door or any panel.", "Relight a pilot or touch the gas valve.", "Reset a tripped high-limit or rollout switch."],
+ "tour": {"open": "Show me the whole furnace from a step back, top to bottom.", "checkpoints": [{"part": "air_filter", "hint": "Look for the filter slot where the big return duct meets the furnace."}, {"part": "furnace_vent", "hint": "Follow the pipe from the top of the furnace to the chimney or the wall."}, {"part": "furnace_switch", "hint": "Look on the furnace or the wall nearby for a switch, often with a red plate."}]},
+ "sources": ["nfpa-heating", "nfpa-co", "cpsc-heating", "nrcan-maint"]
+}

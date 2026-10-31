@@ -1,0 +1,26 @@
+{
+ "id": "outlets_lights", "title": "GFCI outlets, switches and lights", "room": "other",
+ "match": ["gfci", "gfci keeps tripping", "outlet keeps tripping", "reset button", "outlet not working", "dead outlet", "flicker", "flickering", "lights dim", "buzzing", "warm switch", "hot outlet", "light switch", "dimmer", "light fixture", "sparks", "smoke alarm", "chirping"],
+ "parts": [
+  {"id": "gfci_outlet", "label": "GFCI outlet", "sam": "electrical outlet", "looks": "An outlet with TEST and RESET buttons between the sockets, in kitchens, bathrooms, garages and outdoors.", "normal": "RESET pushed in; a light (if it has one) shows power.", "abnormal": "RESET popped out, or it trips again as soon as it is reset."},
+  {"id": "light_switch", "label": "Switch or dimmer", "sam": "light switch", "looks": "A wall switch or dimmer under a cover plate.", "normal": "Cool to the touch; no sound.", "abnormal": "A buzz, a plate that is warm, or browning on the plate."},
+  {"id": "light_fixture", "label": "Light fixture", "sam": "lamp", "looks": "A ceiling or wall light with its bulb and shade.", "normal": "Steady light.", "abnormal": "Flicker on one fixture (often the bulb or a loose bulb), or flicker across several rooms (a circuit or service problem)."},
+  {"id": "smoke_alarm", "label": "Smoke or CO alarm", "sam": "smoke detector", "looks": "A round white alarm on the ceiling or high on a wall.", "normal": "Silent; a green light on some models.", "abnormal": "A chirp every minute (low battery or end of life), or a full alarm."}
+ ],
+ "faults": [
+  {"name": "Tripped GFCI upstream", "evidence": "A dead outlet in a bathroom, kitchen, garage or outdoors while another GFCI on the same run has its RESET popped out."},
+  {"name": "GFCI tripping from a wet or faulty appliance", "evidence": "It holds with nothing plugged in and trips when one appliance is plugged in."},
+  {"name": "Loose bulb or failing bulb", "evidence": "Flicker on one fixture only, which stops with a different bulb."},
+  {"name": "Incompatible dimmer and LED bulbs", "evidence": "Buzz or flicker only when dimmed, with LED bulbs on an older dimmer."},
+  {"name": "Loose connection in a switch, outlet or panel", "evidence": "Flicker across several rooms, a warm plate or a buzz; diagnosis is the electrician's on site."},
+  {"name": "Alarm battery or end of life", "evidence": "A short chirp about once a minute; the date on the back of the alarm older than 10 years."}
+ ],
+ "hazards": [
+  {"id": "outlet_scorch", "label": "Scorch at an outlet or switch", "category": "scorch", "escalate": true, "threshold": "Browning, black scorch or melted plastic on an outlet, switch or cover plate."},
+  {"id": "outlet_water", "label": "Water at an outlet", "category": "water_electric", "escalate": true, "threshold": "Water visibly on or dripping into an outlet, switch or light fixture."}
+ ],
+ "may": ["Press RESET firmly on the GFCI outlet; if it will not stay in, leave it out.", "Unplug everything from the dead outlets, then reset again.", "Try a different bulb in the flickering fixture, with the switch off.", "Read the date on the back of a chirping alarm."],
+ "must_not": ["Remove a cover plate or touch wires.", "Reset the same breaker or GFCI more than once if it trips again right away.", "Open the electrical panel cover."],
+ "tour": {"open": "Show me the outlet or switch from about half a metre.", "checkpoints": [{"part": "gfci_outlet", "hint": "Look in the kitchen, bathroom, garage and outside for an outlet with TEST and RESET buttons."}]},
+ "sources": ["usfa-elec-card", "osha-elec", "nfpa-co"]
+}

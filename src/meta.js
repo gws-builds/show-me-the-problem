@@ -48,14 +48,15 @@ import { PER_RUN_USD, MAX_RUN_USD } from './budget.js';
 export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.META_API_KEY, live = true } = {}) {
   let runSpentUsd = 0; let runCapUsd = PER_RUN_USD;
   const can = () => ledger.assertCanSpend({ live, runSpentUsd, runCapUsd });
-  const post = async (path, model, body, usageOf, { raw = null, accept = 'application/json' } = {}) => {
+  const post = async (path, model, body, usageOf, { raw = null, accept = 'application/json', signal = null } = {}) => {
     can();
+    if (signal?.aborted) throw Object.assign(new Error('turn stopped'), { code: 'ABORTED' });
     if (!apiKey) throw new Error('META_API_KEY is not set');
     const res = await fetchImpl(`${BASE}${path}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, Accept: accept, ...(raw ? {} : { 'Content-Type': 'application/json' }) },
       body: raw ?? JSON.stringify({ model, ...body }),
-      signal: AbortSignal.timeout(30000),
+      signal: signal ? AbortSignal.any([AbortSignal.timeout(30000), signal]) : AbortSignal.timeout(30000),
     });
     const data = accept === 'text/plain' ? await res.text().catch(() => '') : await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`Meta API ${res.status}: ${data?.error?.message ?? 'request failed'}`);
@@ -72,7 +73,7 @@ export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.M
     recordUsage(model, usage) { can(); runSpentUsd += ledger.record(model, usage); },
     /** One agent turn: the model picks one tool. */
     // Low reasoning effort keeps a tool step near 1-2 s (measured Oct 29: minimal 1.6 s, default 3.4 s).
-    respond: ({ instructions, input, tools }) => post('/responses', MODELS.agent, { instructions, input, tools, parallel_tool_calls: false, store: false, reasoning: { effort: AGENT_EFFORT } }, (d) => d.usage ?? {}),
+    respond: ({ instructions, input, tools, effort = AGENT_EFFORT, signal = null }) => post('/responses', MODELS.agent, { instructions, input, tools, parallel_tool_calls: false, store: false, reasoning: { effort } }, (d) => d.usage ?? {}, { signal }),
     /** SAM 3.1 on one frame: records (box, confidence, one_bit mask) for a noun ("faucet", "shut-off valve"). */
     segment: async (imageDataUrl, prompt) => {
       const d = await post('/responses', MODELS.sam, { input: [{ role: 'user', content: [{ type: 'input_text', text: String(prompt) }, { type: 'input_image', image_url: imageDataUrl }] }], metadata: SAM_META }, () => ({ images: 1 }));

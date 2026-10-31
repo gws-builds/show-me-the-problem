@@ -8,8 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'kb', 'cards');
-export const ROOMS = ['boiler_room', 'under_sink', 'electrical_panel', 'kitchen', 'commercial', 'other'];
-export const ROOM_LABEL = { boiler_room: 'boiler room', under_sink: 'under the sink', electrical_panel: 'electrical panel', kitchen: 'kitchen', commercial: 'equipment area', other: 'room' };
+export const ROOMS = ['boiler_room', 'under_sink', 'bathroom', 'electrical_panel', 'kitchen', 'commercial', 'other'];
+export const ROOM_LABEL = { boiler_room: 'boiler room', under_sink: 'under the sink', bathroom: 'bathroom', electrical_panel: 'electrical panel', kitchen: 'kitchen', commercial: 'equipment area', other: 'room' };
 
 export function loadCards(dir = DIR) {
   return fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()

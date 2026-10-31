@@ -214,3 +214,14 @@ test('tap-to-point: only the caller can tap, coordinates are bounded, and a tap 
   assert.ok(counts.sam >= 1);
   assert.ok(calls.view(c.id).events.some((e) => e.kind === 'tap'));
 });
+
+test('taps are capped per call, so a stranger cannot buy unlimited SAM calls (red team 10/31)', async () => {
+  let t = 1_000_000;
+  const { calls, counts } = setup({ clock: () => (t += 5000) });
+  const c = calls.create({ ip: '1.1.9.7' });
+  await calls.frame(c.id, c.camToken, JPEG);
+  for (let i = 0; i < LIMITS.taps; i++) await calls.tap(c.id, c.camToken, 0.5, 0.5);
+  const before = counts.sam;
+  await assert.rejects(calls.tap(c.id, c.camToken, 0.5, 0.5), { code: 'RATE_LIMIT' });
+  assert.equal(counts.sam, before);
+});

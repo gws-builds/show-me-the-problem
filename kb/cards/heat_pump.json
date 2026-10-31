@@ -1,0 +1,21 @@
+{
+ "id": "heat_pump", "title": "Heat pump and ductless mini-split", "room": "other",
+ "match": ["heat pump", "mini split", "mini-split", "ductless", "head unit", "wall unit", "ice", "frozen", "frost", "defrost", "dripping from the wall unit", "remote", "outdoor unit", "blowing cold"],
+ "parts": [
+  {"id": "mini_split_head", "label": "Indoor head", "sam": "air conditioner", "looks": "A long white unit high on the wall with a flap that swings.", "normal": "Even airflow, no drips, quiet.", "abnormal": "Water dripping down the wall, a musty smell, or the flap shut while running."},
+  {"id": "mini_split_filter", "label": "Indoor filters", "sam": "air filter", "looks": "Two mesh screens under the front cover of the indoor head.", "normal": "Light, open mesh.", "abnormal": "Grey felt of dust on the mesh."},
+  {"id": "heat_pump_outdoor", "label": "Outdoor unit", "sam": "air conditioner", "looks": "The box outside with a fan grille; on a heat pump it also runs in winter.", "normal": "A light frost that clears every so often in winter (defrost), with steam during defrost.", "abnormal": "A solid block of ice on the coil or the top that does not clear for hours, or the fan not turning while it runs."},
+  {"id": "line_set", "label": "Refrigerant lines", "sam": "pipe", "looks": "Two copper lines, one insulated, running from the outdoor unit into the wall.", "normal": "Insulation intact.", "abnormal": "Torn or missing insulation, oily stains at a joint."}
+ ],
+ "faults": [
+  {"name": "Dirty indoor filters", "evidence": "Dust felt on the mesh filters under the front cover."},
+  {"name": "Blocked condensate drain (head dripping)", "evidence": "Water running down the wall below the indoor head."},
+  {"name": "Defrost not clearing (heat pump iced)", "evidence": "Solid ice on the outdoor coil that stays for hours; light frost that clears is normal."},
+  {"name": "Mode or remote setting", "evidence": "Remote set to cool, dry or fan instead of heat, or an empty remote screen."}
+ ],
+ "hazards": [],
+ "may": ["Check the remote is set to heat or cool as wanted and has batteries.", "Open the front cover of the indoor head and slide the mesh filters out to look.", "Clear snow or leaves away from the outdoor unit by hand."],
+ "must_not": ["Chip ice off the outdoor coil.", "Open the outdoor unit's panels or touch the line set's service ports."],
+ "tour": {"open": "Show me the indoor unit on the wall from across the room.", "checkpoints": [{"part": "mini_split_filter", "hint": "If you can reach, lift the front cover so I can see the filters."}, {"part": "heat_pump_outdoor", "hint": "When you are outside, show me the whole outdoor unit and the ground around it."}]},
+ "sources": ["nrcan-maint"]
+}

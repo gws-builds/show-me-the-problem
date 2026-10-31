@@ -11,6 +11,7 @@ import { searchCorpus, corpusContext } from './corpus.js';
 import { detectLang } from './i18n.js';
 
 export const MAX_STEPS = 6; // tool steps per caller turn
+const FOLLOW_EFFORT = process.env.AGENT_FOLLOW_EFFORT || 'minimal';
 export const MAX_TURNS = 12; // caller turns per call
 
 export const INSTRUCTIONS = `You run job intake for a home-services business on a live call. The caller is pointing their phone camera at a problem. Speak in short, plain sentences.
@@ -122,11 +123,17 @@ export function createSession({ now = () => Date.now() } = {}) {
 }
 
 /** One caller turn. Returns { say, status }. */
-export async function callerTurn(ctx, history) {
+export async function callerTurn(ctx, history, { signal = null } = {}) {
   const { client, session } = ctx;
   let say = null; let status = 'running'; let track = null;
+  const started = Date.now();
   for (let step = 0; step < MAX_STEPS && !say; step++) {
-    const res = await client.respond({ instructions: instructionsFor(session), input: history, tools: DEFINITIONS });
+    // A turn that timed out stops here instead of spending on in the background (red team 10/31, finding 7).
+    if (signal?.aborted) throw Object.assign(new Error('turn stopped'), { code: 'ABORTED' });
+    // The first step picks the plan at the configured effort; the steps after a tool result
+    // mostly turn that result into the next call or the line, so they run at minimal effort
+    // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
+    const res = await client.respond({ instructions: instructionsFor(session), input: history, tools: DEFINITIONS, signal, ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}) });
     history.push(...(res.output ?? []));
     const call = (res.output ?? []).find((o) => o.type === 'function_call');
     if (!call) { history.push({ role: 'user', content: 'Plain text is not accepted. Call exactly one tool.' }); continue; }
@@ -141,6 +148,6 @@ export async function callerTurn(ctx, history) {
   }
   // Six steps without a line: ask again and keep the call going, rather than end it (red team 10/31).
   if (!say) { say = 'Sorry, I missed part of that. Could you say it once more?'; status = 'keep'; }
-  session.log({ kind: 'say', text: say, status });
+  session.log({ kind: 'say', text: say, status, ms: Date.now() - started });
   return { say, status, track };
 }

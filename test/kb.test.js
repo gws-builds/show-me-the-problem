@@ -49,3 +49,13 @@ test('parts, hazards and extra SAM nouns come from the cards', () => {
   assert.deepEqual(samNounsFor('expansion tank'), ['tank']);
   assert.deepEqual(samNounsFor(''), []);
 });
+
+test('trade cards added 10/31: toilet noises, furnace, mini-split and GFCI/lights are found by the words callers use', () => {
+  assert.equal(retrieve({ room: 'bathroom' })[0].id, 'toilet');
+  assert.equal(retrieve({ text: 'my toilet makes a weird hissing noise after I flush' })[0].id, 'toilet');
+  assert.equal(retrieve({ text: 'the toilet keeps running and refills by itself' })[0].id, 'toilet');
+  assert.equal(retrieve({ text: 'no heat, the furnace clicks and shuts off' })[0].id, 'furnace');
+  assert.equal(retrieve({ text: 'the mini split wall unit is dripping' })[0].id, 'heat_pump');
+  assert.equal(retrieve({ text: 'the bathroom gfci outlet keeps tripping' })[0].id, 'outlets_lights');
+  assert.equal(retrieve({ text: 'lights flicker in the kitchen' })[0].id, 'outlets_lights');
+});
