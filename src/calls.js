@@ -15,7 +15,11 @@ import { hazardIn } from './verifier.js';
 import { guide, DARK_LUMA } from './guidance.js';
 
 // Fixed lines the caller page may speak besides the agent's own (recording cues, the lock).
-export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can stop recording now.', 'Got it. Hold still.']);
+// Fixed lines the phone may have voiced in Aura: recording cues, guidance, and the waiting lines in
+// public/voice.js (red team 10/31: those fell back to the browser voice, so the voice changed on camera).
+export const WAITING_LINES = ['Sure.', 'Okay.', 'Got it.', 'Let me look.', 'On it.', 'Let me check.', 'One moment.', 'Just a second.', 'Give me a moment.', 'Still looking.', 'Almost there.', 'Nearly done, thanks for waiting.', 'Still on it, almost there.',
+  'Claro.', 'Vale.', 'Entendido.', 'Déjame ver.', 'Ya voy.', 'Un momento.', 'Un segundo.', 'Sigo mirando.', 'Casi listo.', 'Ya casi, gracias por esperar.'];
+export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can stop recording now.', 'Got it. Hold still.', ...WAITING_LINES]);
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
@@ -44,7 +48,7 @@ export const LIMITS = {
 };
 // About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
 export const speakMs = (text) => Math.min(15_000, 1200 + String(text ?? '').split(/\s+/).length * 380);
-const STOP_CODES = new Set(['RUN_CAP', 'READ_ONLY', 'HARD_STOP', 'SESSION_STOP']);
+import { STOP_CODES, isStop } from './budget.js';
 
 const id = (n = 16) => randomBytes(n).toString('hex');
 const article = (noun) => `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
@@ -97,10 +101,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
 
   // The agent's line is spoken; "move the camera" (or the shut-off guide) starts tracking a part.
   function afterAgent(c, r) {
-    say(c, r.say, r.status);
+    say(c, r.say, r.status === 'keep' ? c.status : r.status);
     // The tour waits for the answer to be heard, then picks up where it was (founder 10/30).
     if (c.tour && !c.tour.done) { c.holdTourUntil = now() + speakMs(r.say); c.tourResume = true; }
-    if (r.status === 'waiting_camera') c.tracking = { part: r.track || c.session.lastPart() || '', checks: 0, lastAt: 0 };
+    // No camera tracking during a tour: the tour leads the camera (red team 10/31: tracking made it say "Hold still" and stall).
+    if (r.status === 'waiting_camera' && !(c.tour && !c.tour.done)) c.tracking = { part: r.track || c.session.lastPart() || '', checks: 0, lastAt: 0 };
   }
 
   async function turn(c, line) {
@@ -120,7 +125,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     }
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
     // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.
-    if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question from this and the current frame in one or two sentences, then the tour continues.` });
+    if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question with answer_caller, from this and the current frame, in one or two sentences; the tour then continues.` });
     c.history.push({ role: 'user', content: `Caller: ${line}` });
     const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
     // The turn works on its own copy of the history, kept only if it finishes in time: a turn that
@@ -136,7 +141,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
       if (seq !== c.turnSeq) return;
-      say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', err.code ? 'handoff' : c.status);
+      say(c, STOP_CODES.has(err.code) ? 'Let me get the owner to call you back.' : 'Sorry, I lost that. Could you say it again?', isStop(err) ? 'handoff' : c.status);
     } finally { clearTimeout(timer); }
   }
 
@@ -230,12 +235,13 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       }
     } catch (err) {
       c.session.log({ kind: 'error', text: `tour: ${String(err.message).slice(0, 120)}` });
-      if (err?.code) { c.tour.done = true; say(c, 'I have to stop the tour here. The owner will call you back.', 'handoff'); }
+      if (isStop(err)) { c.tour.done = true; say(c, 'I have to stop the tour here. The owner will call you back.', 'handoff'); }
     } finally { c.touring = false; }
   }
 
   function startTour(c, room) {
     if (c.status === 'escalated') return null;
+    if (c.tour && !c.tour.done) return { already: true, room: c.tour.room };
     c.tour = createTour({ room });
     c.tour.refsFor = (q) => c.session.references?.(q, 2) ?? []; // cited trade-manual excerpts for this room
     c.session.setTourRoom(c.tour.room === 'auto' ? null : c.tour.room);

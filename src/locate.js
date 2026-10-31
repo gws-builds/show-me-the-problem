@@ -7,6 +7,7 @@
 //      Otherwise the point goes to SAM as a point prompt, as before.
 // The best record wins; the verifier still requires confidence >= 0.5 before any quote.
 import { maskGeometry, dataUrlSize } from './mask.js';
+import { isStop } from './budget.js';
 import { samNounsFor } from './kb.js';
 
 export const MIN_SCORE = 0.5;
@@ -71,7 +72,7 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
   const size = dataUrlSize(frame.dataUrl);
   const attempt = async (method, noun, run) => {
     let records = [];
-    try { const out = await run(); if (Array.isArray(out)) records = out; else { records = out.records; method = out.method; } } catch (err) { if (err?.code) throw err; tries.push({ method, noun, n: 0, error: String(err.message).slice(0, 80) }); return { method, noun, records }; }
+    try { const out = await run(); if (Array.isArray(out)) records = out; else { records = out.records; method = out.method; } } catch (err) { if (isStop(err)) throw err; tries.push({ method, noun, n: 0, error: String(err.message).slice(0, 80) }); return { method, noun, records }; }
     if (method !== 'grounded box') tries.push({ method, noun, n: records.length, score: best(records)?.score ?? null }); // the box try logged itself, with its IoU
     return { method, noun, records };
   };

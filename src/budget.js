@@ -12,6 +12,10 @@ export const PRICES = {
   'muse-image-1.0': { perImage: 0.01 },
   'muse-voice-transcribe-1.0': { perHour: 0.18 },
 };
+// The codes a spend stop throws. Only these end a tour or a call: a slow fetch has a numeric
+// code too (a timeout's DOMException is 23), and that must never be read as a budget stop.
+export const STOP_CODES = new Set(['RUN_CAP', 'READ_ONLY', 'HARD_STOP', 'SESSION_STOP']);
+export const isStop = (err) => STOP_CODES.has(err?.code);
 export const READ_ONLY_USD = 80;
 export const HARD_STOP_USD = 100;
 // A live call tracks frames at 1 fps (v3, red team pass 1b): $0.25 per call.

@@ -88,7 +88,7 @@ The caller's language is detected from their words. The model writes its lines i
 ## Run it
 
 ```bash
-npm test                              # 135 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
+npm test                              # 143 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
 ```

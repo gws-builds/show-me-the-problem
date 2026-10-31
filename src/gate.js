@@ -52,14 +52,15 @@ export function createGate({ code, now = () => Date.now() }) {
      * lock its owner out.
      */
     check(presented, key = 'unknown', { count = true } = {}) {
-      if (recent(key).length >= MISS_LIMIT) return false;
+      // The right code always works: a stranger's wrong guesses from a shared address must not lock judges out (red team 10/31).
       if (presented && same(String(presented), code)) return true;
+      if (recent(key).length >= MISS_LIMIT) return false;
       if (presented && count) misses.set(key, [...recent(key), now()]);
       return false;
     },
     /** The code a request carries: header first, then the cookie. Never the URL (except /k/, handled by the server). */
     presented: (req) => String(req.headers['x-access-code'] ?? '') || cookieValue(req.headers.cookie),
-    cookie: (secure) => `${COOKIE}=${encodeURIComponent(code)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${secure ? '; Secure' : ''}`,
+    cookie: (secure) => `${COOKIE}=${encodeURIComponent(code)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200${secure ? '; Secure' : ''}`,
     sweep() { for (const [k] of misses) if (!recent(k).length) misses.delete(k); },
   };
 }

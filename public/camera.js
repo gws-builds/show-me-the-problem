@@ -145,7 +145,8 @@ async function poll() {
     if (last) $('line').textContent = last.text;
     Speech.lang = view.lang === 'es' ? 'es' : 'en';
     for (const s of view.says) if (s.n > spoken) { spoken = s.n; Speech.heardN = s.n; if (started) Speech.later(s.text, { urgent: s.status === 'escalated' }); }
-    speakGuidance(view.guidance, view.tracking);
+    // The tour leads the camera itself; no "Hold still" over it (red team 10/31).
+    if (!view.tour || view.tour.done) speakGuidance(view.guidance, view.tracking);
     $('staged').hidden = !view.staged; $('stagedToggle').checked = Boolean(view.staged);
     renderChecklist(view.checklist);
     renderFound(view.tour);

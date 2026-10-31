@@ -133,3 +133,14 @@ test('upstream client frames are masked and server frames parse back (HTTP/1.1 c
   const back = parseServerFrames(Buffer.concat([encodeFrame('{"type":"transcript"}'), encodeFrame(Buffer.alloc(200))]));
   assert.equal(back.frames.length, 2); assert.equal(back.frames[0].data.toString(), '{"type":"transcript"}');
 });
+
+test('a spend stop mid-audio ends the voice session without throwing (red team 10/31)', () => {
+  const sent = [];
+  const up = { readyState: 1, send() {}, close() {} };
+  const client = { assertCanSpend() {}, recordUsage() { const e = new Error('cap'); e.code = 'RUN_CAP'; throw e; } };
+  const calls = { recentSays: () => [], logEvent() {}, voiceTurn: async () => {} };
+  const s = createVoiceSession({ calls, callId: 'c', client, apiKey: 'k', openUpstream: () => up, toClient: (o) => sent.push(o) });
+  assert.doesNotThrow(() => s.audio(Buffer.alloc(BYTES_PER_SECOND * 11)));
+  assert.equal(s.closed, true);
+  assert.ok(sent.some((m) => /spending limit/.test(m.message ?? '')));
+});

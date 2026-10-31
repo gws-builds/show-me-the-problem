@@ -14,6 +14,7 @@ import { createVoiceSession } from './voice.js';
 import { createGate, writeCode, cookieValue } from './gate.js';
 import { createTts } from './tts.js';
 import { loadCorpus } from './corpus.js';
+import { timingSafeEqual } from 'node:crypto';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
@@ -24,8 +25,10 @@ const ledger = createLedger(path.join(DATA, 'ledger.json'), { sessionStopUsd: Nu
 const alerts = createAlerts();
 const record = ledger.record.bind(ledger);
 ledger.record = (model, usage) => { const usd = record(model, usage); alerts.spend(ledger.session()).catch(() => undefined); return usd; };
-// A fresh access code every start, stored for the session script; never printed here.
-const gate = createGate({ code: writeCode(path.join(DATA, 'access_code')) });
+// A fresh access code every start, stored for the session script; never printed here. The hosted judge
+// copy sets ACCESS_CODE (Secret Manager) so its link survives restarts and cold starts (red team 10/31).
+const FIXED_CODE = String(process.env.ACCESS_CODE ?? '');
+const gate = createGate({ code: FIXED_CODE.length >= 12 ? FIXED_CODE : writeCode(path.join(DATA, 'access_code')) });
 setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
 // The owner of the deployment can open live calls past the public limits with this header.
@@ -143,7 +146,8 @@ async function route(req, res) {
     // Everyone past the access code gets live calls (the founder, or a judge given the link), but only
     // the STAFF_KEY holder skips the per-person hourly limit: a shared judge code must not unlock
     // unlimited calls (red team 10/30). The session spend stop and per-call caps apply to everyone.
-    const staff = Boolean(STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY);
+    const given = String(req.headers['x-staff-key'] ?? '');
+    const staff = Boolean(STAFF_KEY && given.length === STAFF_KEY.length && timingSafeEqual(Buffer.from(given), Buffer.from(STAFF_KEY)));
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
     const made = calls.create({ ip: key, live: true, staff, footage });
     if (!staff) alerts.callStarted({ ...ledger.session(), footage: Boolean(footage) }).catch(() => undefined);
@@ -219,7 +223,10 @@ server.on('upgrade', (req, socket) => {
   const toClient = (o) => ws.send(JSON.stringify(o));
   const authTimer = setTimeout(() => { if (!session) ws.close(1008); }, 5000);
   ws.onMessage((data, isBinary) => {
-    if (session) { if (isBinary) session.audio(data); else if (/"endStream"/.test(data)) session.finish(); return; }
+    if (session) {
+      try { if (isBinary) session.audio(data); else if (/"endStream"/.test(data)) session.finish(); } catch { try { session.end(); } catch { /* gone */ } ws.close(1011); }
+      return;
+    }
     if (isBinary) return ws.close(1008);
     try {
       const { token } = JSON.parse(data);

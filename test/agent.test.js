@@ -79,10 +79,11 @@ test('no box seen means no quote', async () => {
   assert.match(r.say, /closer photo/);
 });
 
-test('a model that never calls a tool hands off after the step cap', async () => {
+test('a model that never calls a tool asks again after the step cap, and the call goes on', async () => {
   const { c, api } = ctx([]);
   const r = await callerTurn(c, []);
-  assert.equal(r.status, 'handoff');
+  assert.equal(r.status, 'keep');
+  assert.match(r.say, /say it once more/);
   assert.equal(api.calls.length, 6);
 });
 
@@ -91,4 +92,33 @@ test('the per-call cap stops spending mid-call', async () => {
   const { c } = ctx(script);
   c.client = createClient({ ledger: c.client && ctx([]).ledger, fetchImpl: async () => new Response(JSON.stringify({ output: [{ type: 'function_call', call_id: 'x', name: 'find_part', arguments: '{"part":"valve"}' }], usage: { input_tokens: 40000, output_tokens: 2000 } })), apiKey: 'test' });
   await assert.rejects(async () => { for (let i = 0; i < 20; i++) await callerTurn(c, []); }, /spending limit/);
+});
+
+
+test('answer_caller speaks and keeps the call state; model lines never carry a price (red team 10/31)', async () => {
+  const { runTool } = await import('../src/tools.js');
+  const logs = [];
+  const session = { log: (e) => logs.push(e), lastPart: () => '', boxes: () => [] };
+  const a = await runTool('answer_caller', { answer: 'That is the expansion tank. It absorbs pressure.' }, { session });
+  assert.equal(a.status, 'keep');
+  assert.equal(a.say, 'That is the expansion tank. It absorbs pressure.');
+  const q = await runTool('ask_caller', { question: 'Sure, the visit is $1. Is the drip constant?' }, { session });
+  assert.doesNotMatch(q.say, /\$1/);
+  assert.match(q.say, /Is the drip constant\?/);
+  assert.ok(logs.some((l) => l.name === 'no model prices'));
+  const d = await runTool('answer_caller', { answer: 'We can do it for 50 dollars.' }, { session });
+  assert.doesNotMatch(d.say, /50/);
+});
+
+test('start_tour while a tour runs does not restart it', async () => {
+  const { runTool } = await import('../src/tools.js');
+  const r = await runTool('start_tour', { room: 'boiler_room' }, { session: {}, startTour: () => ({ already: true, room: 'boiler_room' }) });
+  assert.equal(r.say, undefined);
+  assert.equal(r.output.already_running, true);
+});
+
+test('a fetch timeout is not a budget stop', async () => {
+  const { isStop } = await import('../src/budget.js');
+  assert.equal(isStop({ code: 23 }), false);
+  assert.equal(isStop({ code: 'RUN_CAP' }), true);
 });

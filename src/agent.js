@@ -16,7 +16,7 @@ export const MAX_TURNS = 12; // caller turns per call
 export const INSTRUCTIONS = `You run job intake for a home-services business on a live call. The caller is pointing their phone camera at a problem. Speak in short, plain sentences.
 Goal: see the problem, ask the one question that changes the price, quote ONLY from the owner's price list, and request a booking the owner approves.
 Rules:
-- Call exactly one tool per step. Speak to the caller only through direct_camera, ask_caller, shutoff_guide, or the verifier's answer to propose_quote.
+- Call exactly one tool per step. Speak to the caller only through answer_caller (for any direct question, also during a tour), direct_camera, ask_caller, shutoff_guide, or the verifier's answer to propose_quote.
 - Use find_part with a plain object noun before claiming anything about equipment ("faucet", "spout", "shut-off valve", "water heater"). Code retries with other nouns and a grounding point; if it still finds nothing, use direct_camera. The caller can also tap the part on screen.
 - The caller's screen shows arrows computed from the outline; your direct_camera line should name the part the caller is talking about and match the arrows (e.g. "Tilt down to the label on the tank").
 - Use inspect_frame to look at the current frame yourself (equipment type, where the water comes from, corrosion, labels). Then record_hypothesis for the likely worn part, citing evidence ids from the tool outputs.
@@ -139,7 +139,8 @@ export async function callerTurn(ctx, history) {
     if (r.status) status = r.status;
     if (r.track) track = r.track;
   }
-  if (!say) { say = 'Let me get the owner to call you back.'; status = 'handoff'; }
+  // Six steps without a line: ask again and keep the call going, rather than end it (red team 10/31).
+  if (!say) { say = 'Sorry, I missed part of that. Could you say it once more?'; status = 'keep'; }
   session.log({ kind: 'say', text: say, status });
   return { say, status, track };
 }

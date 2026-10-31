@@ -5,7 +5,7 @@
 import { verify, hazardIn } from './verifier.js';
 import { locate } from './locate.js';
 import { SHUTOFF_PLAYBOOK, fixtureFor, HYPOTHESES } from './evidence.js';
-import { safeLine } from './tour.js';
+import { safeLine, noPrice } from './tour.js';
 import { ROOMS } from './kb.js';
 import { PLATE_PROMPT, cleanPlate, describePlate, plateLine } from './plate.js';
 
@@ -23,6 +23,7 @@ export const DEFINITIONS = [
   fn('find_part', 'Look for a part in the live camera view. SAM 3.1 segments it; on a miss, code retries with an alternative noun and with a Muse Spark grounding point. Use plain object nouns, e.g. "faucet", "shut-off valve", "water heater", "breaker panel" (not states like "leak").', { part: str('what to find') }),
   fn('direct_camera', 'Tell the caller how to move the camera so the part or its label is visible.', { instruction: str('one short instruction, e.g. "Tilt down to the label on the tank"') }),
   fn('ask_caller', 'Ask the caller ONE question whose answer changes the price or urgency.', { question: str('one short question') }),
+  fn('answer_caller', 'Answer a direct question from the caller (what is that part, is that normal, what does it do) in one or two short sentences, from what the camera and the tools have shown. Use this whenever the caller asks something, also during a tour; the call or tour then simply continues.', { answer: str('one or two short sentences') }),
   fn('price_list', 'Read the owner\'s price list rows that match a job type.', { job_type: str('e.g. "water heater", "drain", "ac"') }),
   fn('check_calendar', 'First open visit slots for a job type.', { job_type: str('job type') }),
   fn('propose_quote', 'Propose a quote. The verifier decides what the caller hears.', {
@@ -42,6 +43,15 @@ export const DEFINITIONS = [
   fn('escalate', 'A hazard or something outside the price list: stop quoting and page the owner.', { reason: str('why') }),
   fn('request_booking', 'Ask the owner to approve a visit in a slot. The owner taps approve; only then is the visit booked (demo calendar in memory).', { slot_id: str('slot id from check_calendar'), brief: str('tech brief: equipment, issue, parts to bring') }),
 ];
+
+/** A model-written line made safe to speak: no panel-opening steps, no prices (both replaced in code and logged). */
+function speakable(session, line) {
+  const panel = safeLine(line);
+  if (panel.blocked) session.log({ kind: 'code_gate', name: 'no panel opening', text: 'A line asking to open an electrical cover or touch inside was replaced in code.' });
+  const price = noPrice(panel.text);
+  if (price.blocked) session.log({ kind: 'code_gate', name: 'no model prices', text: 'A price in the agent\'s own words was removed in code; only the verifier quotes.' });
+  return price.text;
+}
 
 /**
  * Runs one tool call against the session. Returns { output, say?, status? }.
@@ -63,19 +73,24 @@ export async function runTool(name, args, ctx) {
       let line = String(args.instruction ?? '').slice(0, 200);
       const part = session.lastPart(); const seen = session.boxes().some((b) => (b.score ?? 1) >= 0.5);
       if (part && !seen && !/can'?t see|cannot see|can not see/i.test(line)) line = `I can't see the ${part} yet. ${line}`;
-      const safe = safeLine(line);
-      if (safe.blocked) session.log({ kind: 'code_gate', name: 'no panel opening', text: 'A line asking to open an electrical cover or touch inside was replaced in code.' });
-      return { output: { said: safe.text }, say: safe.text, status: 'waiting_camera' };
+      const safe = speakable(session, line);
+      return { output: { said: safe }, say: safe, status: 'waiting_camera' };
+    }
+    case 'answer_caller': {
+      // Speaks without changing the call's state: no camera tracking, no new question pending.
+      const safe = speakable(session, String(args.answer ?? '').slice(0, 300));
+      return { output: { said: safe }, say: safe, status: 'keep' };
     }
     case 'ask_caller': {
-      const safe = safeLine(String(args.question ?? '').slice(0, 200));
-      if (safe.blocked) session.log({ kind: 'code_gate', name: 'no panel opening', text: 'A line asking to open an electrical cover or touch inside was replaced in code.' });
-      return { output: { said: safe.text }, say: safe.text, status: 'waiting_caller' };
+      const safe = speakable(session, String(args.question ?? '').slice(0, 200));
+      return { output: { said: safe }, say: safe, status: 'waiting_caller' };
     }
     case 'start_tour': {
       const room = ROOMS.includes(args.room) ? args.room : 'other';
       const r = ctx.startTour ? ctx.startTour(room) : null;
       if (!r) return { output: { error: 'tour not available' } };
+      // A tour already running is not restarted (red team 10/31: the caller's "I've never been in here" reset it).
+      if (r.already) return { output: { tour: r.room, already_running: true, note: 'The tour is already going; answer the caller with answer_caller if they asked something.' } };
       return { output: { tour: room, started: true }, say: r.say, status: 'touring' };
     }
     case 'price_list': {

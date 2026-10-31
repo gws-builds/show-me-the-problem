@@ -11,6 +11,7 @@
 import { retrieve, partsOf, hazardsOf, contextFor, ROOMS, ROOM_LABEL } from './kb.js';
 import { corpusContext } from './corpus.js';
 import { maskGeometry, dataUrlSize } from './mask.js';
+import { isStop } from './budget.js';
 import { AGREE_SCORE } from './hazards.js';
 
 // "move closer to doorway" -> "Move closer to the doorway.": a capital and a full stop on model-made directions.
@@ -45,6 +46,18 @@ export function safeLine(text) {
     }
   }
   return { text: String(text ?? ''), blocked: false };
+}
+
+// Model-written lines never carry a price: only the verifier's answer to propose_quote may
+// (red team 10/31: a caller could talk the agent into "the visit is $1"). A sentence with
+// an amount is replaced in code.
+const AMOUNT = /\$\s*\d|\b\d[\d,.]*\s*(dollars?|bucks|usd|d[oó]lares)\b|\bfree of charge\b|\bno charge\b/i;
+export const NO_PRICE_LINE = 'The price comes only from the owner\'s list, once I have seen the problem.';
+export function noPrice(text) {
+  const parts = String(text ?? '').split(/(?<=[.!?])\s+/);
+  const kept = parts.filter((p) => !AMOUNT.test(p));
+  if (kept.length === parts.length) return { text: String(text ?? ''), blocked: false };
+  return { text: [...kept, NO_PRICE_LINE].join(' ').trim(), blocked: true };
 }
 
 const INJECT = /\b(ignore|instructions?|rules?|admin|prompt|developer|assistant|prices?|booking|book it|approve\w*|password|token|you are now|say that)\b|\bsystem\s*(prompt|message|:)|\$/i;
@@ -149,13 +162,13 @@ export async function tourStep(client, tour, frame) {
       try {
         const t = top(await client.segmentPoint(frame.dataUrl, { x: (it.point.x * size.width) / 1000, y: (it.point.y * size.height) / 1000, ...size }));
         if (t && (t.score ?? 1) >= AGREE_SCORE) { it.geo = maskGeometry(t); it.score = t.score ?? 1; }
-      } catch (err) { if (err?.code) throw err; }
+      } catch (err) { if (isStop(err)) throw err; }
     }
   }
   // A safety call needs SAM to find the named object by its noun too (two models agree), not just a point.
   for (const it of items.filter((x) => x.status === 'safety')) {
     let score = 0;
-    try { score = top(await client.segment(frame.dataUrl, it.sam))?.score ?? 0; } catch (err) { if (err?.code) throw err; }
+    try { score = top(await client.segment(frame.dataUrl, it.sam))?.score ?? 0; } catch (err) { if (isStop(err)) throw err; }
     it.confirmScore = score;
     if (score < AGREE_SCORE) { it.status = 'attention'; it.note = `SAM could not confirm "${it.sam}" (${score.toFixed(2)}): needs attention, not escalated`; }
   }

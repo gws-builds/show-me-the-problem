@@ -26,9 +26,10 @@ test('missing, forged and wrong-length codes fail; misses lock a client out; sta
   for (let i = 0; i < 50; i++) g.check('stale-cookie-xxxxx', 'b', { count: false });
   assert.equal(g.locked('b'), false);
   for (let i = 0; i < MISS_LIMIT; i++) g.check(`wrong-${i}-xxxxxxxx`, 'c');
-  assert.equal(g.locked('c'), true); assert.equal(g.check('abcde-fghjk-mnpqr', 'c'), false, 'locked even with the right code');
-  t += 11 * 60_000; assert.equal(g.check('abcde-fghjk-mnpqr', 'c'), true, 'unlocked after the window');
-  assert.match(g.cookie(true), /HttpOnly; SameSite=Strict; Max-Age=43200; Secure$/);
+  assert.equal(g.locked('c'), true); assert.equal(g.check('another-wrong-xxxx', 'c'), false, 'locked for wrong codes');
+  assert.equal(g.check('abcde-fghjk-mnpqr', 'c'), true, 'the right code still works from a locked address (shared judge network)');
+  t += 11 * 60_000; assert.equal(g.locked('c'), false, 'unlocked after the window');
+  assert.match(g.cookie(true), /HttpOnly; SameSite=Lax; Max-Age=43200; Secure$/);
   assert.equal(cookieValue('a=1; smtp_access=xyz; b=2'), 'xyz'); assert.equal(cookieValue(undefined), '');
 });
 test('session spend stop: past the stop, nothing calls the API and new calls are refused', () => {
@@ -62,7 +63,7 @@ const raw = (port, request) => new Promise((resolve) => {
   setTimeout(() => { s.destroy(); resolve(data); }, 2000);
 });
 
-test('server: every page and API needs the code; /k/ sets a strict cookie; the code is never printed', async (t) => {
+test('server: every page and API needs the code; /k/ sets a Lax cookie (survives a click from email); the code is never printed', async (t) => {
   const srv = await startServer();
   t.after(() => { srv.child.kill(); fs.rmSync(srv.dir, { recursive: true, force: true }); });
   const get = (p, headers = {}) => fetch(srv.base + p, { headers, redirect: 'manual' });
@@ -82,7 +83,7 @@ test('server: every page and API needs the code; /k/ sets a strict cookie; the c
   const k = await get(`/k/${srv.code}?to=console`);
   assert.equal(k.status, 302); assert.equal(k.headers.get('location'), '/console#latest');
   const setCookie = k.headers.get('set-cookie');
-  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Strict/);
+  assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Lax/);
   const cookie = setCookie.split(';')[0];
   assert.equal((await get('/', { cookie })).status, 200);
   const h = await (await get('/api/health', { cookie })).json();
@@ -100,7 +101,8 @@ test('server: every page and API needs the code; /k/ sets a strict cookie; the c
   const ws = `GET /api/calls/${call.id}/voice HTTP/1.1\r\nHost: 127.0.0.1:${srv.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n`;
   assert.equal(await raw(srv.port, `${ws}\r\n`), '');
   assert.match(await raw(srv.port, `${ws}Cookie: ${cookie}\r\n\r\n`), /^HTTP\/1\.1 101/);
-  // Too many wrong codes lock this client out, even with the right code
+  // Too many wrong codes lock this client out for wrong codes; the right code still gets in
   for (let i = 0; i < 20; i++) await get(`/k/wrong-${i}-xxxxxxxxx`);
-  assert.equal((await get('/api/health', { 'x-access-code': srv.code })).status, 429);
+  assert.equal((await get('/api/health', { 'x-access-code': 'wrong-again-xxxxxx' })).status, 429);
+  assert.equal((await get('/api/health', { 'x-access-code': srv.code })).status, 200);
 });

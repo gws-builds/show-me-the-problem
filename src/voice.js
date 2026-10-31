@@ -45,7 +45,8 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
   const meter = (force = false) => {
     if (!unmetered || (!force && unmetered < METER_EVERY_S * BYTES_PER_SECOND)) return;
     const seconds = unmetered / BYTES_PER_SECOND; unmetered = 0;
-    try { client.recordUsage(MODELS.transcribe, { seconds }); } catch (err) { send({ type: 'error', message: 'Voice stopped: spending limit.' }); end(); throw err; }
+    // A spend stop ends this voice session only; it must never throw into the socket listener (red team 10/31: that took the server down).
+    try { client.recordUsage(MODELS.transcribe, { seconds }); } catch { send({ type: 'error', message: 'Voice stopped: spending limit.' }); end(); }
   };
   client.assertCanSpend();
   const up = openUpstream(REALTIME_URL);
