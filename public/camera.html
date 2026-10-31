@@ -22,10 +22,9 @@
   <p class="small footage" id="footageNote" hidden>Footage mode: a clip recorded earlier plays here, and its frames and sound go to the models live, right now. Nothing on this page is pre-computed.</p>
   <button id="go">Turn on camera and microphone</button> <span id="err" class="small"></span>
 </div>
-<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas><div class="footage-label" id="footageLabel" hidden>RECORDED CLIP · analyzed live by the models now</div><div class="staged-label" id="staged" hidden>STAGED SCENE · arranged by us for this demo; the detection is live</div><button class="light-btn" id="torch" hidden>Light</button></div>
+<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas><div class="footage-label" id="footageLabel" hidden>RECORDED CLIP · analyzed live by the models now</div><div class="staged-label" id="staged" hidden>STAGED SCENE · arranged by us for this demo; the detection is live</div><button class="light-btn" id="torch" hidden>Light</button><div class="agent-line caption" id="line" aria-live="polite">…</div></div>
 <div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
 <div class="card">
-  <div class="agent-line" id="line" aria-live="polite">…</div>
   <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>
   <button class="talk" id="talk" disabled>Hold to talk</button>
   <form class="row mt" id="typed"><input type="text" id="t" maxlength="300" placeholder="Or type here" autocomplete="off"><button class="secondary" type="submit">Send</button></form>

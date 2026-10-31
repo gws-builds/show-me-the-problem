@@ -124,11 +124,13 @@ function speakGuidance(g, tracking) {
   lastSaidGuide = words; lastGuideAt = Date.now(); Speech.say(words);
 }
 
+const PLAIN = { clear: 'OK', found: 'Found', unconfirmed: 'Checking', attention: 'Needs a look', pending: 'Not yet', cant_tell: 'Not sure' };
 function renderChecklist(list) {
   const ul = $('checks'); if (!ul) return;
   ul.replaceChildren(...(list ?? []).map((c) => {
     const li = document.createElement('li'); li.className = `chk ${c.status}`;
-    const s = document.createElement('span'); s.className = 'st'; s.textContent = c.status;
+    // The caller sees plain words; the model and frame detail stay in the console (red team 10/31).
+    const s = document.createElement('span'); s.className = 'st'; s.textContent = PLAIN[c.status] ?? c.status;
     const l = document.createElement('span'); l.textContent = ` ${c.label}`;
     li.append(s, l);
     if (c.frame) { const f = document.createElement('span'); f.className = 'small'; f.textContent = ` · frame ${c.frame}`; li.append(f); }
