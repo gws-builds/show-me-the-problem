@@ -1,5 +1,7 @@
 # Show Me the Problem
 
+*Built for the "Build for Your World" theme: the trade businesses that keep homes running.*
+
 **A live call that sees.** A homeowner calls a plumbing, HVAC or electrical business and points their phone at what is broken. An agent built on Meta's models:
 
 - outlines the part on the live camera and steers the phone with arrows and voice ("tilt up, closer, hold still") until the view is usable;
@@ -30,7 +32,7 @@ The camera is a sensor inside an agent that talks, decides, verifies and acts. M
 | **Muse Voice Transcribe 1.0** | Realtime over `wss://api.meta.ai/v1/asr/realtime` in ENDPOINTING mode (turn detection), English and Spanish. Our server relays 16 kHz PCM and adds the key; the browser never sees it. Push-to-talk WAV is the fallback. |
 | **Muse Image 1.0** | After approval, an illustration for the technician, labelled "not evidence". The evidence still is the real frame with the SAM outline drawn in code. |
 
-The agent's voice is the browser's built-in speech synthesis: Meta lists no text-to-speech model.
+**The voice is the only part that is not Meta.** Meta's catalogue has no text-to-speech model, so the agent's finished lines are read out by Deepgram Aura-2 (`src/tts.js`), with the browser's built-in speech synthesis as the fallback. Deepgram only turns the agent's own words into sound: all listening, seeing, deciding and answering is done by the Meta models above.
 
 ## How the camera part works
 
@@ -172,7 +174,7 @@ We report what was measured, never a perfect score.
 |---|---|
 | Everything in this repository: agent loop, tools, grounding, mask decoding, guidance, realtime voice relay, camera hazards, checklist, evidence ledger, work order, verifier, budget ledger, pages, eval, tests | **New** (Oct 27 – Nov 4, 2026) |
 | Unmanually, the AI office manager product that answers the business's phone | Pre-existing. It is not in this repository. The demo uses a fictional business, a fictional price list and an in-memory calendar. |
-| Browser speech synthesis for the agent's voice | Browser built-in |
+| Deepgram Aura-2 for the agent's voice (text-to-speech only), browser speech synthesis as fallback | Deepgram (no Meta TTS exists) |
 
 ## License
 

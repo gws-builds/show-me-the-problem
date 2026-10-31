@@ -20,7 +20,18 @@ window.Voice = (() => {
   let fillerTimers = [];
   const state = (t) => { $('vstate').textContent = t; };
 
+  // iPhones pause audio when Control Center opens (starting the screen recording) or a notification
+  // lands; the microphone then goes silent while the screen still says "listening". Resume it.
+  function keepAwake() {
+    const wake = () => { if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); };
+    ctx.onstatechange = wake;
+    document.addEventListener('visibilitychange', wake);
+    setInterval(wake, 3000);
+  }
+  window.addEventListener('speech:real', () => { fillerTimers.forEach(clearTimeout); clearTimeout(fillerTimer); });
+
   async function setup(sourceNode) {
+    keepAwake();
     await ctx.audioWorklet.addModule('/pcm-worklet.js');
     node = new AudioWorkletNode(ctx, 'pcm16k');
     sourceNode.connect(node);
@@ -52,7 +63,8 @@ window.Voice = (() => {
       } else if (m.type === 'final') { $('heard').textContent = `You said: "${m.text}"`; $('partial').textContent = ''; }
       else if (m.type === 'thinking') { state('thinking'); armFiller(); }
       else if (m.type === 'ignored') { $('partial').textContent = ''; }
-      else if (m.type === 'error') { $('heard').textContent = m.message; }
+      // Never leave the caller hanging: an error is said out loud, not only shown (red team 10/30).
+      else if (m.type === 'error') { $('heard').textContent = m.message; fillerTimers.forEach(clearTimeout); window.Speech?.later(m.message || 'Sorry, I lost that. Could you say it again?'); }
       else if (m.type === 'closed') { state('voice off: hold to talk'); }
     };
     // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.

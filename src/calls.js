@@ -123,13 +123,16 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     if (c.tour && !c.tour.done && c.tour.found.size) c.history.push({ role: 'user', content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question from this and the current frame in one or two sentences, then the tour continues.` });
     c.history.push({ role: 'user', content: `Caller: ${line}` });
     const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
+    // The turn works on its own copy of the history, kept only if it finishes in time: a turn that
+    // timed out and finishes later can no longer interleave its tool steps with the next turn's (red team 10/30).
+    const history = [...c.history];
     let timer;
     try {
       const r = await Promise.race([
-        callerTurn(c.ctx, c.history),
+        callerTurn(c.ctx, history),
         new Promise((_, no) => { timer = setTimeout(() => no(new Error(`turn took over ${LIMITS.turnMs / 1000} s`)), LIMITS.turnMs); }),
       ]);
-      if (seq === c.turnSeq) afterAgent(c, r);
+      if (seq === c.turnSeq) { c.history = history; afterAgent(c, r); }
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
       if (seq !== c.turnSeq) return;
@@ -254,13 +257,13 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     /** Ends a call now (the caller hung up, or a test run finished); keeps its replay. */
     end(callId) { const c = calls.get(String(callId)); if (c) { calls.delete(c.id); c.voice?.end(); onEnd?.(c); } },
 
-    create({ ip = 'unknown', live = false, footage = null } = {}) {
+    create({ ip = 'unknown', live = false, staff = live, footage = null } = {}) {
       sweep();
       if (ledger.mode() === 'stopped') throw new CallError('The spending stop for this session is reached. No new calls until a restart.', 503, 'SPEND_STOP');
       if (ledger.mode() !== 'live' && !live) throw new CallError('The live demo is resting to protect its credit. Recorded calls are on the console page.', 503, 'REPLAY_ONLY');
       if (calls.size >= LIMITS.maxLiveCalls) throw new CallError('Too many live calls right now. Try again in a few minutes.', 429, 'BUSY');
       const hits = (ipHits.get(ip) ?? []).filter((t) => now() - t < 3_600_000);
-      if (hits.length >= LIMITS.callsPerIpPerHour && !live) throw new CallError('That is a lot of calls from one place. Try again later.', 429, 'RATE_LIMIT');
+      if (hits.length >= LIMITS.callsPerIpPerHour && !staff) throw new CallError('That is a lot of calls from one place. Try again later.', 429, 'RATE_LIMIT');
       ipHits.set(ip, [...hits, now()]);
       const c = {
         id: id(), camToken: id(), ownerToken: id(), createdAt: now(), turns: 0, busy: false, status: 'started', says: [], history: [], tracking: null,

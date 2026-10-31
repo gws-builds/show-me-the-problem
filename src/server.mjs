@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLedger } from './budget.js';
+import { createAlerts } from './alerts.js';
 import { createClient } from './meta.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
 import { upgrade, connectWebSocket } from './ws.js';
@@ -19,6 +20,10 @@ const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
 fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
 // SPEND_STOP_USD: a hard stop for this server run (default $5), on top of the per-call caps and the account-wide stops.
 const ledger = createLedger(path.join(DATA, 'ledger.json'), { sessionStopUsd: Number(process.env.SPEND_STOP_USD) || 5 });
+// Hosted judge copy: a push for every call and every spend step (src/alerts.js; needs NTFY_TOPIC).
+const alerts = createAlerts();
+const record = ledger.record.bind(ledger);
+ledger.record = (model, usage) => { const usd = record(model, usage); alerts.spend(ledger.session()).catch(() => undefined); return usd; };
 // A fresh access code every start, stored for the session script; never printed here.
 const gate = createGate({ code: writeCode(path.join(DATA, 'access_code')) });
 setInterval(() => gate.sweep(), 60_000).unref();
@@ -133,11 +138,14 @@ async function route(req, res) {
   if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size(), session: ledger.session() });
   if (req.method === 'GET' && p === '/api/calls/latest') return send(res, 200, calls.latest() ?? { id: null });
   if (req.method === 'POST' && p === '/api/calls') {
-    // Everyone past the access code is trusted staff (the founder, or a judge given the link); the
-    // session spend stop and the per-call caps still apply. STAFF_KEY stays for the container deploy.
-    const staff = (STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY) || ok;
+    // Everyone past the access code gets live calls (the founder, or a judge given the link), but only
+    // the STAFF_KEY holder skips the per-person hourly limit: a shared judge code must not unlock
+    // unlimited calls (red team 10/30). The session spend stop and per-call caps apply to everyone.
+    const staff = Boolean(STAFF_KEY && req.headers['x-staff-key'] === STAFF_KEY);
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
-    return send(res, 200, calls.create({ ip: key, live: Boolean(staff), footage }));
+    const made = calls.create({ ip: key, live: true, staff, footage });
+    if (!staff) alerts.callStarted({ ...ledger.session(), footage: Boolean(footage) }).catch(() => undefined);
+    return send(res, 200, made);
   }
   const m = p.match(/^\/api\/calls\/([a-f0-9]{32})(?:\/(frame|speech|say|text|tap|staged|tour|decision|still|annotated|frames\/\d{1,6}))?$/);
   if (m) {

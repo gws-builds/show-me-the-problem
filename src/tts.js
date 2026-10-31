@@ -16,8 +16,10 @@ export function createTts({ apiKey = process.env.DEEPGRAM_API_KEY, voice = proce
       perCall.set(callId, used + t.length); runChars += t.length;
       const r = await fetchImpl(`https://api.deepgram.com/v1/speak?model=${encodeURIComponent(lang === 'es' ? voiceEs : voice)}&encoding=mp3`, {
         method: 'POST', headers: { Authorization: `Token ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }),
-      });
-      if (!r.ok) return null;
+        // A slow voice never holds up the call: after 8 s the browser voice says it instead.
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null);
+      if (!r?.ok) return null;
       return Buffer.from(await r.arrayBuffer());
     },
     used: () => runChars,

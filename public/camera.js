@@ -38,9 +38,12 @@ const Speech = {
   next() { const t = Speech.queue.shift(); if (t) Speech.say(t); },
   async say(text, { filler = false } = {}) {
     const n = ++sayN; Speech.stop(); Speech.speaking = true; Speech.current = text; Speech.isFiller = filler;
+    // A real line ends any waiting lines still scheduled (voice.js).
+    if (!filler) window.dispatchEvent(new Event('speech:real'));
     if (Speech.natural) {
       try {
-        const r = await api('/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        // Never more than 9 s waiting for the natural voice; the browser voice takes over (red team 10/30).
+        const r = await api('/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(9000) });
         if (n !== sayN) return; // a newer line arrived while this one was being made
         if (r.ok) {
           const url = URL.createObjectURL(await r.blob()); if (n !== sayN) { URL.revokeObjectURL(url); return; }
