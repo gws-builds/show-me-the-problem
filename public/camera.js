@@ -138,12 +138,23 @@ function renderChecklist(list) {
   }));
 }
 
-// The caller's own mobile, for the confirmation text the owner sends after approving.
+// The caller's own mobile, for the confirmation text the owner sends after approving: the number,
+// then the 6-digit code texted to it (red team #4: only a number the caller holds is texted).
+let codeStep = false;
 $('mobileForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const r = await api('/mobile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile: $('mobile').value }) }).catch(() => null);
+  const v = $('mobile').value;
+  const r = await api('/mobile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(codeStep ? { code: v } : { mobile: v }) }).catch(() => null);
   const j = r ? await r.json().catch(() => ({})) : {};
-  $('heard').textContent = r?.ok ? `Saved. The confirmation text goes to the number ending ${j.ending}.` : (j.error || 'Could not save that number.');
+  if (!r?.ok) { $('heard').textContent = j.error || 'Could not save that number.'; return; }
+  if (!codeStep) {
+    codeStep = true; $('mobile').value = ''; $('mobile').placeholder = '6-digit code'; $('mobile').inputMode = 'numeric'; $('mobile').autocomplete = 'one-time-code';
+    $('mobileLabel').textContent = `Enter the code we texted to the number ending ${j.ending}`;
+    $('heard').textContent = '';
+  } else {
+    $('mobileForm').hidden = true;
+    $('mobileLabel').textContent = `Confirmed. The confirmation text goes to the number ending ${j.ending}.`;
+  }
 });
 
 // A line pushed over the voice socket is spoken at once; the poll below skips it by number.

@@ -20,7 +20,7 @@ const str = (description) => ({ type: 'string', description });
 export const PLATE_READS = 3;
 
 export const DEFINITIONS = [
-  fn('find_part', 'Look for a part in the live camera view. SAM 3.1 segments it; on a miss, code retries with an alternative noun and with a Muse Spark grounding point. Use plain object nouns, e.g. "faucet", "shut-off valve", "water heater", "breaker panel" (not states like "leak").', { part: str('what to find') }),
+  fn('find_part', 'Look for a part in the live camera view. SAM 3.1 segments it; on a miss, code retries with an alternative noun and with a Muse Spark grounding point. Use plain object nouns, e.g. "faucet", "shut-off valve", "water heater", "breaker panel" (not states like "leak").', { part: str('what to find'), say_now: str('A few words for the caller right now, while you look, so they are not waiting in silence, e.g. "Let me outline the flapper." Empty string if the last line already covers it.') }),
   fn('direct_camera', 'Tell the caller how to move the camera so the part or its label is visible.', { instruction: str('one short instruction, e.g. "Tilt down to the label on the tank"') }),
   fn('ask_caller', 'Ask the caller ONE question whose answer changes the price or urgency.', { question: str('one short question') }),
   fn('answer_caller', 'Answer a direct question from the caller (what is that part, is that normal, what does it do) in one or two short sentences, from what the camera and the tools have shown. Use this whenever the caller asks something, also during a tour; the call or tour then simply continues.', { answer: str('one or two short sentences') }),
@@ -30,7 +30,7 @@ export const DEFINITIONS = [
     equipment: str('equipment seen'), issue: str('likely issue'), price_list_id: str('id of the price row'),
     box_ordinal: { type: 'integer', description: 'ordinal of the SAM box showing the equipment' }, notes: str('anything that affects safety or price'),
   }),
-  fn('inspect_frame', 'Look at the current camera frame with Muse Spark vision and answer one question (faucet type, where water appears, corrosion). The answer is recorded as evidence with its frame.', { question: str('one short question about what is visible') }),
+  fn('inspect_frame', 'Look at the current camera frame with Muse Spark vision and answer one question (faucet type, where water appears, corrosion). The answer is recorded as evidence with its frame.', { question: str('one short question about what is visible'), say_now: str('A few words for the caller right now, while you look, so they are not waiting in silence, e.g. "Let me outline the flapper." Empty string if the last line already covers it.') }),
   fn('read_plate', 'Only when the caller asks how old the equipment is, or asks you to read its label or model: read the rating plate in view (brand, model, serial, fuel, capacity). Code estimates the age from the serial with published rules and adds it for the technician.', { equipment: str('what the plate is on, e.g. "water heater"') }),
   fn('lookup_manual', 'Search the public trade manuals (US Navy and Army courses, HUD, OSHA, EPA) for how a part works or what it looks like. Returns short cited excerpts. Use it to explain, never to decide a hazard or a price.', { question: str('a few plain words, e.g. "temperature and pressure relief valve purpose"') }),
   fn('record_hypothesis', 'Record the likely worn part, citing evidence ids (E1, E2...) from earlier tool outputs. Code refuses a hypothesis without cited evidence.', {
@@ -45,7 +45,7 @@ export const DEFINITIONS = [
 ];
 
 /** A model-written line made safe to speak: no panel-opening steps, no prices (both replaced in code and logged). */
-function speakable(session, line) {
+export function speakable(session, line) {
   const panel = safeLine(line);
   if (panel.blocked) session.log({ kind: 'code_gate', name: 'no panel opening', text: 'A line asking to open an electrical cover or touch inside was replaced in code.' });
   const price = noPrice(panel.text);

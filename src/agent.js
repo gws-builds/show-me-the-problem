@@ -2,7 +2,7 @@
 // the camera; after each thing they say (or each camera move the agent asked
 // for) the agent takes up to MAX_STEPS tool steps and then speaks one line.
 // Every step is logged for the Agent Console, with its cost.
-import { DEFINITIONS, runTool } from './tools.js';
+import { DEFINITIONS, runTool, speakable } from './tools.js';
 import { guide } from './guidance.js';
 import { createChecklist } from './hazards.js';
 import { createEvidence } from './evidence.js';
@@ -139,6 +139,10 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     if (!call) { history.push({ role: 'user', content: 'Plain text is not accepted. Call exactly one tool.' }); continue; }
     let args = {};
     try { args = JSON.parse(call.arguments || '{}'); } catch { /* bad JSON is an empty call */ }
+    // Latency (red team #4): a line the model gives with a looking tool is voiced now, before the tool
+    // runs, through the same code gates as every spoken line.
+    const now = typeof args.say_now === 'string' ? speakable(session, args.say_now.slice(0, 140)).trim() : '';
+    if (now && ctx.sayNow) ctx.sayNow(now);
     const r = await runTool(call.name, args, ctx);
     session.log({ kind: 'tool', name: call.name, args, output: r.output, spentUsd: client.spent() });
     history.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(r.output) });

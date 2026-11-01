@@ -13,7 +13,8 @@ export function createTts({ apiKey = process.env.DEEPGRAM_API_KEY, voice = proce
     async speak(callId, text, lang = 'en') {
       if (!apiKey) return null;
       const t = String(text).slice(0, TTS_LIMITS.line); const used = perCall.get(callId) ?? 0;
-      const key = `${callId}|${lang}|${t}`;
+      // Shared across calls: a greeting or filler is made once per server run (red team #4: cost and first-line delay).
+      const key = `${lang}|${t}`;
       if (cache.has(key)) return cache.get(key);
       if (pending.has(key)) return pending.get(key);
       if (used + t.length > TTS_LIMITS.perCall || runChars + t.length > TTS_LIMITS.perRun) return null;

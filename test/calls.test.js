@@ -279,7 +279,7 @@ test('listen: only the caller can send a clip, it is measured in code, cited as 
   const { calls } = setup();
   const c = calls.create({ ip: '1.1.9.7' });
   // 8 s of loud broadband noise: water still running after the refill.
-  const n = 16000 * 8; const hiss = Buffer.alloc(44 + n * 2); WAV.copy(hiss, 0, 0, 44); hiss.writeUInt32LE(36 + n * 2, 4); hiss.writeUInt32LE(n * 2, 40);
+  const n = 16000 * 8; const hiss = Buffer.alloc(44 + n * 2); WAV.copy(hiss, 0, 0, 44); hiss.writeUInt32LE(36 + n * 2, 4); hiss.writeUInt16LE(2, 32); hiss.writeUInt16LE(16, 34); hiss.writeUInt32LE(n * 2, 40);
   let seed = 3; for (let i = 0; i < n; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; hiss.writeInt16LE(Math.round(((seed / 0x7fffffff) * 2 - 1) * 3000), 44 + i * 2); }
   await assert.rejects(calls.listen(c.id, c.ownerToken, hiss), { code: 'FORBIDDEN' });
   await assert.rejects(calls.listen(c.id, c.camToken, Buffer.from('x')), { code: 'BAD_REQUEST' });
@@ -297,9 +297,12 @@ test("confirmation text: the caller's own mobile only, sent once on the owner's 
   const glimmer = { draft: async () => ({ parts: [], confirmation: 'Hi! The technician will look at the dripping relief valve.' }) };
   const { calls } = setup({ glimmer, sms, agent: [['find_part', { part: 'water heater' }], ['propose_quote', { equipment: 'water heater', issue: 'valve drips', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' }], ['check_calendar', { job_type: 'water heater' }], ['request_booking', { slot_id: 's1', brief: 'valve drips' }]] });
   const c = calls.create({ ip: '1.1.1.8' });
-  assert.throws(() => calls.setMobile(c.id, c.ownerToken, '416 555 0100'), { code: 'FORBIDDEN' });
-  for (const bad of ['555 0100', '+44 20 7946 0958', '+1 016 555 0100', 'call me']) assert.throws(() => calls.setMobile(c.id, c.camToken, bad), { code: 'BAD_REQUEST' }, bad);
-  assert.equal(calls.setMobile(c.id, c.camToken, '(416) 555-0100').ending, '0100');
+  await assert.rejects(calls.setMobile(c.id, c.ownerToken, '416 555 0100'), { code: 'FORBIDDEN' });
+  for (const bad of ['555 0100', '+44 20 7946 0958', '+1 016 555 0100', 'call me']) await assert.rejects(calls.setMobile(c.id, c.camToken, bad), { code: 'BAD_REQUEST' }, bad);
+  assert.equal((await calls.setMobile(c.id, c.camToken, '(416) 555-0100')).ending, '0100');
+  const code = sent.pop().text.match(/\d{6}/)[0];
+  assert.throws(() => calls.verifyMobile(c.id, c.camToken, '000000'), { code: 'BAD_REQUEST' });
+  assert.equal(calls.verifyMobile(c.id, c.camToken, code).ending, '0100');
   await calls.frame(c.id, c.camToken, JPEG);
   await calls.text(c.id, c.camToken, 'my water heater valve drips');
   await calls.text(c.id, c.camToken, 'yes book it');
@@ -315,4 +318,16 @@ test("confirmation text: the caller's own mobile only, sent once on the owner's 
   assert.equal(r.text.to, '…0100');
   await assert.rejects(calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
   assert.equal(sent.length, 1);
+});
+
+test('a "while I look" line is spoken before the tool runs, through the same code gates (latency, red team #4)', async () => {
+  const { calls } = setup({ agent: [['find_part', { part: 'faucet', say_now: 'Let me outline the faucet. Or call 416-555-0100.' }], ['direct_camera', { instruction: 'Tilt down a little.' }]] });
+  const c = calls.create({ ip: '1.1.9.6' });
+  await calls.frame(c.id, c.camToken, JPEG);
+  await calls.text(c.id, c.camToken, 'my faucet drips');
+  const says = calls.view(c.id).says.map((s) => s.text);
+  const i = says.findIndex((t) => t.startsWith('Let me outline the faucet.'));
+  assert.ok(i > 0, says.join(' | '));
+  assert.doesNotMatch(says[i], /416/);
+  assert.ok(i < says.length - 1, 'spoken before the turn finished');
 });

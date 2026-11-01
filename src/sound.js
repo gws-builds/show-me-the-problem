@@ -57,10 +57,20 @@ function frames(pcm) {
 
 /** Measures a 16-bit mono PCM WAV (16 kHz) and returns the sound signatures found in it. */
 export function analyseSound(wav, { fixture = 'toilet' } = {}) {
-  const seconds = wavSeconds(wav);
-  if (seconds == null) throw new Error('audio must be a 16-bit PCM WAV');
-  const data = wav.indexOf('data', 12, 'latin1');
-  const pcm = new Int16Array(wav.buffer.slice(wav.byteOffset + data + 8, wav.byteOffset + wav.length - ((wav.length - data - 8) % 2)));
+  if (wavSeconds(wav) == null) throw new Error('audio must be a 16-bit PCM WAV');
+  // Only what the page records: 16 kHz, mono, 16-bit. Anything else would be measured with the
+  // wrong thresholds, and the length cited as evidence comes from the samples, never the header (red team #4).
+  let off = 12; let fmt = null; let data = null;
+  while (off + 8 <= wav.length) {
+    const id = wav.toString('ascii', off, off + 4); const size = wav.readUInt32LE(off + 4);
+    if (id === 'fmt ' && off + 24 <= wav.length) fmt = { channels: wav.readUInt16LE(off + 10), rate: wav.readUInt32LE(off + 12), bits: wav.readUInt16LE(off + 22) };
+    if (id === 'data') { data = off + 8; break; }
+    off += 8 + size + (size % 2);
+  }
+  if (!fmt || data == null || fmt.channels !== 1 || fmt.rate !== RATE || fmt.bits !== 16) throw new Error('audio must be 16 kHz mono 16-bit, as the call page records it');
+  const end = wav.length - ((wav.length - data) % 2);
+  const pcm = new Int16Array(wav.buffer.slice(wav.byteOffset + data, wav.byteOffset + end));
+  const seconds = pcm.length / RATE;
   const f = frames(pcm);
   if (f.length < 20) return { seconds, findings: [], note: 'Too short to judge: hold it there for about 8 seconds.' };
   const sorted = f.map((x) => x.db).sort((a, b) => a - b);

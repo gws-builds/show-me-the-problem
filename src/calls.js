@@ -8,7 +8,7 @@
 // - Caller words are checked for hazards in CODE before the model sees them:
 //   a hazard ends quoting at once, pages the owner and blocks booking.
 // - Prices only come from the verifier; bookings only from the owner's tap.
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { createSession, callerTurn, MAX_TURNS } from './agent.js';
 import { runTool } from './tools.js';
 import { hazardIn } from './verifier.js';
@@ -186,6 +186,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // The camera and tap continue the conversation without the caller speaking; each counts toward a
   // per-call cap so a moving camera cannot buy unbounded agent turns (red team 10/31, finding 8).
   async function autoTurn(c, note) {
+    // The same gates as a spoken turn: no model spend after an escalation, a decided booking or the turn cap (red team #4).
+    if (['escalated', 'booked', 'declined', 'handoff'].includes(c.status) || c.turns >= MAX_TURNS) return;
     if ((c.autoTurns = (c.autoTurns ?? 0) + 1) > LIMITS.autoTurns) { say(c, 'Tell me what you see, and I will take it from there.', 'waiting_caller'); return; }
     c.history.push({ role: 'user', content: note });
     try { await runTurn(c); } catch (err) { if (err.code !== 'STALE' && isStop(err)) say(c, 'Let me get the owner to call you back.', 'handoff'); }
@@ -336,6 +338,8 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         client: c.client, session: c.session, priceList, calendar: nextSlots(now()),
         notifyOwner: async (m) => { c.pages.push({ ...m, at: now() }); c.session.log({ kind: 'owner_paged', reason: m.reason }); },
         startTour: (room) => startTour(c, room),
+        // The model's "while I look" words, voiced before the tool runs (agent.js).
+        sayNow: (text) => { if (!['escalated', 'booked', 'declined'].includes(c.status)) say(c, text, c.status); },
       };
       calls.set(c.id, c);
       if (footage) c.session.log({ kind: 'footage', text: `Footage mode: recorded clip "${footage}" is played in the browser and its frames go to the models live.` });
@@ -392,6 +396,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const c = asCaller(callId, token);
       if (!Buffer.isBuffer(wav) || wav.length < 1000) throw new CallError('No audio.');
       if (wav.length > LIMITS.wavBytes) throw new CallError('Keep it under 40 seconds.', 413, 'TOO_LARGE');
+      if (c.busy) throw new CallError('Still thinking about the last thing you said. Tap Listen again in a moment.', 409, 'BUSY');
       if ((c.listens = (c.listens ?? 0) + 1) > LIMITS.listens) throw new CallError('I have heard enough of it for this call.', 429, 'RATE_LIMIT');
       let r;
       try { r = analyseSound(wav, { fixture: /sink|faucet|tap|kitchen/.test(`${c.session.lastPart?.() ?? ''} ${c.tour?.room === 'kitchen' ? 'kitchen' : ''}`) && !/toilet/.test(String(c.session.lastPart?.() ?? '')) ? 'sink' : 'toilet' }); } catch (err) { throw new CallError(String(err.message)); }
@@ -522,14 +527,36 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     },
 
     /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
-    /** The caller's own mobile, typed on the call page, for the confirmation text. */
-    setMobile(callId, token, raw) {
+    /**
+     * The caller's own mobile for the confirmation text, proved with a one-time code (red team #4:
+     * whoever holds the call link could otherwise have the business line text anyone). Three numbers
+     * per call at most; no change once the owner has decided the booking.
+     */
+    async setMobile(callId, token, raw) {
       const c = asCaller(callId, token);
+      if (c.booking) throw new CallError('The booking is decided; the number cannot change now.', 409, 'LOCKED');
+      if (!sms) throw new CallError('Texting is off on this demo; the confirmation shows on screen.', 409, 'NO_SMS');
       const m = normaliseMobile(raw);
       if (!m) throw new CallError('Enter a US or Canadian mobile number, like 416 555 0100.');
-      c.mobile = m;
-      c.session.log({ kind: 'mobile', text: `Caller gave a mobile for the confirmation text (ending ${m.slice(-4)}).` });
-      return { ok: true, ending: m.slice(-4) };
+      if ((c.mobileTries = (c.mobileTries ?? 0) + 1) > 3) throw new CallError('That is enough numbers for this call.', 429, 'RATE_LIMIT');
+      const code = String(randomInt(100000, 1000000));
+      c.pendingMobile = { number: m, code, tries: 0 };
+      c.mobile = null;
+      await sms.send(m, `Your code for the repair call: ${code}. If you did not ask for this, ignore it.`).catch((err) => { throw new CallError(`Could not text that number: ${String(err.message).slice(0, 120)}`, 502, 'SMS_FAILED'); });
+      c.session.log({ kind: 'mobile', text: `Code texted to the number ending ${m.slice(-4)}.` });
+      return { ok: true, sent: true, ending: m.slice(-4) };
+    },
+
+    /** The code from that text: only then is the number used for the confirmation. */
+    verifyMobile(callId, token, code) {
+      const c = asCaller(callId, token);
+      const p = c.pendingMobile;
+      if (!p || c.booking) throw new CallError('No code is waiting.', 409, 'NO_CODE');
+      if (++p.tries > 5) { c.pendingMobile = null; throw new CallError('Too many tries. Enter the number again.', 429, 'RATE_LIMIT'); }
+      if (!same(String(code ?? '').replace(/\D/g, ''), p.code)) throw new CallError('That code does not match.');
+      c.mobile = p.number; c.pendingMobile = null;
+      c.session.log({ kind: 'mobile', text: `Caller confirmed the mobile ending ${c.mobile.slice(-4)}.` });
+      return { ok: true, ending: c.mobile.slice(-4) };
     },
 
     async sendConfirmation(callId, token, send) {

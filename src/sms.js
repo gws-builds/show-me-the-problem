@@ -5,12 +5,15 @@
 // reports error 40010 and the owner page says so instead of claiming it was delivered.
 
 export const E164_NANP = /^\+1[2-9]\d{2}[2-9]\d{6}$/;
+// NANP area codes that are not the US or Canada (Caribbean, Bermuda: international SMS rates),
+// plus premium and toll-free codes that cannot take a text (red team #4).
+const NOT_US_CA = new Set('242 246 264 268 284 345 441 473 649 658 664 721 758 767 784 809 829 849 868 869 876 900 976 800 833 844 855 866 877 888'.split(' '));
 
 /** "+1 (416) 555-0100", "416-555-0100" → "+14165550100", or null. */
 export function normaliseMobile(raw) {
   const d = String(raw ?? '').replace(/[^\d+]/g, '');
   const n = d.startsWith('+') ? d : d.length === 10 ? `+1${d}` : d.length === 11 && d.startsWith('1') ? `+${d}` : d;
-  return E164_NANP.test(n) ? n : null;
+  return E164_NANP.test(n) && !NOT_US_CA.has(n.slice(2, 5)) ? n : null;
 }
 
 export function createSms({ apiKey = process.env.TELNYX_API_KEY, from = process.env.SMS_FROM, fetchImpl = fetch } = {}) {

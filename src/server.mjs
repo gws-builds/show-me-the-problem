@@ -184,7 +184,7 @@ async function route(req, res) {
       if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
       return send(res, 200, await calls.speech(id, cam, await readBody(req, LIMITS.wavBytes)));
     }
-    if (req.method === 'POST' && action === 'mobile') return send(res, 200, calls.setMobile(id, cam, String((await json(req, 200)).mobile ?? '')));
+    if (req.method === 'POST' && action === 'mobile') { const b = await json(req, 200); return send(res, 200, b.code != null ? calls.verifyMobile(id, cam, String(b.code)) : await calls.setMobile(id, cam, String(b.mobile ?? ''))); }
     if (req.method === 'POST' && action === 'listen') {
       if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
       return send(res, 200, await calls.listen(id, cam, await readBody(req, LIMITS.wavBytes)));
