@@ -17,7 +17,7 @@ const WAV = (() => { const b = Buffer.alloc(44 + 32000); b.write('RIFF', 0); b.w
 let HAZARD_SCAN = () => '{"findings":[]}';
 const setHazardScan = (fn) => { HAZARD_SCAN = fn; };
 
-function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock, glimmer = null } = {}) {
+function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock, glimmer = null, sms = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-calls-'));
   const file = path.join(dir, 'ledger.json');
   if (spent) fs.writeFileSync(file, JSON.stringify({ spentUsd: spent, calls: 0 }));
@@ -35,7 +35,7 @@ function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips
     return new Response(JSON.stringify({ output, usage: { input_tokens: 1000, output_tokens: 40 } }));
   };
   let t = 1_000_000; const now = clock ?? (() => (t += 2000));
-  const calls = createCalls({ ledger, priceList: PRICES, now, glimmer, makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
+  const calls = createCalls({ ledger, priceList: PRICES, now, glimmer, sms, later: (fn) => fn(), makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
   return { calls, counts, ledger };
 }
 
@@ -259,7 +259,7 @@ test('Glimmer follow-up: drafted after approval, sent only by the owner, only on
   await calls.frame(c.id, c.camToken, JPEG);
   await calls.text(c.id, c.camToken, 'my water heater valve drips');
   await calls.text(c.id, c.camToken, 'yes book it');
-  assert.throws(() => calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
+  await assert.rejects(calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
   await calls.decide(c.id, c.ownerToken, true);
   await new Promise((r) => setImmediate(r));
   const f = calls.view(c.id).booking.followUp;
@@ -269,8 +269,50 @@ test('Glimmer follow-up: drafted after approval, sent only by the owner, only on
   assert.doesNotMatch(f.confirmation, /\$|example\.com|deposit/);
   assert.match(f.confirmation, /booked for/);
   const before = calls.view(c.id).says.length;
-  assert.throws(() => calls.sendConfirmation(c.id, c.camToken, true), { code: 'FORBIDDEN' });
-  calls.sendConfirmation(c.id, c.ownerToken, true);
+  await assert.rejects(calls.sendConfirmation(c.id, c.camToken, true), { code: 'FORBIDDEN' });
+  await calls.sendConfirmation(c.id, c.ownerToken, true);
   assert.equal(calls.view(c.id).says.length, before + 1);
-  assert.throws(() => calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
+  await assert.rejects(calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
+});
+
+test('listen: only the caller can send a clip, it is measured in code, cited as evidence, and capped per call', async () => {
+  const { calls } = setup();
+  const c = calls.create({ ip: '1.1.9.7' });
+  // 8 s of loud broadband noise: water still running after the refill.
+  const n = 16000 * 8; const hiss = Buffer.alloc(44 + n * 2); WAV.copy(hiss, 0, 0, 44); hiss.writeUInt32LE(36 + n * 2, 4); hiss.writeUInt32LE(n * 2, 40);
+  let seed = 3; for (let i = 0; i < n; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; hiss.writeInt16LE(Math.round(((seed / 0x7fffffff) * 2 - 1) * 3000), 44 + i * 2); }
+  await assert.rejects(calls.listen(c.id, c.ownerToken, hiss), { code: 'FORBIDDEN' });
+  await assert.rejects(calls.listen(c.id, c.camToken, Buffer.from('x')), { code: 'BAD_REQUEST' });
+  const r = await calls.listen(c.id, c.camToken, hiss);
+  assert.equal(r.findings[0].sound, 'steady_flow');
+  const view = calls.view(c.id);
+  assert.ok(view.events.some((e) => e.kind === 'sound'));
+  for (let i = 0; i < LIMITS.listens - 1; i++) await calls.listen(c.id, c.camToken, hiss);
+  await assert.rejects(calls.listen(c.id, c.camToken, hiss), { code: 'RATE_LIMIT' });
+});
+
+test("confirmation text: the caller's own mobile only, sent once on the owner's Send, delivery reported honestly", async () => {
+  const sent = [];
+  const sms = { send: async (to, text) => { sent.push({ to, text }); return { id: 'm1' }; }, status: async () => ({ state: 'failed', reason: 'this line is not registered for US business texting yet (10DLC)' }) };
+  const glimmer = { draft: async () => ({ parts: [], confirmation: 'Hi! The technician will look at the dripping relief valve.' }) };
+  const { calls } = setup({ glimmer, sms, agent: [['find_part', { part: 'water heater' }], ['propose_quote', { equipment: 'water heater', issue: 'valve drips', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' }], ['check_calendar', { job_type: 'water heater' }], ['request_booking', { slot_id: 's1', brief: 'valve drips' }]] });
+  const c = calls.create({ ip: '1.1.1.8' });
+  assert.throws(() => calls.setMobile(c.id, c.ownerToken, '416 555 0100'), { code: 'FORBIDDEN' });
+  for (const bad of ['555 0100', '+44 20 7946 0958', '+1 016 555 0100', 'call me']) assert.throws(() => calls.setMobile(c.id, c.camToken, bad), { code: 'BAD_REQUEST' }, bad);
+  assert.equal(calls.setMobile(c.id, c.camToken, '(416) 555-0100').ending, '0100');
+  await calls.frame(c.id, c.camToken, JPEG);
+  await calls.text(c.id, c.camToken, 'my water heater valve drips');
+  await calls.text(c.id, c.camToken, 'yes book it');
+  await calls.decide(c.id, c.ownerToken, true);
+  await new Promise((r) => setImmediate(r));
+  const r = await calls.sendConfirmation(c.id, c.ownerToken, true);
+  assert.deepEqual(sent.map((x) => x.to), ['+14165550100']);
+  assert.match(sent[0].text, /relief valve/);
+  await new Promise((r2) => setImmediate(r2));
+  const f = calls.view(c.id).booking.followUp;
+  assert.equal(f.text.state, 'failed');
+  assert.match(f.text.reason, /10DLC/);
+  assert.equal(r.text.to, '…0100');
+  await assert.rejects(calls.sendConfirmation(c.id, c.ownerToken, true), { code: 'NO_DRAFT' });
+  assert.equal(sent.length, 1);
 });

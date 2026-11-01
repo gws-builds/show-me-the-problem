@@ -138,6 +138,22 @@ function renderChecklist(list) {
   }));
 }
 
+// The caller's own mobile, for the confirmation text the owner sends after approving.
+$('mobileForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await api('/mobile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile: $('mobile').value }) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  $('heard').textContent = r?.ok ? `Saved. The confirmation text goes to the number ending ${j.ending}.` : (j.error || 'Could not save that number.');
+});
+
+// A line pushed over the voice socket is spoken at once; the poll below skips it by number.
+window.addEventListener('agent:say', (e) => {
+  const s = e.detail;
+  if (!s || s.n <= spoken) return;
+  spoken = s.n; Speech.heardN = s.n; $('line').textContent = s.text;
+  if (started) Speech.later(s.text, { urgent: s.status === 'escalated' });
+});
+
 async function poll() {
   try {
     const r = await api(''); if (!r.ok) { $('status').textContent = 'ended'; return; }

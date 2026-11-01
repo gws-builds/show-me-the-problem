@@ -23,6 +23,8 @@ export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
+import { analyseSound } from './sound.js';
+import { normaliseMobile } from './sms.js';
 import { reviewWorkOrder } from './review.js';
 import { draftFollowUp } from './afterBooking.js';
 import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
@@ -49,6 +51,7 @@ export const LIMITS = {
   turnMs: 20_000,
   autoTurns: 10, // agent turns started by the camera or a tap, per call
   taps: 40, // SAM point prompts from taps, per call
+  listens: 4, // equipment sound clips measured, per call
   voiceWaitMs: 25_000, // a line said while the agent is still answering waits its turn instead of being refused
 };
 // About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
@@ -78,7 +81,7 @@ function nextSlots(now) {
 /**
  * deps: { ledger, makeClient(live) -> Meta client, priceList, now?, onEnd?(call) }
  */
-export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null }) {
+export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null, onSay = null, sms = null, later = (fn, ms) => setTimeout(fn, ms).unref?.() }) {
   const calls = new Map();
   const ipHits = new Map();
 
@@ -94,7 +97,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
   // from a fixed table (i18n.js); the model's own lines are already Spanish.
   const labelEs = (label) => priceList.find((r) => r.label === label)?.labelEs ?? label;
   const say = (c, text, status) => {
-    c.says.push({ n: c.says.length + 1, text: toLang(text, c.session.lang?.(), { labelEs }), status, at: now() }); c.status = status ?? c.status;
+    const entry = { n: c.says.length + 1, text: toLang(text, c.session.lang?.(), { labelEs }), status, at: now() };
+    c.says.push(entry); c.status = status ?? c.status;
+    // Latency (founder 11/01): the line goes out the moment it exists (voice socket + voice made now),
+    // not when the phone next polls and then asks for the audio.
+    try { onSay?.(c, entry); } catch { /* delivery is best effort; polling still carries the line */ }
     // A booking now waits for the owner: start the Glimmer GPU so the follow-up draft is not a cold start.
     if (status === 'awaiting_owner') glimmer?.warm?.();
   };
@@ -380,6 +387,21 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       });
     },
 
+    /** Listen: a clip of the equipment itself (the tank refilling), measured in code (sound.js). */
+    async listen(callId, token, wav) {
+      const c = asCaller(callId, token);
+      if (!Buffer.isBuffer(wav) || wav.length < 1000) throw new CallError('No audio.');
+      if (wav.length > LIMITS.wavBytes) throw new CallError('Keep it under 40 seconds.', 413, 'TOO_LARGE');
+      if ((c.listens = (c.listens ?? 0) + 1) > LIMITS.listens) throw new CallError('I have heard enough of it for this call.', 429, 'RATE_LIMIT');
+      let r;
+      try { r = analyseSound(wav, { fixture: /sink|faucet|tap|kitchen/.test(`${c.session.lastPart?.() ?? ''} ${c.tour?.room === 'kitchen' ? 'kitchen' : ''}`) && !/toilet/.test(String(c.session.lastPart?.() ?? '')) ? 'sink' : 'toilet' }); } catch (err) { throw new CallError(String(err.message)); }
+      const added = r.findings.map((f) => c.session.evidence.add({ kind: 'sound', sound: f.sound, claim: `Heard: ${f.detail}. ${f.meaning}`, confidence: Math.min(0.9, 0.5 + f.share / 2), support: `Measured in code from ${r.seconds.toFixed(1)} s of audio${f.source ? `; ${f.source}` : ''}`, frame: null }));
+      c.session.log({ kind: 'sound', seconds: r.seconds, levelDb: r.levelDb ?? null, findings: r.findings.map(({ sound, share, detail }) => ({ sound, share, detail })), text: r.findings.length ? `Listened ${r.seconds.toFixed(1)} s: ${r.findings.map((f) => f.detail).join('; ')}` : r.note });
+      if (!added.length) { say(c, r.note ?? 'I could not make out the sound. Hold the phone over the tank for about 8 seconds.', c.status); return { findings: [] }; }
+      await exclusive(c, () => autoTurn(c, `[microphone] Listened to the equipment for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.`));
+      return { findings: r.findings.map(({ sound, detail, meaning }) => ({ sound, detail, meaning })) };
+    },
+
     /** Tap-to-point: the caller taps the part on screen (x, y in 0..1); SAM segments what is under the finger. */
     async tap(callId, token, x, y) {
       const c = asCaller(callId, token);
@@ -500,14 +522,34 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
     },
 
     /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
-    sendConfirmation(callId, token, send) {
+    /** The caller's own mobile, typed on the call page, for the confirmation text. */
+    setMobile(callId, token, raw) {
+      const c = asCaller(callId, token);
+      const m = normaliseMobile(raw);
+      if (!m) throw new CallError('Enter a US or Canadian mobile number, like 416 555 0100.');
+      c.mobile = m;
+      c.session.log({ kind: 'mobile', text: `Caller gave a mobile for the confirmation text (ending ${m.slice(-4)}).` });
+      return { ok: true, ending: m.slice(-4) };
+    },
+
+    async sendConfirmation(callId, token, send) {
       const c = asOwner(callId, token);
       const f = c.booking?.followUp;
       if (!f || f.status !== 'draft') throw new CallError('No confirmation is waiting.', 409, 'NO_DRAFT');
       f.status = send ? 'sent' : 'dropped';
-      c.session.log({ kind: 'confirmation', sent: Boolean(send) });
-      if (send) say(c, f.confirmation, c.status);
-      return { ok: true };
+      if (!send) { c.session.log({ kind: 'confirmation', sent: false }); return { ok: true }; }
+      say(c, f.confirmation, c.status);
+      // A real text from the business line when the caller gave a mobile (one per call: the draft is consumed above).
+      if (c.mobile && sms) {
+        f.text = { to: `…${c.mobile.slice(-4)}`, state: 'sending' };
+        try {
+          const { id } = await sms.send(c.mobile, f.confirmation);
+          f.text.state = 'on its way';
+          if (id) later(async () => { const st = await sms.status(id).catch(() => null); if (st) { f.text.state = st.state; f.text.reason = st.reason ?? null; c.session.log({ kind: 'confirmation_text', state: st.state, reason: st.reason ?? null }); } }, 8000);
+        } catch (err) { f.text.state = 'failed'; f.text.reason = String(err.message).slice(0, 160); }
+      }
+      c.session.log({ kind: 'confirmation', sent: true, texted: f.text?.state ?? 'no mobile given', reason: f.text?.reason ?? null });
+      return { ok: true, text: f.text ?? null };
     },
 
     /** Read-only view for the console and the caller's page. Never includes tokens or raw frames. */
@@ -522,7 +564,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         says: c.says, events: c.session.events(), pages: c.pages.map(({ reason, at, urgent }) => ({ reason, at, urgent })),
         pending: p ? { slot: p.slot, brief: p.brief, quote: p.quote, workOrder: c.booking ? null : workOrder(c.session, { slot: p.slot, quote: p.quote }) } : null,
         evidence: c.session.evidence.list(),
-        booking: c.booking, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
+        booking: c.booking, mobile: c.mobile ? `…${c.mobile.slice(-4)}` : null, annotated: Boolean(c.annotated), hasFrame: Boolean(c.session.latestFrame()), staged: c.staged, checklist: c.session.checklist.list(),
         boxes: c.session.boxes(), part: c.session.lastPart(), tracking: Boolean(c.tracking), guidance: g, lang: c.session.lang?.() ?? 'en', footage: c.footage, latency: { p50: p50(c.latencies), n: c.latencies.length },
         tour: tourView(c.tour), cards: c.session.cards(), capUsd: c.client.cap?.() ?? null,
       };

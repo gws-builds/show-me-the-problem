@@ -2,6 +2,7 @@
 // capped before it is read, static files from a fixed list, strict CSP.
 //   node src/server.mjs            (PORT, HOST=127.0.0.1 by default; META_API_KEY from env)
 import { createGlimmer } from './afterBooking.js';
+import { createSms } from './sms.js';
 import { CALL_ROUTE } from './routes.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -39,8 +40,15 @@ const tts = createTts();
 // The trade library loads once (about a second) before the first call needs it.
 setImmediate(() => { const l = loadCorpus(); console.log(l.error ? `trade library NOT loaded: ${l.error}` : `trade library: ${l.index.size} passages (${l.loadMs} ms)`); });
 
+// Open voice sockets by call, so a new line is pushed at once instead of waiting for the 0.7 s poll.
+const sockets = new Map();
 const calls = createCalls({
-  ledger, priceList, glimmer: createGlimmer(),
+  ledger, priceList, glimmer: createGlimmer(), sms: createSms(),
+  onSay: (c, entry) => {
+    sockets.get(c.id)?.({ type: 'say', n: entry.n, text: entry.text, status: entry.status });
+    // The natural voice is made now and kept, so the phone's /say request is served from memory.
+    if (tts.on) void tts.speak(c.id, entry.text, c.session.lang?.() ?? 'en').catch(() => null);
+  },
   makeClient: (live) => createClient({ ledger, live }),
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
@@ -176,6 +184,11 @@ async function route(req, res) {
       if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
       return send(res, 200, await calls.speech(id, cam, await readBody(req, LIMITS.wavBytes)));
     }
+    if (req.method === 'POST' && action === 'mobile') return send(res, 200, calls.setMobile(id, cam, String((await json(req, 200)).mobile ?? '')));
+    if (req.method === 'POST' && action === 'listen') {
+      if (!String(req.headers['content-type'] ?? '').startsWith('audio/wav')) throw new CallError('Send audio/wav.', 415, 'BAD_TYPE');
+      return send(res, 200, await calls.listen(id, cam, await readBody(req, LIMITS.wavBytes)));
+    }
     if (req.method === 'GET' && action?.startsWith('frames/')) {
       const d = calls.keptFrameOf(id, action.split('/')[1]);
       if (!d) return send(res, 404, { error: 'No such evidence frame.' });
@@ -192,7 +205,7 @@ async function route(req, res) {
     if (req.method === 'POST' && action === 'staged') return send(res, 200, calls.setStaged(id, cam, (await json(req, 200)).staged === true));
     if (req.method === 'POST' && action === 'tap') { const b = await json(req, 200); return send(res, 200, await calls.tap(id, cam, b.x, b.y)); }
     if (req.method === 'POST' && action === 'text') return send(res, 200, await calls.text(id, cam, (await json(req, 2000)).text));
-    if (req.method === 'POST' && action === 'confirmation') return send(res, 200, calls.sendConfirmation(id, owner, (await json(req, 200)).send === true));
+    if (req.method === 'POST' && action === 'confirmation') return send(res, 200, await calls.sendConfirmation(id, owner, (await json(req, 200)).send === true));
     if (req.method === 'POST' && action === 'decision') return send(res, 200, await calls.decide(id, owner, (await json(req, 200)).approve === true));
   }
   const r = p.match(/^\/api\/runs\/([a-f0-9]{32})$/);
@@ -244,10 +257,11 @@ function voiceUpgrade(req, socket) {
         openUpstream: (url) => connectWebSocket(url), toClient,
       });
       calls.setVoice(callId, session);
+      sockets.set(callId, toClient);
       clearTimeout(authTimer);
     } catch (err) { toClient({ type: 'error', message: err instanceof CallError || err?.code ? err.message : 'Voice could not start.' }); ws.close(1008); }
   });
-  ws.onClose(() => { clearTimeout(authTimer); if (session) { session.end(); calls.setVoice(callId, null); } });
+  ws.onClose(() => { clearTimeout(authTimer); if (sockets.get(callId) === toClient) sockets.delete(callId); if (session) { session.end(); calls.setVoice(callId, null); } });
 }
 const PORT = Number(process.env.PORT || 8642);
 const HOST = process.env.HOST || '127.0.0.1';

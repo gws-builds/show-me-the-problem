@@ -53,3 +53,13 @@ test('a failed voice request returns nothing (the page falls back to the browser
   const tts = createTts({ apiKey: 'k', fetchImpl: async () => new Response('no', { status: 401 }) });
   assert.equal(await tts.speak('a', 'hello'), null);
 });
+
+test('a line asked for twice while it is being made is made once (server head start + phone request)', async () => {
+  const { createTts } = await import('../src/tts.js');
+  let n = 0;
+  const tts = createTts({ apiKey: 'k', fetchImpl: async () => { n++; await new Promise((r) => setTimeout(r, 20)); return new Response(Buffer.from('mp3')); } });
+  const [a, b] = await Promise.all([tts.speak('c1', 'Hello there'), tts.speak('c1', 'Hello there')]);
+  assert.equal(n, 1);
+  assert.deepEqual(a, b);
+  assert.equal(tts.used(), 'Hello there'.length);
+});

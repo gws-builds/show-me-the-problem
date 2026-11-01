@@ -7,6 +7,7 @@ window.Voice = (() => {
   const $ = (s) => document.getElementById(s);
   let ctx = null; let node = null; let ws = null; let callId = null; let camToken = null; let fillerTimer = null; let lastSays = 0;
   let ptt = null; // { chunks: [] } while holding to talk
+  let rec = null; // { chunks: [] } while listening to the equipment
   // Founder 10/30: never dead air, but no fixed script either: a short, varied acknowledgement only when
   // the answer is slow (1.2 s), a "one moment" kind of line if it is slower, a last reassurance after
   // 11 s. Never the same line twice in a row. Any real line cuts a filler off (Speech.say stops
@@ -38,11 +39,13 @@ window.Voice = (() => {
     node.port.onmessage = (e) => {
       const buf = e.data;
       if (ptt) ptt.chunks.push(new Int16Array(buf));
-      if (ws?.readyState === 1 && ws.ready && !ptt) ws.send(buf);
+      if (rec) rec.chunks.push(new Int16Array(buf));
+      if (ws?.readyState === 1 && ws.ready && !ptt && !rec) ws.send(buf);
     };
     // The worklet must be pulled by the graph; a silent gain keeps it running without echo.
     const mute = ctx.createGain(); mute.gain.value = 0; node.connect(mute); mute.connect(ctx.destination);
     enablePtt();
+    enableListen();
     connect();
   }
 
@@ -66,6 +69,8 @@ window.Voice = (() => {
       // Never leave the caller hanging: an error is said out loud, not only shown (red team 10/30).
       else if (m.type === 'error') { $('heard').textContent = m.message; fillerTimers.forEach(clearTimeout); window.Speech?.later(m.message || 'Sorry, I lost that. Could you say it again?'); }
       else if (m.type === 'closed') { state('voice off: hold to talk'); }
+      // The agent's line, pushed the moment it exists (camera.js speaks it; the poll is the fallback).
+      else if (m.type === 'say') { window.dispatchEvent(new CustomEvent('agent:say', { detail: m })); }
     };
     // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.
     // Self-repair: reconnect after every drop (1.5 s, then slower), hold-to-talk works meanwhile.
@@ -93,6 +98,32 @@ window.Voice = (() => {
     }, ms));
   }
 
+  function toWav(chunks) {
+    const n = chunks.reduce((a, c) => a + c.length, 0);
+    const wav = new DataView(new ArrayBuffer(44 + n * 2)); const w = (o, s) => [...s].forEach((ch, i) => wav.setUint8(o + i, ch.charCodeAt(0)));
+    w(0, 'RIFF'); wav.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+    wav.setUint32(24, 16000, true); wav.setUint32(28, 32000, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true); w(36, 'data'); wav.setUint32(40, n * 2, true);
+    let o = 44; for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) wav.setInt16(o, c[i], true);
+    return wav;
+  }
+
+  // Listen: 8 s of the equipment itself (the tank refilling), measured on the server (sound.js).
+  // The voice stream pauses meanwhile so running water is not sent as words.
+  function enableListen() {
+    const b = $('listen'); if (!b) return; b.disabled = false;
+    b.onclick = async () => {
+      if (rec || ptt) return;
+      window.Speech?.stop(); rec = { chunks: [] }; b.disabled = true;
+      for (let s = 8; s > 0; s--) { b.textContent = `Listening… ${s}`; await new Promise((r) => setTimeout(r, 1000)); }
+      const wav = toWav(rec.chunks); rec = null; b.textContent = 'Checking the sound…';
+      try {
+        const r = await fetch(`/api/calls/${callId}/listen`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'x-cam-token': camToken }, body: wav.buffer });
+        const j = await r.json(); $('heard').textContent = j.findings?.length ? `Heard: ${j.findings.map((f) => f.detail).join('; ')}` : (j.error || 'Could not make out the sound.');
+      } catch { $('heard').textContent = 'Could not send that. Try again.'; }
+      b.textContent = 'Listen to it'; b.disabled = false;
+    };
+  }
+
   // Push-to-talk fallback: hold the button, release to send one WAV to /speech.
   function enablePtt() {
     const b = $('talk'); b.disabled = false;
@@ -100,11 +131,7 @@ window.Voice = (() => {
     const up = async (e) => {
       e.preventDefault(); if (!ptt) return;
       const chunks = ptt.chunks; ptt = null; b.textContent = 'Thinking…'; b.classList.remove('rec'); b.disabled = true;
-      const n = chunks.reduce((a, c) => a + c.length, 0);
-      const wav = new DataView(new ArrayBuffer(44 + n * 2)); const w = (o, s) => [...s].forEach((ch, i) => wav.setUint8(o + i, ch.charCodeAt(0)));
-      w(0, 'RIFF'); wav.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
-      wav.setUint32(24, 16000, true); wav.setUint32(28, 32000, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true); w(36, 'data'); wav.setUint32(40, n * 2, true);
-      let o = 44; for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) wav.setInt16(o, c[i], true);
+      const wav = toWav(chunks);
       try {
         armFiller();
         const r = await fetch(`/api/calls/${callId}/speech`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'x-cam-token': camToken }, body: wav.buffer });

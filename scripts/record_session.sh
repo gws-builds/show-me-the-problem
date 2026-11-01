@@ -78,6 +78,16 @@ if [[ -z "${GLIMMER_API_KEY:-}" && -f "$GL_FILE" ]]; then
 fi
 [[ -n "${GLIMMER_API_KEY:-}" && -n "${GLIMMER_URL:-}" ]] && echo "Glimmer follow-up: on (the GPU starts when a booking waits for the owner)" || echo "Glimmer follow-up: off"
 
+# Confirmation as a real text (src/sms.js): the business line's Telnyx key and number, from local
+# files only. SMS_FROM lives in ../.secrets/snap_sms.env; the key in the workspace's Telnyx.env.
+SMS_FILE="${SMS_ENV_FILE:-$ROOT/../.secrets/snap_sms.env}"
+[[ -z "${SMS_FROM:-}" && -f "$SMS_FILE" ]] && { set -a; . "$SMS_FILE"; set +a; }
+TX_FILE="${TELNYX_ENV_FILE:-$ROOT/../../../.secrets/Telnyx.env}"
+if [[ -z "${TELNYX_API_KEY:-}" && -f "$TX_FILE" ]]; then
+  TELNYX_API_KEY="$(sed -n 's/^API_KEY[[:space:]]*=[[:space:]]*//p' "$TX_FILE" | tr -d "\"'" | head -1)"; export TELNYX_API_KEY
+fi
+[[ -n "${TELNYX_API_KEY:-}" && -n "${SMS_FROM:-}" ]] && echo "Confirmation text: on (sent only when the owner taps it)" || echo "Confirmation text: off (shown on screen only)"
+
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then die "port $PORT is already in use (another server?)"; fi
 
 # --- 1. server (127.0.0.1 only) ---

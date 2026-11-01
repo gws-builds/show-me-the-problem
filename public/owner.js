@@ -18,10 +18,13 @@ async function confirmSend(send) {
 $('fuSend').addEventListener('click', () => confirmSend(true));
 $('fuDrop').addEventListener('click', () => confirmSend(false));
 // Glimmer's draft: the truck list (each item cites evidence) and the text that waits for Send.
-function renderFollowUp(f) {
+function renderFollowUp(f, mobile) {
   $('fu').hidden = !f;
   if (!f) return;
-  const say = { running: 'Drafting the truck list and the confirmation text…', failed: 'The follow-up draft did not finish. Text the customer yourself.', sent: "Shown on the customer's screen.", dropped: 'Not sent.' };
+  // A real text when the caller gave a mobile; its delivery is reported as the carrier reports it.
+  const texted = f.text ? (f.text.state === 'delivered' ? `Texted to ${f.text.to}: delivered.` : f.text.state === 'failed' ? `Text to ${f.text.to} failed: ${f.text.reason}.` : `Text to ${f.text.to}: ${f.text.state}.`) : '';
+  const say = { running: 'Drafting the truck list and the confirmation text…', failed: 'The follow-up draft did not finish. Text the customer yourself.', sent: `Shown on the customer's screen. ${texted}`.trim(), dropped: 'Not sent.' };
+  $('fuSend').textContent = mobile ? `Text it to ${mobile}` : "Show on the customer's screen";
   $('fuState').textContent = f.status === 'draft' ? `Draft ready in ${(f.ms / 1000).toFixed(1)} s, about $${f.costUsd.toFixed(3)} of GPU time for the draft (start-up and idle time not included)${f.dropped ? `; ${f.dropped} item(s) dropped for citing no evidence` : ''}. Nothing goes out until you tap it.` : say[f.status] ?? '';
   $('fuParts').replaceChildren(...(f.parts ?? []).map((p) => el('li', `${p.item}: ${p.why} [${p.cites.join(', ')}]`)));
   $('fuText').textContent = f.confirmation ? `Text to customer: "${f.confirmation}"` : '';
@@ -87,7 +90,7 @@ async function poll() {
       $('doneCard').hidden = false; $('doneH').textContent = v.booking.approved ? `Booked: ${v.booking.slot.label}` : 'Declined';
       $('woH').textContent = 'Technician work order';
       renderWorkOrder(v.booking.workOrder && { ...v.booking.workOrder, review: v.booking.review }, v.evidence);
-      renderFollowUp(v.booking.followUp ?? null);
+      renderFollowUp(v.booking.followUp ?? null, v.mobile);
       if (v.annotated && !annShown) {
         const a = await fetch(`/api/calls/${id}/annotated`, { headers: { 'x-owner-token': owner } });
         if (a.ok) { $('ann').src = URL.createObjectURL(await a.blob()); $('ann').hidden = false; $('annNote').hidden = false; annShown = true; }

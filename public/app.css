@@ -19,6 +19,7 @@ button:disabled { opacity: .5; cursor: default; }
 .agent-line { font-size: 1.15rem; color: var(--text); min-height: 2.6em; }
 .talk { width: 100%; font-size: 1.1rem; padding: 18px; }
 .talk.rec { background: var(--bad); color:#fff; }
+.talk.listen { margin-top: 8px; padding: 12px; font-size: 1rem; background: transparent; border: 2px solid currentColor; }
 /* The agent's line sits on the video as a caption, so a phone never scrolls to read or answer it (red team 10/31). */
 .stage .caption { position:absolute; left:8px; right:8px; bottom:8px; min-height:0; max-height:40%; overflow:auto; padding:10px 12px; border-radius:10px; background:rgba(4,8,16,.82); color:#f8fafc; font-size:1.05rem; line-height:1.4; }
 .stage .caption:empty { display:none; }
