@@ -62,3 +62,11 @@ test('a negation inside the hazard words negates them ("gas tank, no leak visibl
   assert.equal(hazardIn('the gas line is not leaking'), false);
   for (const t of ['I smell gas', 'there is a gas leak by the heater', 'gas smell in the basement', 'sparks from the outlet', 'huele a gas']) assert.equal(hazardIn(t), true, t);
 });
+
+// Red team #5: routine furnace and electrical parts carry hazard words; they must not end every HVAC call.
+test('routine part names are not hazards; the same words as real events still are', () => {
+  for (const t of ['my flame sensor is dirty', 'the spark igniter clicks but no heat', 'the flame goes out after 10 seconds', 'smoke detector chirping every minute', 'arc fault breaker keeps tripping', 'the pilot light is out', 'hot surface igniter cracked'])
+    assert.equal(hazardIn(t), false, t);
+  for (const t of ['sparks coming from the outlet', 'smoke coming from the furnace', 'smoke detector going off', 'I smell gas', 'the igniter is sparking and there is smoke', 'flames out of the burner door'])
+    assert.equal(hazardIn(t), true, t);
+});

@@ -8,6 +8,7 @@ window.Voice = (() => {
   let ctx = null; let node = null; let ws = null; let callId = null; let camToken = null; let fillerTimer = null; let lastSays = 0;
   let ptt = null; // { chunks: [] } while holding to talk
   let rec = null; // { chunks: [] } while listening to the equipment
+  let micTrack = null; // the live mic, so Listen can switch its voice filters off while recording
   // Founder 11/01: an acknowledgement the instant the caller stops talking ("On it"), then "just a few
   // moments longer" if the answer is still coming at ~5 s, and a last reassurance after 11 s. The lines
   // are made once when the call starts and kept on the phone, so they play with no wait. Never the same
@@ -74,7 +75,7 @@ window.Voice = (() => {
       // The agent's line, pushed the moment it exists (camera.js speaks it; the poll is the fallback).
       else if (m.type === 'say') { window.dispatchEvent(new CustomEvent('agent:say', { detail: m })); }
       // The AI asked to hear the equipment (listen_to_equipment): record by itself, no button.
-      else if (m.type === 'listen') { void listenNow(); }
+      else if (m.type === 'listen') { void listenNow(true); }
     };
     // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.
     // Self-repair: reconnect after every drop (1.5 s, then slower), hold-to-talk works meanwhile.
@@ -113,14 +114,23 @@ window.Voice = (() => {
 
   // Listen: 8 s of the equipment itself, measured on the server (sound.js). Started by the AI on its own
   // (a 'listen' message) or by the button. The voice stream pauses meanwhile so the noise is not sent as words.
-  async function listenNow() {
+  async function listenNow(fromAi = false) {
     const b = $('listen');
     if (rec || ptt) return;
-    // The AI's own line ("hold your phone near it") plays first, then recording starts.
-    for (let i = 0; i < 40 && window.Speech?.speaking && !window.Speech?.isFiller; i++) await new Promise((r) => setTimeout(r, 100));
-    window.Speech?.stop(); rec = { chunks: [] }; if (b) b.disabled = true;
+    // The AI's own line ("hold your phone near it") arrives just after the request: let it play first, so
+    // the agent's voice is not in the clip (red team #5). A button press has no line to wait for.
+    if (fromAi) {
+      await new Promise((ok) => { const t = setTimeout(ok, 2000); window.addEventListener('agent:say', () => { clearTimeout(t); setTimeout(ok, 300); }, { once: true }); });
+      for (let i = 0; i < 80 && window.Speech?.speaking && !window.Speech?.isFiller; i++) await new Promise((r) => setTimeout(r, 100));
+    }
+    window.Speech?.stop(); if (b) b.disabled = true;
+    // Phone voice filters remove exactly the hiss and hum being measured: off for these 8 s, then back on.
+    const voiceFilters = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    await micTrack?.applyConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false }).catch(() => {});
+    rec = { chunks: [] };
     for (let s = 8; s > 0; s--) { if (b) b.textContent = `Listening… ${s}`; state(`listening to the equipment… ${s}`); await new Promise((r) => setTimeout(r, 1000)); }
     const wav = toWav(rec.chunks); rec = null; if (b) b.textContent = 'Checking the sound…'; state('listening (hands-free)');
+    await micTrack?.applyConstraints(voiceFilters).catch(() => {});
     try {
       // Still answering the last thing said? Try again shortly (409), at most three times.
       let r; for (let i = 0; i < 4; i++) { r = await fetch(`/api/calls/${callId}/listen`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'x-cam-token': camToken }, body: wav.buffer }); if (r.status !== 409) break; await new Promise((ok) => setTimeout(ok, 1500)); }
@@ -153,7 +163,7 @@ window.Voice = (() => {
 
   return {
     async startFromStream(stream, id, token) {
-      callId = id; camToken = token;
+      callId = id; camToken = token; micTrack = stream.getAudioTracks()[0] ?? null;
       ctx = new AudioContext();
       await setup(ctx.createMediaStreamSource(new MediaStream(stream.getAudioTracks())));
     },

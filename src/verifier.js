@@ -30,8 +30,13 @@ const lastClause = (s) => s.split(CLAUSE).filter((x) => x !== undefined).pop() ?
 // the camera's wiring finding (a cord visibly not connected to power is "attention", kb/cards/outlet_cord.json).
 const WIRING = new Set([2, 7]);
 
+// Routine HVAC and electrical part names that contain a hazard word (red team #5: "flame sensor",
+// "spark igniter", "arc fault breaker" and a chirping smoke detector all escalated, so no furnace call
+// could be quoted). They are blanked before the hazard check; "sparks from the igniter" still escalates.
+const ROUTINE = /\b(spark|hot[- ]surface)[- ]?(igniters?|ignitors?|plugs?|electrodes?)\b|\bflame[- ](sensors?|rods?|rollout switch(es)?)\b|\bpilot (light|flame)s?\b|\b(the )?flames? (goes|go|went|keeps going) out\b|\barc[- ]fault( breakers?| outlets?)?\b|\bafci\b|\bsmoke (detectors?|alarms?)\b(?!.{0,25}\b(going off|went off|sounding|won'?t stop|alarming)\b)/gi;
+
 function hazardInOne(text, skip = null) {
-  const t = String(text);
+  const t = String(text).replace(ROUTINE, ' ');
   for (const [i, re] of HAZARDS.entries()) {
     if (skip?.has(i)) continue;
     for (const m of t.matchAll(new RegExp(re.source, 'gi'))) {
@@ -74,6 +79,14 @@ const JOB_PARTS = {
   'heat pump': ['heat pump', 'air conditioner', 'condenser', 'unit', 'filter'],
   lights: ['lamp', 'light', 'fixture', 'switch', 'dimmer'],
   'smoke alarm': ['smoke', 'detector', 'alarm'],
+  // Commercial and industrial (red team #5: no commercial row could ever be quoted).
+  'rooftop unit': ['rooftop', 'rtu', 'unit', 'condenser', 'air handler', 'fan', 'hvac'],
+  chiller: ['chiller', 'compressor', 'unit', 'cooling tower'],
+  'walk-in cooler': ['walk-in', 'cooler', 'freezer', 'evaporator', 'condenser', 'compressor', 'unit'],
+  'commercial boiler': ['boiler', 'burner', 'pump', 'gauge', 'valve'],
+  motor: ['motor', 'drive', 'vfd', 'pump', 'fan', 'belt'],
+  switchgear: ['switchgear', 'panel', 'breaker', 'disconnect', 'transformer'],
+  'backflow preventer': ['backflow', 'valve', 'pipe', 'assembly'],
 };
 
 /** wiringSettled: the camera's wiring finding was already judged in code, so the model restating it is not new evidence. */

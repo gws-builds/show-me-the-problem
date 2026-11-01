@@ -312,6 +312,8 @@ test('listen_to_equipment: the AI asks, the phone is told to record, and a buzzi
   assert.equal(r.findings[0].sound, 'hum');
   assert.ok(d.calls.view(c2.id).says.some((x) => /keep away/i.test(x.text)), 'hazard warning said in code');
   assert.ok(d.calls.view(c2.id).events.some((e) => e.name === 'sound hazard'));
+  assert.equal(d.calls.view(c2.id).status, 'escalated', 'escalated in code: nothing can be booked');
+  assert.ok(d.calls.view(c2.id).events.some((e) => e.kind === 'owner_paged'));
 });
 
 test("confirmation text: the caller's own mobile only, sent once on the owner's Send, delivery reported honestly", async () => {

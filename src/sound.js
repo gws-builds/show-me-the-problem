@@ -59,7 +59,7 @@ export const SOUND_MEANINGS = {
     quiet: QUIET,
   },
   furnace: {
-    steady_flow: M('A steady rush of air is normal while the blower runs; a hiss from the gas side is not, and is treated as a gas concern.', ['blower'], 'usfa-heating', true),
+    steady_flow: M('A steady rush of air is normal while the blower runs. A hiss at the gas valve or burners is different: if you smell gas, leave and call the gas company.', ['blower'], 'usfa-heating'),
     whistle: M('A whistle or squeal from a furnace is usually a slipping blower belt, a worn motor bearing or a clogged filter.', ['blower belt', 'air filter']),
     gurgle: M('Gurgling from a high-efficiency furnace is usually the condensate drain or trap.', ['condensate trap']),
     bang: M('A bang when the burners light is delayed ignition: dirty burners. Do not keep restarting it.', ['burners'], 'usfa-heating', true),
@@ -79,7 +79,7 @@ export const SOUND_MEANINGS = {
   electrical: {
     steady_flow: M('A steady hiss or sizzle near electrical equipment can be arcing. Keep away and do not touch the panel.', [], 'osha-electrical', true),
     whistle: M('A high whine from electrical equipment can be a failing transformer, dimmer or breaker; an electrician must check it.', ['breaker'], 'osha-electrical', true),
-    gurgle: M('A bubbling sound near electrical equipment is unusual; keep away and have an electrician check it.', [], 'osha-electrical', true),
+    gurgle: M('A bubbling sound near electrical equipment is unusual; it may be pipes nearby. Do not touch the panel.', [], 'osha-electrical'),
     bang: M('A pop or crack from a panel or outlet is arcing. Keep away, do not reset anything, and have an electrician check it.', ['breaker'], 'osha-electrical', true),
     hum: M('A buzz or hum from a breaker panel or outlet usually means a loose connection or an overloaded breaker. Keep away and do not touch it.', ['breaker'], 'osha-electrical', true),
     rattle: M('A chattering sound from a panel can be a failing breaker or contactor. Keep away.', ['breaker'], 'osha-electrical', true),
@@ -97,14 +97,16 @@ export const SOUND_MEANINGS = {
 };
 // The words the caller or the model use for a piece of equipment → its row above.
 const KINDS = [
-  ['electrical', /breaker|panel|outlet|switch|electric(al)?|transformer|wiring|light/],
+  // Specific equipment first, so "electric water heater", "furnace access panel" and "pilot light" are not
+  // read as electrical (red team #5).
   ['water_heater', /water heater|tank heater|hot water/],
   ['boiler', /boiler|radiator|hydronic/],
-  ['furnace', /furnace|blower|heater/],
+  ['furnace', /furnace|blower|pilot|heater/],
   ['ac', /\bac\b|a\/c|air condition|heat pump|condenser|compressor|mini.?split|rooftop|rtu|chiller/],
-  ['motor', /motor|pump|fan|belt|bearing|disposal|compressor|machine/],
+  ['electrical', /breaker|panel|outlet|switch|electric(al)?|transformer|wiring|light/],
   ['sink', /sink|faucet|tap|kitchen/],
-  ['toilet', /toilet|tank|flush/],
+  ['toilet', /toilet|tank|flush|bathroom/],
+  ['motor', /motor|pump|fan|belt|bearing|disposal|machine/],
 ];
 /** "rooftop unit" → "ac", "breaker panel" → "electrical"; anything unknown → "motor". */
 export function equipmentKind(words) {
@@ -133,18 +135,18 @@ function frames(pcm) {
       }
     }
     // Mains hum: strong periodicity at 50/60 Hz or their 100/120 Hz harmonic (lags 133-320 samples).
-    let low = 0;
+    let low = 0; let lowLag = 0;
     if (rms > 30) {
       for (const lag of [133, 160, 267, 320]) {
         for (const l of [lag - 1, lag, lag + 1]) {
           let num = 0; let a = 0; let b = 0;
           for (let i = s; i + l < s + FRAME; i++) { const x = pcm[i] - mean; const y = pcm[i + l] - mean; num += x * y; a += x * x; b += y * y; }
           const r = a && b ? num / Math.sqrt(a * b) : 0;
-          if (r > low) low = r;
+          if (r > low) { low = r; lowLag = lag === 133 || lag === 267 ? 60 : 50; } // mains family: 60 Hz or 50 Hz
         }
       }
     }
-    out.push({ db: 20 * Math.log10(Math.max(1, rms)), zcr: zc / FRAME, pitch: best, low });
+    out.push({ db: 20 * Math.log10(Math.max(1, rms)), zcr: zc / FRAME, pitch: best, low, lowLag });
   }
   return out;
 }
@@ -180,7 +182,8 @@ export function analyseSound(wav, { fixture = 'motor' } = {}) {
   const tone = f.filter((x) => x.db > LOUD_DB && x.pitch >= 0.75 && x.zcr > 0.035);
   if (share(tone.length) >= 0.15) found.push({ sound: 'whistle', share: share(tone.length), detail: `Clear tone for ${Math.round(share(tone.length) * 100)}% of the clip` });
   // Gurgle: low-pitched (few crossings) bursts that rise and fall, not a steady level.
-  const low = f.map((x) => x.db > LOUD_DB + 3 && x.zcr < 0.05);
+  // Bubbles are irregular; a voice is a clear low pitch (low >= 0.6) and is not a gurgle (red team #5).
+  const low = f.map((x) => x.db > LOUD_DB + 3 && x.zcr < 0.05 && x.low < 0.6);
   let bursts = 0; for (let i = 1; i < low.length; i++) if (low[i] && !low[i - 1]) bursts++;
   if (bursts >= 4 && share(low.filter(Boolean).length) >= 0.1) found.push({ sound: 'gurgle', share: share(low.filter(Boolean).length), detail: `${bursts} low bubbling bursts` });
   // Bang: one frame far above the clip's median and its neighbours; many of them is a rattle.
@@ -188,8 +191,12 @@ export function analyseSound(wav, { fixture = 'motor' } = {}) {
   if (bangs >= 1 && bangs <= 6) found.push({ sound: 'bang', share: share(bangs), detail: `${bangs} sharp knock${bangs === 1 ? '' : 's'}` });
   if (bangs > 6) found.push({ sound: 'rattle', share: share(bangs), detail: `${bangs} rapid knocks (rattling)` });
   // Hum: a low, steady electrical or motor tone (few zero crossings, strong 50-120 Hz periodicity).
+  // Mains hum holds one pitch and one level; a voice near the phone moves in both (red team #5).
   const hum = f.filter((x) => x.db > LOUD_DB - 6 && x.zcr < 0.05 && x.low >= 0.8);
-  if (share(hum.length) >= 0.5) found.push({ sound: 'hum', share: share(hum.length), detail: `Steady low hum for ${Math.round(share(hum.length) * 100)}% of the clip` });
+  const lagCount = new Map(); for (const x of hum) lagCount.set(x.lowLag, (lagCount.get(x.lowLag) ?? 0) + 1);
+  const steadyPitch = hum.length ? Math.max(...lagCount.values()) / hum.length : 0;
+  const humSpread = hum.length ? Math.max(...hum.map((x) => x.db)) - Math.min(...hum.map((x) => x.db)) : 99;
+  if (share(hum.length) >= 0.5 && steadyPitch >= 0.8 && humSpread < 12) found.push({ sound: 'hum', share: share(hum.length), detail: `Steady low hum for ${Math.round(share(hum.length) * 100)}% of the clip` });
   if (!found.length && share(loud.length) < 0.2) found.push({ sound: 'quiet', share: share(f.length - loud.length), detail: 'Quiet most of the clip' });
   const table = SOUND_MEANINGS[equipmentKind(fixture)];
   return { seconds, levelDb: Math.round(median), findings: found.map((x) => ({ ...x, ...table[x.sound] })) };

@@ -53,6 +53,7 @@ export const LIMITS = {
   autoTurns: 10, // agent turns started by the camera or a tap, per call
   taps: 40, // SAM point prompts from taps, per call
   listens: 4, // equipment sound clips measured, per call
+  codeTextsPerHour: 20, // one-time-code texts across every call on this server
   voiceWaitMs: 25_000, // a line said while the agent is still answering waits its turn instead of being refused
 };
 // About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
@@ -83,6 +84,7 @@ function nextSlots(now) {
  * deps: { ledger, makeClient(live) -> Meta client, priceList, now?, onEnd?(call) }
  */
 export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null, onSay = null, onListen = null, sms = null, later = (fn, ms) => setTimeout(fn, ms).unref?.() }) {
+  const codeTexts = []; // { at, to } of one-time-code texts, for the server-wide cap
   const calls = new Map();
   const ipHits = new Map();
 
@@ -414,9 +416,16 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       c.session.log({ kind: 'sound', seconds: r.seconds, levelDb: r.levelDb ?? null, findings: r.findings.map(({ sound, share, detail }) => ({ sound, share, detail })), text: r.findings.length ? `Listened ${r.seconds.toFixed(1)} s: ${r.findings.map((f) => f.detail).join('; ')}` : r.note });
       if (!added.length) { say(c, r.note ?? 'I could not make out the sound. Hold the phone near it for about 8 seconds.', c.status); return { findings: [] }; }
       // A dangerous sound (buzzing panel, arcing, delayed ignition) is said in code first, never left to the model.
+      // A dangerous sound (buzzing panel, arcing, delayed ignition) is handled in code, never left to the
+      // model: the warning is said, the owner is paged and the call is escalated, so nothing gets booked (red team #5).
       const danger = r.findings.find((f) => f.hazard);
-      if (danger) { say(c, `Please keep away from it and don't touch anything. ${danger.meaning}`, c.status); c.session.log({ kind: 'code_gate', name: 'sound hazard', text: `Hazard sound (${danger.sound}) on ${kind}: warning said in code.` }); }
-      await exclusive(c, () => autoTurn(c, `[microphone] Listened to the ${kind.replace('_', ' ')} for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.${danger ? ' This is a hazard: escalate to the owner.' : ''}`));
+      if (danger) {
+        await c.ctx.notifyOwner({ urgent: true, reason: `Hazard sound on the ${kind.replace('_', ' ')}: ${danger.detail}. ${danger.meaning}`, transcript: c.session.callerText?.() ?? '' });
+        say(c, `Please keep away from it and don't touch anything. ${danger.meaning} I am getting the owner on this right now.`, 'escalated');
+        c.session.log({ kind: 'code_gate', name: 'sound hazard', text: `Hazard sound (${danger.sound}) on ${kind}: warning said and owner paged in code.` });
+      } else {
+        await exclusive(c, () => autoTurn(c, `[microphone] Listened to the ${kind.replace('_', ' ')} for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.`));
+      }
       return { findings: r.findings.map(({ sound, detail, meaning }) => ({ sound, detail, meaning })) };
     },
 
@@ -539,7 +548,6 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       return { ok: true };
     },
 
-    /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
     /**
      * The caller's own mobile for the confirmation text, proved with a one-time code (red team #4:
      * whoever holds the call link could otherwise have the business line text anyone). Three numbers
@@ -552,6 +560,11 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       const m = normaliseMobile(raw);
       if (!m) throw new CallError('Enter a US or Canadian mobile number, like 416 555 0100.');
       if ((c.mobileTries = (c.mobileTries ?? 0) + 1) > 3) throw new CallError('That is enough numbers for this call.', 429, 'RATE_LIMIT');
+      // Across all calls too (red team #5: 18 numbers an hour from one address): 20 code texts an hour
+      // on this server and 3 a day to any one number.
+      const t = now(); codeTexts.splice(0, codeTexts.length, ...codeTexts.filter((x) => t - x.at < 86_400_000));
+      if (codeTexts.filter((x) => t - x.at < 3_600_000).length >= LIMITS.codeTextsPerHour || codeTexts.filter((x) => x.to === m).length >= 3) throw new CallError('Too many codes sent right now. Try again later.', 429, 'RATE_LIMIT');
+      codeTexts.push({ at: t, to: m });
       const code = String(randomInt(100000, 1000000));
       c.pendingMobile = { number: m, code, tries: 0 };
       c.mobile = null;
@@ -572,6 +585,7 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       return { ok: true, ending: c.mobile.slice(-4) };
     },
 
+    /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
     async sendConfirmation(callId, token, send) {
       const c = asOwner(callId, token);
       const f = c.booking?.followUp;

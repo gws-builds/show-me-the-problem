@@ -264,6 +264,70 @@
    "priceCents": 8900,
    "trade": "electrical",
    "labelEs": "Cambio de alarma de humo y CO, por alarma"
+  },
+  {
+   "id": "c-rtu-diag",
+   "jobType": "rooftop unit",
+   "label": "Rooftop unit diagnostic visit (applied to repair)",
+   "priceCents": 34900,
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de unidad de techo (se descuenta de la reparación)"
+  },
+  {
+   "id": "c-rtu-pm",
+   "jobType": "rooftop unit",
+   "label": "Rooftop unit maintenance: filters, belts, coils, refrigerant check",
+   "priceCents": 42900,
+   "trade": "hvac",
+   "labelEs": "Mantenimiento de unidad de techo: filtros, correas, serpentines, refrigerante"
+  },
+  {
+   "id": "c-chiller",
+   "jobType": "chiller",
+   "label": "Chiller diagnostic visit (applied to repair)",
+   "priceCents": 59900,
+   "trade": "hvac",
+   "labelEs": "Diagnóstico de enfriadora (se descuenta de la reparación)"
+  },
+  {
+   "id": "c-walkin",
+   "jobType": "walk-in cooler",
+   "label": "Walk-in cooler or freezer diagnostic (applied to repair)",
+   "priceCents": 29900,
+   "trade": "refrigeration",
+   "labelEs": "Diagnóstico de cámara frigorífica (se descuenta de la reparación)"
+  },
+  {
+   "id": "c-boiler",
+   "jobType": "commercial boiler",
+   "label": "Commercial boiler service and combustion check",
+   "priceCents": 54900,
+   "trade": "hvac",
+   "labelEs": "Servicio de caldera comercial y prueba de combustión"
+  },
+  {
+   "id": "c-vfd",
+   "jobType": "motor",
+   "label": "Motor or VFD drive diagnostic (applied to repair)",
+   "priceCents": 32900,
+   "trade": "electrical",
+   "labelEs": "Diagnóstico de motor o variador (se descuenta de la reparación)"
+  },
+  {
+   "id": "c-ir",
+   "jobType": "switchgear",
+   "label": "Infrared scan of panels and switchgear (up to 10 panels)",
+   "priceCents": 69900,
+   "trade": "electrical",
+   "labelEs": "Termografía de tableros y equipos de maniobra (hasta 10 tableros)"
+  },
+  {
+   "id": "c-backflow",
+   "jobType": "backflow preventer",
+   "label": "Commercial backflow preventer test and report",
+   "priceCents": 19900,
+   "trade": "plumbing",
+   "labelEs": "Prueba e informe del preventor de reflujo comercial"
   }
  ]
 }

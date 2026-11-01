@@ -8,6 +8,7 @@
 //   - every line passes safeLine(): nobody is told to open an electrical cover or touch anything inside;
 //   - text in the frame (a sign saying "ignore your rules") is data: evidence that reads like an
 //     instruction is dropped, and spoken lines are composed here from card labels and short evidence.
+import { noContact } from './tools.js';
 import { retrieve, partsOf, hazardsOf, contextFor, ROOMS, ROOM_LABEL } from './kb.js';
 import { corpusContext } from './corpus.js';
 import { maskGeometry, dataUrlSize } from './mask.js';
@@ -202,7 +203,8 @@ export async function tourStep(client, tour, frame) {
   let say = tour.done ? summary(tour) : [...names, direction].join(' ');
   if (!tour.done && !names.length && direction === tour.lastDirection) say = null; // nothing new: stay quiet
   if (!tour.done) tour.lastDirection = direction;
-  if (say) { say = safeLine(say).text; tour.lastSay = say; }
+  // A sign or label on camera never makes the business voice read a price, number or payment ask (red team #5).
+  if (say) { say = noContact(noPrice(safeLine(say).text).text).text; tour.lastSay = say; }
   const confirmed = items.filter((x) => x.status === 'safety');
   return { items, say, done: tour.done, escalate: confirmed.filter((x) => x.hazard?.escalate), warn: confirmed.filter((x) => !x.hazard?.escalate) };
 }
