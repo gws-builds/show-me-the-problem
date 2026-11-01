@@ -17,13 +17,14 @@ import { guide, DARK_LUMA } from './guidance.js';
 // Fixed lines the caller page may speak besides the agent's own (recording cues, the lock).
 // Fixed lines the phone may have voiced in Aura: recording cues, guidance, and the waiting lines in
 // public/voice.js (red team 10/31: those fell back to the browser voice, so the voice changed on camera).
-export const WAITING_LINES = ['Sure.', 'Okay.', 'Got it.', 'Let me look.', 'On it.', 'Let me check.', 'One moment.', 'Just a second.', 'Give me a moment.', 'Still looking.', 'Almost there.', 'Nearly done, thanks for waiting.', 'Still on it, almost there.',
-  'Claro.', 'Vale.', 'Entendido.', 'Déjame ver.', 'Ya voy.', 'Un momento.', 'Un segundo.', 'Sigo mirando.', 'Casi listo.', 'Ya casi, gracias por esperar.'];
+// The acknowledgements public/voice.js plays while the agent works (keep the two lists the same).
+export const WAITING_LINES = ['On it.', 'Got it.', 'Okay, one sec.', 'Let me look.', 'Sure, checking.', 'Just a few moments longer.', 'Almost there, a few more seconds.', 'Still checking, just a moment longer.', 'Nearly done, thanks for waiting.', 'Still on it, almost there.',
+  'Enseguida.', 'Entendido.', 'Déjame ver.', 'Ya voy.', 'Unos momentos más.', 'Casi listo, unos segundos más.', 'Ya casi, gracias por esperar.'];
 export const SPOKEN_CUES = new Set(['Start your screen recording now.', 'You can stop recording now.', 'Got it. Hold still.', ...WAITING_LINES]);
 import { scanFrame, severityOf } from './hazards.js';
 import { maskGeometry } from './mask.js';
 import { workOrder } from './evidence.js';
-import { analyseSound } from './sound.js';
+import { analyseSound, equipmentKind, EQUIPMENT_KINDS } from './sound.js';
 import { normaliseMobile } from './sms.js';
 import { reviewWorkOrder } from './review.js';
 import { draftFollowUp } from './afterBooking.js';
@@ -81,7 +82,7 @@ function nextSlots(now) {
 /**
  * deps: { ledger, makeClient(live) -> Meta client, priceList, now?, onEnd?(call) }
  */
-export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null, onSay = null, sms = null, later = (fn, ms) => setTimeout(fn, ms).unref?.() }) {
+export function createCalls({ ledger, makeClient, priceList, now = () => Date.now(), onEnd = null, glimmer = null, onSay = null, onListen = null, sms = null, later = (fn, ms) => setTimeout(fn, ms).unref?.() }) {
   const calls = new Map();
   const ipHits = new Map();
 
@@ -340,6 +341,12 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
         startTour: (room) => startTour(c, room),
         // The model's "while I look" words, voiced before the tool runs (agent.js).
         sayNow: (text) => { if (!['escalated', 'booked', 'declined'].includes(c.status)) say(c, text, c.status); },
+        // listen_to_equipment: the phone starts an 8 s recording by itself (voice socket); false when it cannot.
+        requestListen: (kind) => {
+          if (!c.voice || (c.listens ?? 0) >= LIMITS.listens || !onListen) return false;
+          c.listenFor = kind;
+          try { onListen(c, kind); return true; } catch { return false; }
+        },
       };
       calls.set(c.id, c);
       if (footage) c.session.log({ kind: 'footage', text: `Footage mode: recorded clip "${footage}" is played in the browser and its frames go to the models live.` });
@@ -399,11 +406,17 @@ export function createCalls({ ledger, makeClient, priceList, now = () => Date.no
       if (c.busy) throw new CallError('Still thinking about the last thing you said. Tap Listen again in a moment.', 409, 'BUSY');
       if ((c.listens = (c.listens ?? 0) + 1) > LIMITS.listens) throw new CallError('I have heard enough of it for this call.', 429, 'RATE_LIMIT');
       let r;
-      try { r = analyseSound(wav, { fixture: /sink|faucet|tap|kitchen/.test(`${c.session.lastPart?.() ?? ''} ${c.tour?.room === 'kitchen' ? 'kitchen' : ''}`) && !/toilet/.test(String(c.session.lastPart?.() ?? '')) ? 'sink' : 'toilet' }); } catch (err) { throw new CallError(String(err.message)); }
+      // The kind the AI asked for (listen_to_equipment), else the part on camera or the tour's room.
+      const kind = EQUIPMENT_KINDS.includes(c.listenFor) ? c.listenFor : equipmentKind(`${c.session.lastPart?.() ?? ''} ${c.tour?.room ?? ''}`.replace('electrical_panel', 'electrical panel').replace('under_sink', 'sink').replace('boiler_room', 'boiler'));
+      c.listenFor = null;
+      try { r = analyseSound(wav, { fixture: kind }); } catch (err) { throw new CallError(String(err.message)); }
       const added = r.findings.map((f) => c.session.evidence.add({ kind: 'sound', sound: f.sound, claim: `Heard: ${f.detail}. ${f.meaning}`, confidence: Math.min(0.9, 0.5 + f.share / 2), support: `Measured in code from ${r.seconds.toFixed(1)} s of audio${f.source ? `; ${f.source}` : ''}`, frame: null }));
       c.session.log({ kind: 'sound', seconds: r.seconds, levelDb: r.levelDb ?? null, findings: r.findings.map(({ sound, share, detail }) => ({ sound, share, detail })), text: r.findings.length ? `Listened ${r.seconds.toFixed(1)} s: ${r.findings.map((f) => f.detail).join('; ')}` : r.note });
-      if (!added.length) { say(c, r.note ?? 'I could not make out the sound. Hold the phone over the tank for about 8 seconds.', c.status); return { findings: [] }; }
-      await exclusive(c, () => autoTurn(c, `[microphone] Listened to the equipment for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.`));
+      if (!added.length) { say(c, r.note ?? 'I could not make out the sound. Hold the phone near it for about 8 seconds.', c.status); return { findings: [] }; }
+      // A dangerous sound (buzzing panel, arcing, delayed ignition) is said in code first, never left to the model.
+      const danger = r.findings.find((f) => f.hazard);
+      if (danger) { say(c, `Please keep away from it and don't touch anything. ${danger.meaning}`, c.status); c.session.log({ kind: 'code_gate', name: 'sound hazard', text: `Hazard sound (${danger.sound}) on ${kind}: warning said in code.` }); }
+      await exclusive(c, () => autoTurn(c, `[microphone] Listened to the ${kind.replace('_', ' ')} for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.${danger ? ' This is a hazard: escalate to the owner.' : ''}`));
       return { findings: r.findings.map(({ sound, detail, meaning }) => ({ sound, detail, meaning })) };
     },
 

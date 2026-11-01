@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyseSound } from '../src/sound.js';
+import { analyseSound, equipmentKind, SOUND_MEANINGS } from '../src/sound.js';
 
 // A 16 kHz mono 16-bit WAV from a sample function.
 function wav(seconds, fn) {
@@ -15,11 +15,11 @@ function wav(seconds, fn) {
 const kinds = (r) => r.findings.map((f) => f.sound);
 
 test('a toilet still running after the refill is heard as steady flow, with the running-toilet meaning', () => {
-  const r = analyseSound(wav(8, (_t, rnd) => rnd() * 3000));
+  const r = analyseSound(wav(8, (_t, rnd) => rnd() * 3000), { fixture: 'toilet' });
   assert.ok(kinds(r).includes('steady_flow'), JSON.stringify(r));
   const f = r.findings.find((x) => x.sound === 'steady_flow');
   assert.match(f.meaning, /flapper/);
-  assert.equal(f.source, 'epa-leaks');
+  assert.equal(f.source, 'epa-fix-leak');
   assert.ok(f.share >= 0.6);
 });
 
@@ -38,4 +38,36 @@ test('a quiet tank is reported as quiet, and a single knock as a bang', () => {
 test('too short a clip asks for more, and a non-WAV is refused', () => {
   assert.equal(analyseSound(wav(0.5, () => 0)).findings.length, 0);
   assert.throws(() => analyseSound(Buffer.from('not audio at all, really not')));
+});
+
+// All trades (founder 11/01): HVAC, electrical and mechanical sounds, not only toilets.
+test('a 60 Hz buzz at a breaker panel is a hum and a hazard; the same hum on a motor is not', () => {
+  const buzz = wav(8, (t, rnd) => Math.sin(2 * Math.PI * 120 * t) * 3000 + rnd() * 30);
+  const panel = analyseSound(buzz, { fixture: 'breaker panel' });
+  const hum = panel.findings.find((f) => f.sound === 'hum');
+  assert.ok(hum, JSON.stringify(panel));
+  assert.equal(hum.hazard, true);
+  assert.equal(hum.source, 'osha-electrical');
+  assert.ok(!kinds(panel).includes('whistle') && !kinds(panel).includes('gurgle'), JSON.stringify(panel));
+  const pump = analyseSound(buzz, { fixture: 'pump' }).findings.find((f) => f.sound === 'hum');
+  assert.ok(pump && !pump.hazard);
+});
+
+test('many rapid knocks are a rattle, not a bang', () => {
+  const r = analyseSound(wav(8, (t, rnd) => rnd() * 20 + (t % 0.3 < 0.01 ? rnd() * 20000 : 0)), { fixture: 'ac' });
+  assert.ok(kinds(r).includes('rattle'), JSON.stringify(r));
+  assert.ok(!kinds(r).includes('bang'));
+});
+
+test('equipment words map to the right row, and every row explains every sound', () => {
+  assert.equal(equipmentKind('rooftop unit'), 'ac');
+  assert.equal(equipmentKind('heat pump'), 'ac');
+  assert.equal(equipmentKind('breaker panel'), 'electrical');
+  assert.equal(equipmentKind('water heater'), 'water_heater');
+  assert.equal(equipmentKind('boiler'), 'boiler');
+  assert.equal(equipmentKind('sump pump'), 'motor');
+  assert.equal(equipmentKind('something odd'), 'motor');
+  for (const [kind, row] of Object.entries(SOUND_MEANINGS)) {
+    for (const sound of ['steady_flow', 'whistle', 'gurgle', 'bang', 'hum', 'rattle', 'quiet']) assert.ok(row[sound]?.meaning, `${kind}.${sound}`);
+  }
 });

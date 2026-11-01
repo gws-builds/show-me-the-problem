@@ -8,13 +8,13 @@ window.Voice = (() => {
   let ctx = null; let node = null; let ws = null; let callId = null; let camToken = null; let fillerTimer = null; let lastSays = 0;
   let ptt = null; // { chunks: [] } while holding to talk
   let rec = null; // { chunks: [] } while listening to the equipment
-  // Founder 10/30: never dead air, but no fixed script either: a short, varied acknowledgement only when
-  // the answer is slow (1.2 s), a "one moment" kind of line if it is slower, a last reassurance after
-  // 11 s. Never the same line twice in a row. Any real line cuts a filler off (Speech.say stops
-  // whatever is playing), so an early answer is never held back.
+  // Founder 11/01: an acknowledgement the instant the caller stops talking ("On it"), then "just a few
+  // moments longer" if the answer is still coming at ~5 s, and a last reassurance after 11 s. The lines
+  // are made once when the call starts and kept on the phone, so they play with no wait. Never the same
+  // line twice in a row; any real line cuts a filler off (Speech.say stops whatever is playing).
   const FILLERS = {
-    en: [[1200, ['Sure.', 'Okay.', 'Got it.', 'Let me look.', 'On it.', 'Let me check.']], [5000, ['One moment.', 'Just a second.', 'Give me a moment.', 'Still looking.']], [11000, ['Almost there.', 'Nearly done, thanks for waiting.', 'Still on it, almost there.']]],
-    es: [[1200, ['Claro.', 'Vale.', 'Entendido.', 'Déjame ver.', 'Ya voy.']], [5000, ['Un momento.', 'Un segundo.', 'Sigo mirando.']], [11000, ['Casi listo.', 'Ya casi, gracias por esperar.']]],
+    en: [[150, ['On it.', 'Got it.', 'Okay, one sec.', 'Let me look.', 'Sure, checking.']], [5000, ['Just a few moments longer.', 'Almost there, a few more seconds.', 'Still checking, just a moment longer.']], [11000, ['Nearly done, thanks for waiting.', 'Still on it, almost there.']]],
+    es: [[150, ['Enseguida.', 'Entendido.', 'Déjame ver.', 'Ya voy.']], [5000, ['Unos momentos más.', 'Casi listo, unos segundos más.']], [11000, ['Ya casi, gracias por esperar.']]],
   };
   let lastFiller = '';
   const pick = (lines) => { const pool = lines.filter((l) => l !== lastFiller); lastFiller = pool[Math.floor(Math.random() * pool.length)]; return lastFiller; };
@@ -47,6 +47,8 @@ window.Voice = (() => {
     enablePtt();
     enableListen();
     connect();
+    // The acknowledgements are made once and kept on the phone (camera.js), so "On it" has no wait.
+    window.Speech?.prefetch?.(FILLERS[window.Speech?.lang === 'es' ? 'es' : 'en'].flatMap(([, lines]) => lines));
   }
 
   function connect() {
@@ -71,6 +73,8 @@ window.Voice = (() => {
       else if (m.type === 'closed') { state('voice off: hold to talk'); }
       // The agent's line, pushed the moment it exists (camera.js speaks it; the poll is the fallback).
       else if (m.type === 'say') { window.dispatchEvent(new CustomEvent('agent:say', { detail: m })); }
+      // The AI asked to hear the equipment (listen_to_equipment): record by itself, no button.
+      else if (m.type === 'listen') { void listenNow(); }
     };
     // Reconnect once after a drop (the service ends idle or long sessions); hold-to-talk works meanwhile.
     // Self-repair: reconnect after every drop (1.5 s, then slower), hold-to-talk works meanwhile.
@@ -107,21 +111,26 @@ window.Voice = (() => {
     return wav;
   }
 
-  // Listen: 8 s of the equipment itself (the tank refilling), measured on the server (sound.js).
-  // The voice stream pauses meanwhile so running water is not sent as words.
+  // Listen: 8 s of the equipment itself, measured on the server (sound.js). Started by the AI on its own
+  // (a 'listen' message) or by the button. The voice stream pauses meanwhile so the noise is not sent as words.
+  async function listenNow() {
+    const b = $('listen');
+    if (rec || ptt) return;
+    // The AI's own line ("hold your phone near it") plays first, then recording starts.
+    for (let i = 0; i < 40 && window.Speech?.speaking && !window.Speech?.isFiller; i++) await new Promise((r) => setTimeout(r, 100));
+    window.Speech?.stop(); rec = { chunks: [] }; if (b) b.disabled = true;
+    for (let s = 8; s > 0; s--) { if (b) b.textContent = `Listening… ${s}`; state(`listening to the equipment… ${s}`); await new Promise((r) => setTimeout(r, 1000)); }
+    const wav = toWav(rec.chunks); rec = null; if (b) b.textContent = 'Checking the sound…'; state('listening (hands-free)');
+    try {
+      // Still answering the last thing said? Try again shortly (409), at most three times.
+      let r; for (let i = 0; i < 4; i++) { r = await fetch(`/api/calls/${callId}/listen`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'x-cam-token': camToken }, body: wav.buffer }); if (r.status !== 409) break; await new Promise((ok) => setTimeout(ok, 1500)); }
+      const j = await r.json(); $('heard').textContent = j.findings?.length ? `Heard: ${j.findings.map((f) => f.detail).join('; ')}` : (j.error || 'Could not make out the sound.');
+    } catch { $('heard').textContent = 'Could not send that. Try again.'; }
+    if (b) { b.textContent = 'Listen to it'; b.disabled = false; }
+  }
   function enableListen() {
     const b = $('listen'); if (!b) return; b.disabled = false;
-    b.onclick = async () => {
-      if (rec || ptt) return;
-      window.Speech?.stop(); rec = { chunks: [] }; b.disabled = true;
-      for (let s = 8; s > 0; s--) { b.textContent = `Listening… ${s}`; await new Promise((r) => setTimeout(r, 1000)); }
-      const wav = toWav(rec.chunks); rec = null; b.textContent = 'Checking the sound…';
-      try {
-        const r = await fetch(`/api/calls/${callId}/listen`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', 'x-cam-token': camToken }, body: wav.buffer });
-        const j = await r.json(); $('heard').textContent = j.findings?.length ? `Heard: ${j.findings.map((f) => f.detail).join('; ')}` : (j.error || 'Could not make out the sound.');
-      } catch { $('heard').textContent = 'Could not send that. Try again.'; }
-      b.textContent = 'Listen to it'; b.disabled = false;
-    };
+    b.onclick = () => void listenNow();
   }
 
   // Push-to-talk fallback: hold the button, release to send one WAV to /speech.

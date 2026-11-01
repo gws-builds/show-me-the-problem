@@ -17,7 +17,7 @@ const WAV = (() => { const b = Buffer.alloc(44 + 32000); b.write('RIFF', 0); b.w
 let HAZARD_SCAN = () => '{"findings":[]}';
 const setHazardScan = (fn) => { HAZARD_SCAN = fn; };
 
-function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock, glimmer = null, sms = null } = {}) {
+function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips', spent = 0, clock, glimmer = null, sms = null, onListen = null } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-calls-'));
   const file = path.join(dir, 'ledger.json');
   if (spent) fs.writeFileSync(file, JSON.stringify({ spentUsd: spent, calls: 0 }));
@@ -35,7 +35,7 @@ function setup({ agent = [], sam = () => 1, heard = 'My water heater valve drips
     return new Response(JSON.stringify({ output, usage: { input_tokens: 1000, output_tokens: 40 } }));
   };
   let t = 1_000_000; const now = clock ?? (() => (t += 2000));
-  const calls = createCalls({ ledger, priceList: PRICES, now, glimmer, sms, later: (fn) => fn(), makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
+  const calls = createCalls({ ledger, priceList: PRICES, now, glimmer, sms, onListen, later: (fn) => fn(), makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
   return { calls, counts, ledger };
 }
 
@@ -289,6 +289,29 @@ test('listen: only the caller can send a clip, it is measured in code, cited as 
   assert.ok(view.events.some((e) => e.kind === 'sound'));
   for (let i = 0; i < LIMITS.listens - 1; i++) await calls.listen(c.id, c.camToken, hiss);
   await assert.rejects(calls.listen(c.id, c.camToken, hiss), { code: 'RATE_LIMIT' });
+});
+
+// Founder 11/01: the AI starts listening by itself, for any trade; a dangerous sound is warned about in code.
+test('listen_to_equipment: the AI asks, the phone is told to record, and a buzzing panel is a hazard said in code', async () => {
+  const asked = [];
+  const { calls } = setup({ agent: [['listen_to_equipment', { equipment: 'electrical', instruction: 'Hold your phone near the panel.' }]], onListen: (c, kind) => asked.push(kind) });
+  const c = calls.create({ ip: '1.1.9.8' });
+  // No live microphone: the tool says so instead of pretending.
+  await calls.text(c.id, c.camToken, 'My breaker panel is buzzing');
+  assert.equal(asked.length, 0);
+  // With the microphone live, the same request reaches the phone.
+  const d = setup({ agent: [['listen_to_equipment', { equipment: 'electrical', instruction: 'Hold your phone near the panel.' }]], onListen: (x, kind) => asked.push(kind) });
+  const c2 = d.calls.create({ ip: '1.1.9.9' });
+  d.calls.setVoice(c2.id, { end() {}, closed: false });
+  await d.calls.text(c2.id, c2.camToken, 'My breaker panel is buzzing');
+  assert.deepEqual(asked, ['electrical']);
+  assert.ok(d.calls.view(c2.id).says.some((x) => /near the panel/.test(x.text)));
+  const n = 16000 * 8; const buzz = Buffer.alloc(44 + n * 2); WAV.copy(buzz, 0, 0, 44); buzz.writeUInt32LE(36 + n * 2, 4); buzz.writeUInt16LE(2, 32); buzz.writeUInt16LE(16, 34); buzz.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buzz.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 120 * i / 16000) * 3000), 44 + i * 2);
+  const r = await d.calls.listen(c2.id, c2.camToken, buzz);
+  assert.equal(r.findings[0].sound, 'hum');
+  assert.ok(d.calls.view(c2.id).says.some((x) => /keep away/i.test(x.text)), 'hazard warning said in code');
+  assert.ok(d.calls.view(c2.id).events.some((e) => e.name === 'sound hazard'));
 });
 
 test("confirmation text: the caller's own mobile only, sent once on the owner's Send, delivery reported honestly", async () => {

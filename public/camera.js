@@ -36,10 +36,23 @@ const Speech = {
     Speech.queue.push(text); if (Speech.queue.length > 2) Speech.queue.shift();
   },
   next() { const t = Speech.queue.shift(); if (t) Speech.say(t); },
+  // Short lines made once and kept as audio on the phone (the acknowledgements in voice.js).
+  clips: new Map(),
+  async prefetch(texts) {
+    for (const t of texts) {
+      if (Speech.clips.has(t)) continue;
+      try { const r = await api('/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }), signal: AbortSignal.timeout(9000) }); if (r.ok) Speech.clips.set(t, URL.createObjectURL(await r.blob())); } catch { /* made on demand instead */ }
+    }
+  },
   async say(text, { filler = false } = {}) {
     const n = ++sayN; Speech.stop(); Speech.speaking = true; Speech.current = text; Speech.isFiller = filler;
     // A real line ends any waiting lines still scheduled (voice.js).
     if (!filler) window.dispatchEvent(new Event('speech:real'));
+    const kept = Speech.clips.get(text);
+    if (kept) {
+      player.onended = player.onerror = () => { if (n === sayN) { Speech.speaking = false; Speech.next(); } };
+      player.src = kept; try { await player.play(); return; } catch { /* fall through */ }
+    }
     if (Speech.natural) {
       try {
         // Never more than 9 s waiting for the natural voice; the browser voice takes over (red team 10/30).

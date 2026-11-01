@@ -49,6 +49,8 @@ const calls = createCalls({
     // The natural voice is made now and kept, so the phone's /say request is served from memory.
     if (tts.on) void tts.speak(c.id, entry.text, c.session.lang?.() ?? 'en').catch(() => null);
   },
+  // listen_to_equipment: the phone records 8 s of the equipment by itself.
+  onListen: (c, equipment) => { const push = sockets.get(c.id); if (!push) throw new Error('no voice socket'); push({ type: 'listen', equipment }); },
   makeClient: (live) => createClient({ ledger, live }),
   // A finished call is kept as a replay for the console: events and spoken lines only, never frames or audio.
   onEnd: (c) => {
