@@ -37,6 +37,11 @@ const ledger = createLedger(path.join(DATA, 'ledger.json'), {
 // A fresh access code every start, stored for the session script; never printed here. The hosted judge
 // copy sets ACCESS_CODE (Secret Manager) so its link survives restarts and cold starts (red team 10/31).
 const FIXED_CODE = String(process.env.ACCESS_CODE ?? '');
+// A set code must be one the /k/<code> link can carry; otherwise no judge link could ever open (red team #8 L4).
+if (FIXED_CODE && !/^[a-z0-9-]{12,64}$/.test(FIXED_CODE)) {
+  console.error('ACCESS_CODE must be 12-64 characters of a-z, 0-9 and "-". Not starting.');
+  process.exit(1);
+}
 const gate = createGate({ code: FIXED_CODE.length >= 12 ? FIXED_CODE : writeCode(path.join(DATA, 'access_code')) });
 setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
@@ -155,6 +160,8 @@ const HEADERS = {
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
   'Cache-Control': 'no-store',
+  // Browsers honour this only on an https response, so plain-http localhost is unaffected (red team #7 L8).
+  'Strict-Transport-Security': 'max-age=31536000',
 };
 
 const send = (res, status, body, type = 'application/json', extra = {}) => {

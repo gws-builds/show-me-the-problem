@@ -9,21 +9,43 @@ import { timingSafeEqual } from 'node:crypto';
 const AMOUNT =
   /[$€£¥]\s*\d|\b\d[\d,.]*\s*(dollars?|bucks|usd|eur(?:os?)?|d[oó]lares)\b|\bfree (?:of charge|visit|call|quote|inspection|estimate)\b|\bno (?:charge|cost)\b|\bcosts? nothing\b|\bgratis\b|\b\d{1,3}(?:,\d{3})+\b/i;
 // A price said in words gets past a digit check (red team #6 B-6: "two hundred bucks", "one fifty for the
-// visit", "that is 150"). A sentence is priced when it has a number (in words, or a bare 2-4 digit figure that
-// is not a time, a year or a measurement) together with a money word, or a number followed by "for the visit/job".
-// Red team #7 M6 added the words around a price ("the visit is 89", "around 89 total", "normally 89 but for
-// you 1"), Spanish tens, other currencies and "free visit".
-const NUM_WORD = String.raw`(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)`;
-const BARE_NUM = String.raw`(?<!\bto\s)\b(?!(?:19|20)\d{2}\b)\d{2,4}\b(?![\s-]*(?:to\s+\d|am|pm|a\.m|p\.m|:|%|°|degrees?|seconds?|secs?|minutes?|mins?|hours?|days?|weeks?|months?|years?|a[nñ]os|gallons?|gal|litres?|liters?|psi|amps?|volts?|watts?|btu|kw|lbs?|feet|ft|foot|inch(?:es)?|in\b|cm|mm|metres?|meters?))`;
-const MONEY_WORD =
-  /\b(?:price[sd]?|cost[s]?|charges?|fees?|run(?:s)? (?:you|about|around)|bucks|dollars?|quote[sd]?|pay|visit|total|bill|parts|labou?r|flat|rate|about|around|roughly|near|usually|normally|typically|for you|precio|cuesta|cobra|cobramos|d[oó]lares|son)\b/i;
-const NUMBER = new RegExp(`\\b${NUM_WORD}\\b|${BARE_NUM}`, 'i');
-const FOR_THE_JOB = new RegExp(
-  `(?:\\b${NUM_WORD}\\b(?:[\\s-]+${NUM_WORD}\\b)*|\\b\\d{2,5}\\b)\\s+for (?:the|your|this|that) [a-z]`,
+// visit", "that is 150"). Red team #8 H1: the first version (RT7 M6) also treated "about", "around", "near"
+// and every number word as money, so "hold the phone about two feet away" and a boiler-tour hint were
+// replaced. Now:
+//   - a strong money word (price, cost, fee, bucks, quote...) with any number that is not a measurement;
+//   - a soft word (visit, about, usually, just, would be...) only with a figure that looks like an amount:
+//     2-4 digits, a decimal, or a compound number in words ("eighty nine", "a hundred and fifty");
+//   - always: a currency sign or name, "89.99", "for 89.", "89 plus tax", "1k", "<n> for the <job>".
+// Measurements are never amounts: a number followed by a unit (feet, years, gallons, steps, turns...).
+const ONES = String.raw`(?:one|two|three|four|five|six|seven|eight|nine|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)`;
+const TENS = String.raw`(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)`;
+const NUM_WORD = String.raw`(?:${ONES}|ten|eleven|twelve|fifteen|${TENS}|hundred|thousand|grand|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)`;
+const UNIT = String.raw`(?:to\s+\d|am\b|pm\b|a\.m|p\.m|:|%|°|degrees?|seconds?|secs?|minutes?|mins?|hours?|days?|weeks?|months?|years?|a[nñ]os|gallons?|gal\b|litres?|liters?|psi|amps?|volts?|watts?|btu|kw\b|lbs?|pounds?|feet|ft\b|foot|inch(?:es)?|in\b|cm\b|mm\b|metres?|meters?|steps?|turns?|quarters?|sides?|things?|times?|parts?|pieces?|screws?|wires?|pipes?|valves?|breakers?|of\b|or\b|more\b|moments?|ways?|people|kids?)`;
+const NOT_UNIT = String.raw`(?![\s-]*(?:and\s+\w+[\s-]+)?${UNIT})`;
+const BARE_NUM = String.raw`(?<!\bto\s)\b(?!(?:19|20)\d{2}\b)\d{2,4}\b${NOT_UNIT}`;
+const DECIMAL = String.raw`\b\d+\.\d{2}\b${NOT_UNIT}`;
+const WORD_AMOUNT = String.raw`(?:\b(?:a\s+|one\s+)?(?:hundred|thousand|grand|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)\b|\b${TENS}[\s-]+(?:y\s+)?${ONES}\b|\b${ONES}\s+${TENS}\b)${NOT_UNIT}`;
+const STRONG =
+  /\b(?:price[sd]?|cost[s]?|charge[sd]?|fees?|bucks|dollars?|quote[sd]?|pay(?:ing)? (?:about|around|just|only|\$|\d)|bill|total|rate|labou?r|precio|cuesta|cobra|cobramos|d[oó]lares)\b/i;
+const SOFT =
+  /\b(?:visit|about|around|roughly|near|usually|normally|typically|for you|son|flat|would be|comes to|runs|just|only|under|over|vale|give or take|including|includes)\b/i;
+const ANY_NUMBER = new RegExp(`\\b${NUM_WORD}\\b${NOT_UNIT}|${BARE_NUM}|${DECIMAL}`, 'i');
+const AMOUNT_LIKE = new RegExp(`${BARE_NUM}|${DECIMAL}|${WORD_AMOUNT}`, 'i');
+const ALWAYS = new RegExp(
+  [
+    DECIMAL,
+    String.raw`\bfor\s+(?:just\s+|only\s+)?\d{2,5}(?:\.\d{2})?(?=\s*(?:[.!?,;]|$|and\b|plus\b|total\b|flat\b))`,
+    String.raw`\bplus (?:tax|hst|gst|vat)\b`,
+    String.raw`\b\d+(?:\.\d+)?k\b`,
+    `(?:\\b${NUM_WORD}\\b(?:[\\s-]+${NUM_WORD}\\b)*|\\b\\d{2,5}\\b)\\s+for (?:the|your|this|that) [a-z]`,
+  ].join('|'),
   'i',
 );
 const priced = (sentence) =>
-  AMOUNT.test(sentence) || FOR_THE_JOB.test(sentence) || (MONEY_WORD.test(sentence) && NUMBER.test(sentence));
+  AMOUNT.test(sentence) ||
+  ALWAYS.test(sentence) ||
+  (STRONG.test(sentence) && ANY_NUMBER.test(sentence)) ||
+  (SOFT.test(sentence) && AMOUNT_LIKE.test(sentence));
 export const NO_PRICE_LINE = "The price comes only from the owner's list, once I have seen the problem.";
 export function noPrice(text) {
   const parts = String(text ?? '').split(/(?<=[.!?])\s+/);

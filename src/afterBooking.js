@@ -148,15 +148,19 @@ export async function draftFollowUp(
     .slice(-60)
     .map(({ id, kind, claim, frame, support }) => ({ id, kind, claim, frame, support }));
   const { quote, ...rest } = workOrder;
+  const input = () =>
+    JSON.stringify({ workOrder: { ...rest, quote: quote ? { label: quote.label } : null }, evidence: ledger });
+  // Too long: drop evidence until it fits, so Glimmer always gets valid JSON (red team #7 L18). Background
+  // first (tour notes, manual excerpts), oldest first; the outlines, observations and the caller's words go
+  // last (red team #8 L5). The final slice only guards a work order that is itself too long.
+  const background = new Set(['tour', 'reference', 'kb_ref']);
+  const dropOne = () => {
+    const i = ledger.findIndex((e) => background.has(e.kind));
+    ledger.splice(i >= 0 ? i : 0, 1);
+  };
+  while (ledger.length && input().length > 20000) dropOne();
   const t0 = now();
-  const raw = await glimmer.draft(
-    JSON.stringify({ workOrder: { ...rest, quote: quote ? { label: quote.label } : null }, evidence: ledger }).slice(
-      0,
-      20000,
-    ),
-    frameDataUrl,
-    { lang },
-  );
+  const raw = await glimmer.draft(input().slice(0, 20000), frameDataUrl, { lang });
   const ms = now() - t0;
   return {
     ...checkFollowUp(raw, evidence, workOrder.slot?.label, lang),

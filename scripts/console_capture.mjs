@@ -3,15 +3,17 @@
 // sees renders the console page, Chrome's screencast hands us its frames, and
 // ffmpeg writes them at a steady 15 fps. No window, no screen-recording
 // permission, nothing else on the Mac is captured.
-//   node scripts/console_capture.mjs <url> <out.mp4>     (stop with TERM or INT)
+//   CAPTURE_URL=<url> node scripts/console_capture.mjs <out.mp4>     (stop with TERM or INT)
+// The URL carries the access code, so it comes in the environment, not argv where `ps` shows it.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const [url, out] = process.argv.slice(2);
+const url = process.env.CAPTURE_URL;
+const [out] = process.argv.slice(2);
 if (!url || !out) {
-  console.error('usage: console_capture.mjs <url> <out.mp4>');
+  console.error('usage: CAPTURE_URL=<url> console_capture.mjs <out.mp4>');
   process.exit(2);
 }
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

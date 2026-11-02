@@ -164,7 +164,7 @@ export function createSession({ now = () => Date.now() } = {}) {
     setBoxes(p, b, at, meta = {}) {
       part = p;
       boxes = b;
-      locateMeta = meta;
+      locateMeta = { ...meta, at: now() };
       guidance = {
         ...guide(b[0]?.geo ?? null, { prev: guidance, luma: meta.luma ?? null }),
         frame: meta.frameN ?? null,

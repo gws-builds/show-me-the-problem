@@ -22,10 +22,19 @@ const words = (s) =>
 export function isEcho(heard, agentLines) {
   const w = words(heard);
   if (w.length < 2) return w.length === 0 || agentLines.some((l) => words(l).includes(w[0]) && words(l).length < 4);
+  // In the agent's word order, not just the same words: an echo replays the line, a caller rewords it.
   return agentLines.some((line) => {
-    const set = new Set(words(line));
-    if (!set.size) return false;
-    return w.filter((x) => set.has(x)).length / w.length >= 0.7;
+    const lw = words(line);
+    let i = 0;
+    let hit = 0;
+    for (const x of w) {
+      const j = lw.indexOf(x, i);
+      if (j >= 0) {
+        hit++;
+        i = j + 1;
+      }
+    }
+    return lw.length > 0 && hit / w.length >= 0.7;
   });
 }
 
@@ -58,6 +67,11 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
   let playing = false;
   let playedUntil = 0;
   let echoPossible = true; // until the phone reports playback, keep the word check
+  // A short phrase is echo only when it starts right after the phone starts or stops talking. Later, a
+  // caller cutting in with the agent's own words ("the water heater") is a barge-in (red team #7 L14).
+  let echoOnset = true;
+  let playStartedAt = 0;
+  const ECHO_ONSET_MS = 1500;
   let reported = false;
   const ECHO_TAIL_MS = 1200;
   const queue = [];
@@ -98,7 +112,9 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       return;
     }
     if (m.type === 'speechStart') {
-      echoPossible = !reported || playing || now() - playedUntil < ECHO_TAIL_MS;
+      const t = now();
+      echoPossible = !reported || playing || t - playedUntil < ECHO_TAIL_MS;
+      echoOnset = !reported || (playing ? t - playStartedAt < ECHO_ONSET_MS : t - playedUntil < ECHO_TAIL_MS);
       return send({ type: 'speechStart' });
     }
     if (m.type === 'transcript') return send({ type: 'partial', text: String(m.transcript ?? '').slice(0, 300) });
@@ -117,7 +133,8 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       // The phone's own waiting lines ("Okay, one sec.") can leak back too (red team #5 S4); only a
       // multi-word match counts, so a caller's own one-word "okay" is never dropped.
       const fillerEcho = text.split(/\s+/).length >= 2 && isEcho(text, WAITING_LINES);
-      if (echoPossible && (isEcho(text, agentLines) || fillerEcho)) {
+      const short = text.split(/\s+/).length < 4;
+      if (echoPossible && (!short || echoOnset) && (isEcho(text, agentLines) || fillerEcho)) {
         calls.logEvent(callId, { kind: 'echo_dropped', text });
         return send({ type: 'ignored', text });
       }
@@ -177,6 +194,7 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
     playback(on) {
       reported = true;
       if (playing && !on) playedUntil = now();
+      if (!playing && on) playStartedAt = now();
       playing = Boolean(on);
     },
     /** Half-close: no more audio, but keep reading until the service sends its last turn and closes. */

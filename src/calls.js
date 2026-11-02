@@ -8,126 +8,23 @@
 // - Caller words are checked for hazards in CODE before the model sees them:
 //   a hazard ends quoting at once, pages the owner and blocks booking.
 // - Prices only come from the verifier; bookings only from the owner's tap.
-import { randomBytes, randomInt } from 'node:crypto';
-
-import { draftFollowUp } from './afterBooking.js';
 import { createSession, callerTurn, MAX_TURNS } from './agent.js';
 import { PER_RUN_USD, STOP_CODES, isStop } from './budget.js';
-import { workOrder } from './evidence.js';
-import { bookingIcs } from './ics.js';
 import { safeEqual } from './filters.js';
 import { guide, DARK_LUMA } from './guidance.js';
-import { scanFrame, severityOf } from './hazards.js';
 import { toLang } from './i18n.js';
 import { guessPart, speculate } from './locate.js';
-import { maskGeometry } from './mask.js';
-import { reviewWorkOrder } from './review.js';
-import { normaliseMobile } from './sms.js';
-import { analyseSound, equipmentKind, EQUIPMENT_KINDS } from './sound.js';
 import { runTool } from './tools.js';
-import { createTour, tourStep, openLine, tourView, tourMemo, TOUR } from './tour.js';
+import { createTour, openLine, tourMemo, TOUR } from './tour.js';
 import { sentences } from './tts.js';
 import { hazardIn } from './verifier.js';
+import { createBooking } from './calls/booking.js';
+import { createCameraLoops } from './calls/camera.js';
+import { createListen } from './calls/listen.js';
+import { LIMITS, SPOKEN_CUES, CallError, speakMs, newId, nextSlots } from './calls/shared.js';
+import { viewOf } from './calls/view.js';
 
-// The fixed lines the phone may voice besides the agent's own: the acknowledgements public/voice.js plays
-// while the agent works (keep the two lists the same) and the recording cues. Listed so /say serves them
-// in the natural voice instead of the browser's.
-export const WAITING_LINES = [
-  'On it.',
-  'Got it.',
-  'Okay, one sec.',
-  'Let me look.',
-  'Sure, checking.',
-  'Just a few moments longer.',
-  'Almost there, a few more seconds.',
-  'Still checking, just a moment longer.',
-  'Nearly done, thanks for waiting.',
-  'Still on it, almost there.',
-  'Enseguida.',
-  'Entendido.',
-  'Déjame ver.',
-  'Ya voy.',
-  'Unos momentos más.',
-  'Casi listo, unos segundos más.',
-  'Ya casi, gracias por esperar.',
-];
-export const SPOKEN_CUES = new Set([
-  'Start your screen recording now.',
-  'You can stop recording now.',
-  'Got it. Hold still.',
-  ...WAITING_LINES,
-]);
-
-export const LIMITS = {
-  frameBytes: 400_000, // data URL length, ~300 KB JPEG
-  wavBytes: 1_300_000, // ~40 s of 16 kHz mono
-  textChars: 300,
-  frameEveryMs: 800,
-  speechEveryMs: 1500,
-  callTtlMs: 15 * 60_000,
-  idleMs: 2 * 60_000, // no frame, speech or tap for this long ends the call
-  maxLiveCalls: 10,
-  callsPerIpPerHour: 6,
-  // Model spend one person (IP) may cause in an hour, so a shared judge code cannot drain the session stop
-  // for everyone (red team #5 S1: about 8 tour calls emptied a $5 stop). Staff calls are not counted.
-  usdPerIpPerHour: 1.5,
-  liveCallsPerIp: 2, // calls open at once from one place, so one person cannot hold the live slots
-  trackChecks: 8, // SAM re-checks while the caller moves the camera (each updates the guidance arrow)
-  trackEveryMs: 1500,
-  hazardScans: 12, // camera hazard scans per call (2 min of camera at one per 10 s) (Spark lists, SAM must agree)
-  scanEveryMs: 10_000,
-  tourSteps: TOUR.steps, // guided-tour steps per call (Spark names parts, SAM outlines them)
-  tourEveryMs: TOUR.everyMs,
-  // Founder 10/30: "it should never fail or freeze". A caller turn that runs longer than this
-  // is answered with a retry line instead of silence; a late result is dropped, never spoken over a newer line.
-  turnMs: 20_000,
-  autoTurns: 10, // agent turns started by the camera or a tap, per call
-  taps: 40, // SAM point prompts from taps, per call
-  listens: 4, // equipment sound clips measured, per call
-  codeTextsPerHour: 20, // one-time-code texts across every call on this server
-  voiceWaitMs: 25_000, // a line said while the agent is still answering waits its turn instead of being refused
-};
-// About 2.6 spoken words a second, so a tour step never talks over the agent's answer.
-export const speakMs = (text) => Math.min(15_000, 1200 + String(text ?? '').split(/\s+/).length * 380);
-
-const newId = (n = 16) => randomBytes(n).toString('hex');
-const article = (noun) => `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
-
-export class CallError extends Error {
-  constructor(message, status = 400, code = 'BAD_REQUEST') {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-// The demo business's next three weekday windows, in its own time zone, with the date and hours a
-// calendar invite needs (src/ics.js).
-const BUSINESS_TZ = process.env.BUSINESS_TZ || 'America/Toronto';
-function nextSlots(now) {
-  const out = [];
-  const d = new Date(now);
-  for (let i = 1; out.length < 3 && i < 10; i++) {
-    const day = new Date(d.getTime() + i * 86_400_000);
-    const weekday = day.toLocaleDateString('en-US', { weekday: 'short', timeZone: BUSINESS_TZ });
-    if (weekday === 'Sat' || weekday === 'Sun') continue;
-    const label = day.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      timeZone: BUSINESS_TZ,
-    });
-    const morning = out.length % 2 === 0;
-    out.push({
-      id: `s${out.length + 1}`,
-      label: `${label}, ${morning ? '9-11 AM' : '1-3 PM'}`,
-      date: day.toLocaleDateString('en-CA', { timeZone: BUSINESS_TZ }),
-      startHour: morning ? 9 : 13,
-      endHour: morning ? 11 : 15,
-    });
-  }
-  return out;
-}
+export { WAITING_LINES, SPOKEN_CUES, LIMITS, speakMs, CallError } from './calls/shared.js';
 
 /**
  * deps: { ledger, makeClient(live) -> Meta client, priceList, now?, onEnd?(call) }
@@ -144,7 +41,6 @@ export function createCalls({
   sms = null,
   later = (fn, ms) => setTimeout(fn, ms).unref?.(),
 }) {
-  const codeTexts = []; // { at, to } of one-time-code texts, for the server-wide cap
   const calls = new Map();
   const ipHits = new Map();
   const ipSpend = new Map(); // ip -> [{ at, usd }] for finished calls, last hour
@@ -184,7 +80,10 @@ export function createCalls({
     c.says.push(entry);
     // Escalation is sticky: a turn already running when a scan or sound check escalated cannot turn the call
     // back into a bookable one (red team #7 M8).
-    if (c.status !== 'escalated') c.status = status ?? c.status;
+    // So are a booking and a decline, except that a hazard after them still escalates (red team #8 M1: a tour
+    // step finishing after the owner's tap turned a booked call back into "waiting_caller").
+    const settled = c.status === 'booked' || c.status === 'declined';
+    if (c.status !== 'escalated' && (!settled || status === 'escalated')) c.status = status ?? c.status;
     // Latency (founder 11/01): the line goes out the moment it exists (voice socket + voice made now),
     // not when the phone next polls and then asks for the audio.
     try {
@@ -206,11 +105,7 @@ export function createCalls({
     }
   }
 
-  const p50 = (a) => {
-    if (!a.length) return null;
-    const s = [...a].sort((x, y) => x - y);
-    return s[Math.floor(s.length / 2)];
-  };
+  // Real time on purpose: it waits on the event loop, and an injected test clock may never advance.
   const waitIdle = async (c, ms) => {
     const end = Date.now() + ms;
     while (c.busy && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
@@ -238,6 +133,20 @@ export function createCalls({
       );
       return;
     }
+    // Code, not the model, decides that a hazard ends the call's quoting. Checked before the "already
+    // settled" and turn-cap answers: gas or smoke after a booking still escalates (red team #8 H2).
+    if (hazardIn(line)) {
+      c.session.heard(line);
+      c.session.checklist.set('words', 'found', null, `Caller said: "${line.slice(0, 120)}"`);
+      const r = await runTool('escalate', { reason: `Caller said: ${line.slice(0, 200)}` }, c.ctx);
+      c.session.log({
+        kind: 'code_gate',
+        name: 'hazard',
+        text: 'Hazard words heard: escalated in code before any model call.',
+      });
+      say(c, r.say, 'escalated');
+      return;
+    }
     if (c.status === 'booked' || c.status === 'declined') {
       say(c, 'This visit is already settled. The office will text you.', c.status);
       return;
@@ -249,18 +158,6 @@ export function createCalls({
     c.turns++;
     c.session.heard(line);
     const cl = c.session.checklist;
-    // Code, not the model, decides that a hazard ends the call's quoting.
-    if (hazardIn(line)) {
-      cl.set('words', 'found', null, `Caller said: "${line.slice(0, 120)}"`);
-      const r = await runTool('escalate', { reason: `Caller said: ${line.slice(0, 200)}` }, c.ctx);
-      c.session.log({
-        kind: 'code_gate',
-        name: 'hazard',
-        text: 'Hazard words heard: escalated in code before any model call.',
-      });
-      say(c, r.say, 'escalated');
-      return;
-    }
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
     // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.
     if (c.tour && !c.tour.done && c.tour.found.size)
@@ -271,9 +168,15 @@ export function createCalls({
     // The first useful words come from code the moment the caller stops, not after Spark's 2-5 s plan
     // (red team #6, latency 1): "Let me look at the water heater." Only for a part we know, with a live
     // frame, outside a tour, on an English call; Spark is told it was said so it does not repeat it.
+    // Only when the caller used the English word: a Spanish "el tubo" on a call not yet marked Spanish must
+    // not get an English line (red team #8 M4).
     const named = guessPart(line);
     const ack =
-      named && !c.tour && c.session.latestFrame() && (c.session.lang?.() ?? 'en') === 'en'
+      named &&
+      line.toLowerCase().includes(named) &&
+      !c.tour &&
+      c.session.latestFrame() &&
+      (c.session.lang?.() ?? 'en') === 'en'
         ? `Let me look at the ${named}.`
         : null;
     if (ack) say(c, ack, c.status);
@@ -368,222 +271,8 @@ export function createCalls({
     }
   }
 
-  // While the agent waits for the caller to move the camera, SAM re-checks the
-  // part on new frames; as soon as it is in view the agent continues by itself.
-  async function track(c) {
-    const t = c.tracking;
-    if (!t?.part || c.busy || t.checks >= LIMITS.trackChecks || now() - t.lastAt < LIMITS.trackEveryMs) return;
-    t.checks++;
-    t.lastAt = now();
-    await exclusive(c, async () => {
-      const r = await runTool('find_part', { part: t.part }, c.ctx).catch((err) => ({
-        output: { error: String(err.message) },
-      }));
-      const good = (r.output?.boxes ?? []).filter((b) => (b.score ?? 1) >= 0.5).length;
-      const g = c.session.guidance();
-      c.session.log({ kind: 'track', part: t.part, check: t.checks, boxes: good, guidance: g?.state ?? null });
-      // Continue once the outline is centred and steady (hold/locked); on the last check, any confident outline will do.
-      const ready = good && (g?.state === 'locked' || g?.state === 'hold' || t.checks >= LIMITS.trackChecks);
-      if (!ready) {
-        if (!good && t.checks >= LIMITS.trackChecks) {
-          c.tracking = null;
-          say(c, 'I still cannot see it. Could you tap it on your screen, or describe what you see?', 'waiting_caller');
-        }
-        return;
-      }
-      c.tracking = null;
-      await autoTurn(
-        c,
-        `[camera] The caller moved the camera. SAM now outlines "${t.part}" (${good} confident object(s), guidance: ${g?.state ?? 'n/a'}). Continue.`,
-      );
-    });
-  }
-
-  // One confirmed camera finding (Spark + SAM agree), from the hazard scan or the tour: checklist,
-  // owner page, spoken line. Escalating ones end quoting; the rest are a warning and the call goes on.
-  async function raise(c, f, n, source) {
-    const sev = severityOf(f);
-    const cl = c.session.checklist;
-    cl.addCheck?.(f.category);
-    const detail = `${f.object}${f.near ? ` near ${f.near}` : ''}: ${f.why} (${source}; SAM outlined it at ${f.score.toFixed(2)})`;
-    cl.set(f.category, sev === 'attention' ? 'attention' : 'found', n, detail, {
-      geo: f.geo ?? null,
-      object: f.object,
-    });
-    if (c.warned.has(f.category)) return;
-    c.warned.add(f.category);
-    if (sev === 'escalate') {
-      await c.ctx.notifyOwner({
-        urgent: true,
-        reason: `Camera hazard (${f.category}): ${f.object} in frame ${n}, confirmed by Spark and SAM.`,
-      });
-      c.session.log({
-        kind: 'code_gate',
-        name: 'camera hazard',
-        text: `${f.category}: ${f.object} seen by Spark and outlined by SAM (${f.score.toFixed(2)}). Escalated in code.`,
-      });
-      say(
-        c,
-        `Stop for a moment: I can see ${article(f.object)} that looks unsafe (${f.why || f.category}). I am getting the owner on this now. Please do not touch it.`,
-        'escalated',
-      );
-      if (c.tour) c.tour.done = true;
-    } else if (sev === 'attention') {
-      await c.ctx.notifyOwner({
-        urgent: false,
-        reason: `Camera note (${f.category}): ${f.object}, frame ${n}. Not connected to power, so not escalated.`,
-      });
-      c.session.log({
-        kind: 'code_gate',
-        name: 'camera attention',
-        text: `${f.object}: bare wire on a cord that is not connected to power. Needs attention, not escalated (knowledge-base threshold).`,
-      });
-      say(
-        c,
-        `I can see bare wire on ${article(f.object)} that does not look plugged in. Please keep it unplugged and don't use it; the technician should replace it.`,
-        c.status,
-      );
-      // The agent hears the code's judgement, so it does not escalate the same sign again without new evidence.
-      note(
-        c,
-        `[camera check, code] ${f.object}: bare wire on a loose cord or strip that is NOT connected to power (frame ${n}). Knowledge-base threshold: needs attention, not an emergency. Do not escalate this sign again unless you see it plugged in, in a wall box or panel, or the caller reports sparks, heat or smoke. Advise not to use it; the technician replaces it.`,
-      );
-    } else {
-      await c.ctx.notifyOwner({
-        urgent: false,
-        reason: `Camera warning (${f.category}): ${f.object}${f.near ? ` near ${f.near}` : ''}, frame ${n}.`,
-      });
-      c.session.log({
-        kind: 'code_gate',
-        name: 'camera warning',
-        text: `${f.object}${f.near ? ` near ${f.near}` : ''}: spoken warning, owner noted. Call continues.`,
-      });
-      say(
-        c,
-        `Before anything else: I can see ${article(f.object)}${f.near ? ` close to the ${f.near}` : ''}. Please move it away from the heat.`,
-        c.status,
-      );
-    }
-  }
-
-  async function scan(c) {
-    const frame = c.session.latestFrame();
-    if (!frame) return;
-    c.scanning = true;
-    c.scans++;
-    c.lastScanAt = now();
-    try {
-      const r = await scanFrame(c.client, frame);
-      const n = c.session.keepFrame(frame.n, frame.dataUrl);
-      const cl = c.session.checklist;
-      for (const id of r.clear) cl.set(id, 'clear', n, 'Nothing seen by Muse Spark in this frame');
-      for (const f of r.findings.filter((x) => x.status !== 'found'))
-        cl.set(
-          f.category,
-          'unconfirmed',
-          n,
-          `Spark saw "${f.object}", SAM could not outline it (${f.score.toFixed(2)}): not escalated`,
-        );
-      c.session.log({
-        kind: 'hazard_scan',
-        frame: n,
-        staged: Boolean(c.staged),
-        clear: r.clear,
-        findings: r.findings.map(({ category, object, near, score, status, where, powered }) => ({
-          category,
-          object,
-          near,
-          where,
-          powered,
-          score: Number(score.toFixed(2)),
-          status,
-        })),
-      });
-      for (const f of r.findings.filter((x) => x.status === 'found'))
-        await raise(c, { ...f, geo: f.record ? maskGeometry(f.record) : null }, n, 'Spark saw it');
-    } catch (err) {
-      c.session.log({ kind: 'error', text: `hazard scan: ${String(err.message).slice(0, 120)}` });
-    } finally {
-      c.scanning = false;
-    }
-  }
-
-  // Guided tour: one step every few seconds while frames arrive. Runs beside the conversation.
-  async function tourTick(c) {
-    const frame = c.session.latestFrame();
-    if (!frame || !c.tour || c.tour.done) return;
-    c.touring = true;
-    c.lastTourAt = now();
-    try {
-      const r = await tourStep(c.client, c.tour, frame);
-      const n = c.session.keepFrame(frame.n, frame.dataUrl);
-      c.session.log({
-        kind: 'tour',
-        frame: n,
-        step: c.tour.step,
-        room: c.tour.room,
-        items: r.items.map(({ id, label, status, evidence, score, note, confirmScore }) => ({
-          id,
-          label,
-          status,
-          evidence,
-          score: score != null ? Number(score.toFixed(2)) : null,
-          confirmScore: confirmScore != null ? Number(confirmScore.toFixed(2)) : null,
-          note,
-        })),
-      });
-      for (const it of r.items.filter((x) => x.status === 'attention' || x.status === 'safety')) {
-        if (!c.session.evidence.list().some((e) => e.kind === 'tour' && e.part === it.id && e.status === it.status))
-          c.session.evidence.add({
-            kind: 'tour',
-            part: it.id,
-            status: it.status,
-            claim: `${it.label}: ${it.status === 'safety' ? 'safety issue' : 'needs attention'}, ${it.evidence}`,
-            frame: n,
-            confidence: it.score ?? 0.5,
-            geo: it.geo ?? null,
-            support: 'Muse Spark on this frame; SAM outline',
-          });
-      }
-      for (const it of [...r.escalate, ...r.warn])
-        await raise(
-          c,
-          {
-            category: it.hazard.category,
-            object: it.label.toLowerCase(),
-            near: '',
-            why: it.evidence,
-            score: it.confirmScore ?? it.score ?? 0,
-            geo: it.geo ?? null,
-          },
-          n,
-          `tour: ${it.hazard.label}`,
-        );
-      if (c.status === 'escalated') return;
-      // A step that finished while the caller was being answered keeps its labels but not its line.
-      const held = !r.done && (c.busy || now() < (c.holdTourUntil ?? 0));
-      if (r.say && !held) {
-        say(c, `${c.tourResume && !r.done ? 'Back to the tour. ' : ''}${r.say}`, r.done ? 'waiting_caller' : 'touring');
-        c.tourResume = false;
-      }
-      if (r.done) {
-        note(c, tourMemo(c.tour));
-        say(c, 'Would you like a price for a visit to look at any of this?', 'waiting_caller');
-        c.session.log({
-          kind: 'tour_done',
-          text: `Tour of the ${c.tour.room.replace('_', ' ')} finished after ${c.tour.step} steps.`,
-        });
-      }
-    } catch (err) {
-      c.session.log({ kind: 'error', text: `tour: ${String(err.message).slice(0, 120)}` });
-      if (isStop(err)) {
-        c.tour.done = true;
-        say(c, 'I have to stop the tour here. The owner will call you back.', 'handoff');
-      }
-    } finally {
-      c.touring = false;
-    }
-  }
+  const { track, scan, tourTick } = createCameraLoops({ now, say, note, autoTurn, exclusive });
+  const listen = createListen({ now, say, exclusive, autoTurn });
 
   function startTour(c, room) {
     if (c.status === 'escalated') return null;
@@ -653,6 +342,8 @@ export function createCalls({
       else ipHits.delete(ip);
     }
   }
+
+  const booking = createBooking({ now, say, mayRaise, glimmer, sms, later });
 
   return {
     sweep,
@@ -805,6 +496,7 @@ export function createCalls({
         !dark &&
         c.tour &&
         !c.tour.done &&
+        !['escalated', 'booked', 'declined', 'handoff'].includes(c.status) &&
         !c.touring &&
         !c.busy &&
         now() >= (c.holdTourUntil ?? 0) &&
@@ -841,85 +533,7 @@ export function createCalls({
 
     /** Listen: a clip of the equipment itself (the tank refilling), measured in code (sound.js). */
     async listen(callId, token, wav) {
-      const c = asCaller(callId, token);
-      if (!Buffer.isBuffer(wav) || wav.length < 1000) throw new CallError('No audio.');
-      if (wav.length > LIMITS.wavBytes) throw new CallError('Keep it under 40 seconds.', 413, 'TOO_LARGE');
-      if (c.busy)
-        throw new CallError('Still thinking about the last thing you said. Tap Listen again in a moment.', 409, 'BUSY');
-      if ((c.listens = (c.listens ?? 0) + 1) > LIMITS.listens)
-        throw new CallError('I have heard enough of it for this call.', 429, 'RATE_LIMIT');
-      let r;
-      // The kind the AI asked for (listen_to_equipment), else the part on camera or the tour's room.
-      // The AI's request counts only while fresh: a request whose recording never arrived is not reused later.
-      const asked = c.listenFor && now() - c.listenFor.at < 60_000 ? c.listenFor.kind : null;
-      const kind = EQUIPMENT_KINDS.includes(asked)
-        ? asked
-        : equipmentKind(
-            `${c.session.lastPart?.() ?? ''} ${c.tour?.room ?? ''}`
-              .replace('electrical_panel', 'electrical panel')
-              .replace('under_sink', 'sink')
-              .replace('boiler_room', 'boiler'),
-          );
-      c.listenFor = null;
-      try {
-        r = analyseSound(wav, { fixture: kind });
-      } catch (err) {
-        throw new CallError(String(err.message));
-      }
-      const added = r.findings.map((f) =>
-        c.session.evidence.add({
-          kind: 'sound',
-          sound: f.sound,
-          claim: `Heard: ${f.detail}. ${f.meaning}`,
-          confidence: Math.min(0.9, 0.5 + f.share / 2),
-          support: `Measured in code from ${r.seconds.toFixed(1)} s of audio${f.source ? `; ${f.source}` : ''}`,
-          frame: null,
-        }),
-      );
-      c.session.log({
-        kind: 'sound',
-        seconds: r.seconds,
-        levelDb: r.levelDb ?? null,
-        findings: r.findings.map(({ sound, share, detail }) => ({ sound, share, detail })),
-        text: r.findings.length
-          ? `Listened ${r.seconds.toFixed(1)} s: ${r.findings.map((f) => f.detail).join('; ')}`
-          : r.note,
-      });
-      if (!added.length) {
-        say(c, r.note ?? 'I could not make out the sound. Hold the phone near it for about 8 seconds.', c.status);
-        return { findings: [] };
-      }
-      // A dangerous sound (buzzing panel, arcing, delayed ignition) is handled in code, never left to the
-      // model: the warning is said, the owner is paged and the call is escalated, so nothing gets booked (red team #5).
-      const danger = r.findings.find((f) => f.hazard);
-      if (danger) {
-        await c.ctx.notifyOwner({
-          urgent: true,
-          reason: `Hazard sound on the ${kind.replace('_', ' ')}: ${danger.detail}. ${danger.meaning}`,
-          transcript: c.session.callerText?.() ?? '',
-        });
-        say(
-          c,
-          `Please keep away from it and don't touch anything. ${danger.meaning} I am getting the owner on this right now.`,
-          'escalated',
-        );
-        // On the safety checklist too, so request_booking's camera-hazard check also refuses (red team #7 M8).
-        c.session.checklist.add('sound', 'Hazard sound (Listen)', 'sound', 'escalate');
-        c.session.checklist.set('sound', 'found', null, `${danger.sound}: ${danger.detail}`);
-        c.session.log({
-          kind: 'code_gate',
-          name: 'sound hazard',
-          text: `Hazard sound (${danger.sound}) on ${kind}: warning said and owner paged in code.`,
-        });
-      } else {
-        await exclusive(c, () =>
-          autoTurn(
-            c,
-            `[microphone] Listened to the ${kind.replace('_', ' ')} for ${r.seconds.toFixed(1)} s, measured in code: ${added.map((e) => `${e.id} ${e.claim}`).join(' | ')}. Use these as evidence (cite the ids) together with what the camera shows, and tell the caller what you heard in one short sentence.`,
-          ),
-        );
-      }
-      return { findings: r.findings.map(({ sound, detail, meaning }) => ({ sound, detail, meaning })) };
+      return listen(asCaller(callId, token), wav);
     },
 
     /** Tap-to-point: the caller taps the part on screen (x, y in 0..1); SAM segments what is under the finger. */
@@ -936,7 +550,7 @@ export function createCalls({
       if (!c.session.latestFrame()) return { ok: true };
       return exclusive(c, async () => {
         const part = c.session.lastPart() || 'part the caller tapped';
-        const r = await runTool('find_part', { part }, c.ctx).catch((err) => ({
+        const r = await runTool('find_part', { part, recheck: true }, c.ctx).catch((err) => ({
           output: { error: String(err.message) },
         }));
         const n = r.output?.boxes?.length ?? 0;
@@ -1065,234 +679,26 @@ export function createCalls({
     },
 
     async decide(callId, token, approve) {
-      const c = asOwner(callId, token);
-      const p = c.session.pendingBooking();
-      if (!p) throw new CallError('Nothing is waiting for approval.', 409, 'NOTHING_PENDING');
-      if (c.status === 'escalated')
-        throw new CallError('This call was escalated as a hazard. Call the customer first.', 409, 'HAZARD');
-      if (c.booking) throw new CallError('Already decided.', 409, 'DECIDED');
-      c.booking = {
-        approved: Boolean(approve),
-        slot: p.slot,
-        brief: p.brief,
-        quote: p.quote,
-        at: now(),
-        workOrder: approve ? workOrder(c.session, { slot: p.slot, quote: p.quote }) : null,
-      };
-      c.session.log({ kind: 'owner_decision', approved: Boolean(approve), slot: p.slot.label });
-      if (!approve) {
-        say(c, 'The office could not take that slot. They will text you another time.', 'declined');
-        return { ok: true };
-      }
-      say(c, `You're booked for ${p.slot.label}. The technician will bring what's in the brief.`, 'booked');
-      // Muse Wonder reviews the approved work order for the technician, beside the booking, never blocking it.
-      c.booking.review = { status: 'running' };
-      // Its own allowance on top of what the call spent, so a long call still gets its plan (red team 10/31); never past MAX_RUN_USD.
-      if (mayRaise(c, c.client.spent() + 0.1)) c.client.setCap(c.client.spent() + 0.1);
-      const t0 = Date.now();
-      const spent0 = c.client.spent?.() ?? null;
-      reviewWorkOrder(c.client, c.booking.workOrder, c.session.evidence.list())
-        .then((r) => {
-          c.booking.review = { status: 'done', ...r };
-          c.session.log({
-            kind: 'wonder_review',
-            steps: r.steps.length,
-            gaps: r.gaps.length,
-            dropped: r.dropped,
-            ms: Date.now() - t0,
-            costUsd: spent0 == null ? null : Math.max(0, c.client.spent() - spent0),
-          });
-        })
-        .catch((err) => {
-          c.booking.review = { status: 'failed' };
-          c.session.log({ kind: 'error', text: `review: ${String(err.message).slice(0, 160)}` });
-        });
-      // Muse Glimmer (open weights, the business's own GPU) drafts the truck list and the customer's
-      // confirmation text; the text waits for the owner's Send. Skipped when no endpoint is configured.
-      if (glimmer) {
-        c.booking.followUp = { status: 'running' };
-        draftFollowUp(
-          glimmer,
-          c.booking.workOrder,
-          c.session.evidence.list(),
-          c.session.latestFrame()?.dataUrl ?? null,
-          { now, lang: c.session.lang?.() ?? 'en' },
-        )
-          .then((r) => {
-            c.booking.followUp = { status: 'draft', ...r };
-            c.session.log({
-              kind: 'glimmer_followup',
-              parts: r.parts.length,
-              dropped: r.dropped,
-              ms: r.ms,
-              costUsd: r.costUsd,
-            });
-          })
-          .catch((err) => {
-            c.booking.followUp = { status: 'failed' };
-            c.session.log({ kind: 'error', text: `follow-up: ${String(err.message).slice(0, 160)}` });
-          });
-      }
-      // The evidence stills are drawn in code from SAM masks (owner page). Muse Image adds a separate,
-      // clearly labelled illustration; it is never used as evidence. Best effort: a failure never blocks the booking.
-      const frame = c.session.latestFrame();
-      const box = c.session.boxes()[0];
-      // In the background, like Wonder and Glimmer: the owner's tap returns at once (red team #3).
-      if (frame && box) {
-        c.client
-          .annotate(
-            frame.dataUrl,
-            `Draw a bright red rectangle around the ${c.session.lastPart()} (pixels x ${box.x1}-${box.x2}, y ${box.y1}-${box.y2}) and a short label "${c.session.lastPart()}". Change nothing else.`,
-          )
-          .then((img) => {
-            c.annotated = img;
-            c.session.log({ kind: 'annotated', ok: Boolean(img) });
-          })
-          .catch((err) => c.session.log({ kind: 'error', text: `annotate: ${String(err.message).slice(0, 160)}` }));
-      }
-      return { ok: true };
+      return booking.decide(asOwner(callId, token), approve);
     },
-
     /**
      * The caller's own mobile for the confirmation text, proved with a one-time code (red team #4:
-     * whoever holds the call link could otherwise have the business line text anyone). Three numbers
-     * per call at most; no change once the owner has decided the booking.
+     * whoever holds the call link could otherwise have the business line text anyone).
      */
     async setMobile(callId, token, raw) {
-      const c = asCaller(callId, token);
-      if (c.booking) throw new CallError('The booking is decided; the number cannot change now.', 409, 'LOCKED');
-      if (!sms) throw new CallError('Texting is off on this demo; the confirmation shows on screen.', 409, 'NO_SMS');
-      const m = normaliseMobile(raw);
-      if (!m) throw new CallError('Enter a US or Canadian mobile number, like 416 555 0100.');
-      if ((c.mobileTries = (c.mobileTries ?? 0) + 1) > 3)
-        throw new CallError('That is enough numbers for this call.', 429, 'RATE_LIMIT');
-      // Across all calls too (red team #5: 18 numbers an hour from one address): 20 code texts an hour
-      // on this server and 3 a day to any one number.
-      const t = now();
-      codeTexts.splice(0, codeTexts.length, ...codeTexts.filter((x) => t - x.at < 86_400_000));
-      if (
-        codeTexts.filter((x) => t - x.at < 3_600_000).length >= LIMITS.codeTextsPerHour ||
-        codeTexts.filter((x) => x.to === m).length >= 3
-      )
-        throw new CallError('Too many codes sent right now. Try again later.', 429, 'RATE_LIMIT');
-      codeTexts.push({ at: t, to: m });
-      const code = String(randomInt(100000, 1000000));
-      c.pendingMobile = { number: m, code, tries: 0 };
-      c.mobile = null;
-      await sms
-        .send(m, `Your code for the repair call: ${code}. If you did not ask for this, ignore it.`)
-        .catch((err) => {
-          throw new CallError(`Could not text that number: ${String(err.message).slice(0, 120)}`, 502, 'SMS_FAILED');
-        });
-      c.session.log({ kind: 'mobile', text: `Code texted to the number ending ${m.slice(-4)}.` });
-      return { ok: true, sent: true, ending: m.slice(-4) };
+      return booking.setMobile(asCaller(callId, token), raw);
     },
-
-    /** The code from that text: only then is the number used for the confirmation. */
     verifyMobile(callId, token, code) {
-      const c = asCaller(callId, token);
-      const p = c.pendingMobile;
-      if (!p || c.booking) throw new CallError('No code is waiting.', 409, 'NO_CODE');
-      if (++p.tries > 5) {
-        c.pendingMobile = null;
-        throw new CallError('Too many tries. Enter the number again.', 429, 'RATE_LIMIT');
-      }
-      if (!safeEqual(String(code ?? '').replace(/\D/g, ''), p.code)) throw new CallError('That code does not match.');
-      c.mobile = p.number;
-      c.pendingMobile = null;
-      c.session.log({ kind: 'mobile', text: `Caller confirmed the mobile ending ${c.mobile.slice(-4)}.` });
-      return { ok: true, ending: c.mobile.slice(-4) };
+      return booking.verifyMobile(asCaller(callId, token), code);
     },
-
     /** The owner sends (or drops) Glimmer's confirmation text. Only a finished draft, only once. */
     async sendConfirmation(callId, token, send) {
-      const c = asOwner(callId, token);
-      const f = c.booking?.followUp;
-      if (!f || f.status !== 'draft') throw new CallError('No confirmation is waiting.', 409, 'NO_DRAFT');
-      f.status = send ? 'sent' : 'dropped';
-      if (!send) {
-        c.session.log({ kind: 'confirmation', sent: false });
-        return { ok: true };
-      }
-      say(c, f.confirmation, c.status);
-      // A real text from the business line when the caller gave a mobile (one per call: the draft is consumed above).
-      if (c.mobile && sms) {
-        f.text = { to: `…${c.mobile.slice(-4)}`, state: 'sending' };
-        try {
-          const { id } = await sms.send(c.mobile, f.confirmation);
-          f.text.state = 'on its way';
-          if (id)
-            later(async () => {
-              const st = await sms.status(id).catch(() => null);
-              if (st) {
-                f.text.state = st.state;
-                f.text.reason = st.reason ?? null;
-                c.session.log({ kind: 'confirmation_text', state: st.state, reason: st.reason ?? null });
-              }
-            }, 8000);
-        } catch (err) {
-          f.text.state = 'failed';
-          f.text.reason = String(err.message).slice(0, 160);
-        }
-      }
-      c.session.log({
-        kind: 'confirmation',
-        sent: true,
-        texted: f.text?.state ?? 'no mobile given',
-        reason: f.text?.reason ?? null,
-      });
-      return { ok: true, text: f.text ?? null };
+      return booking.sendConfirmation(asOwner(callId, token), send);
     },
 
     /** Read-only view for the console and the caller's page. Never includes tokens or raw frames. */
     view(callId) {
-      const c = get(callId);
-      const p = c.session.pendingBooking();
-      const g0 = c.session.guidance();
-      const g = g0?.words ? { ...g0, words: toLang(g0.words, c.session.lang?.()) } : g0;
-      return {
-        id: c.id,
-        now: now(),
-        status: c.status,
-        turns: c.turns,
-        spentUsd: Math.round(c.client.spent() * 10000) / 10000,
-        says: c.says,
-        events: c.session.events(),
-        pages: c.pages.map(({ reason, at, urgent }) => ({ reason, at, urgent })),
-        pending: p
-          ? {
-              slot: p.slot,
-              brief: p.brief,
-              quote: p.quote,
-              workOrder: c.booking ? null : workOrder(c.session, { slot: p.slot, quote: p.quote }),
-            }
-          : null,
-        evidence: c.session.evidence.list(),
-        booking: c.booking,
-        mobile: c.mobile ? `…${c.mobile.slice(-4)}` : null,
-        annotated: Boolean(c.annotated),
-        hasFrame: Boolean(c.session.latestFrame()),
-        staged: c.staged,
-        checklist: c.session.checklist.list(),
-        boxes: c.session.boxes(),
-        part: c.session.lastPart(),
-        tracking: Boolean(c.tracking),
-        guidance: g,
-        lang: c.session.lang?.() ?? 'en',
-        footage: c.footage,
-        latency: { p50: p50(c.latencies), n: c.latencies.length },
-        tour: tourView(c.tour),
-        cards: c.session.cards(),
-        capUsd: c.client.cap?.() ?? null,
-        // What the call saved the owner, from this call's own record (the owner page's results strip).
-        results: {
-          callMinutes: Math.round((now() - c.createdAt) / 6000) / 10,
-          minutesToQuote: c.session.quotedAt() ? Math.round((c.session.quotedAt() - c.createdAt) / 6000) / 10 : null,
-          quotedCents: c.session.quote()?.priceCents ?? null,
-          ownerTaps: c.booking ? 1 : 0,
-          booked: Boolean(c.booking?.approved),
-        },
-      };
+      return viewOf(get(callId), now);
     },
     langOf(callId) {
       return calls.get(String(callId))?.session.lang?.() ?? 'en';
@@ -1323,23 +729,8 @@ export function createCalls({
     annotatedOf(callId, token) {
       return asOwner(callId, token).annotated;
     },
-    /** The approved visit as a calendar invite, for the owner only; null until a visit is approved. */
     bookingIcsOf(callId, token) {
-      const c = asOwner(callId, token);
-      if (!c.booking?.approved) return null;
-      const q = c.booking.quote;
-      return bookingIcs({
-        uid: c.id,
-        slot: c.booking.slot,
-        title: q ? `${q.label}` : 'Service visit',
-        details: [
-          c.booking.brief,
-          q ? `Quoted from your price list: $${(q.priceCents / 100).toFixed(2)}` : 'Price confirmed on site',
-        ]
-          .filter(Boolean)
-          .join('\n'),
-        now: new Date(now()),
-      });
+      return booking.ics(asOwner(callId, token));
     },
   };
 }

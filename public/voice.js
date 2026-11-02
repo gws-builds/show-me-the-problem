@@ -16,7 +16,7 @@ window.Voice = (() => {
   let micTrack = null; // the live mic, so Listen can switch its voice filters off while recording
   let micSource = null; // its node in the audio graph, swapped if the filters do not come back
   // Founder 11/01: an acknowledgement the instant the caller stops talking ("On it"), then "just a few
-  // moments longer" if the answer is still coming at ~5 s, and a last reassurance after 11 s. The lines
+  // moments longer" if the answer is still coming at ~5 s, and reassurances after 11 s and 19 s. The lines
   // are made once when the call starts and kept on the phone, so they play with no wait. Never the same
   // line twice in a row; any real line cuts a filler off (Speech.say stops whatever is playing).
   const FILLERS = {
@@ -27,11 +27,13 @@ window.Voice = (() => {
         ['Just a few moments longer.', 'Almost there, a few more seconds.', 'Still checking, just a moment longer.'],
       ],
       [11000, ['Nearly done, thanks for waiting.', 'Still on it, almost there.']],
+      [19000, ['Thanks for bearing with me, I am just about done.']],
     ],
     es: [
       [150, ['Enseguida.', 'Entendido.', 'Déjame ver.', 'Ya voy.']],
       [5000, ['Unos momentos más.', 'Casi listo, unos segundos más.']],
       [11000, ['Ya casi, gracias por esperar.']],
+      [19000, ['Gracias por la paciencia, ya casi termino.']],
     ],
   };
   let lastFiller = '';

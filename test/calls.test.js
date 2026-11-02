@@ -555,3 +555,35 @@ test('a "while I look" line is spoken before the tool runs, through the same cod
   assert.doesNotMatch(says[i], /416/);
   assert.ok(i < says.length - 1, 'spoken before the turn finished');
 });
+
+test('red team #8 H2 and M1: gas said after the owner booked still escalates and pages; the decision ends the tour', async () => {
+  const { calls, counts } = setup({
+    agent: [
+      ['find_part', { part: 'water heater' }],
+      [
+        'propose_quote',
+        { equipment: 'water heater', issue: 'valve drips', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' },
+      ],
+      ['check_calendar', { job_type: 'water heater' }],
+      ['request_booking', { slot_id: 's1', brief: 'relief valve' }],
+    ],
+  });
+  const c = calls.create({ ip: '1.1.1.9', staff: true });
+  await calls.frame(c.id, c.camToken, JPEG);
+  calls.tour(c.id, c.camToken, 'boiler_room');
+  await calls.text(c.id, c.camToken, 'my water heater valve drips');
+  await calls.text(c.id, c.camToken, 'yes please book it');
+  await calls.decide(c.id, c.ownerToken, true);
+  let v = calls.view(c.id);
+  assert.equal(v.status, 'booked');
+  assert.equal(v.tour.done, true, 'the owner decision ends the tour');
+  const sparkBefore = counts.spark;
+  await calls.text(c.id, c.camToken, 'wait, now I smell gas and there is smoke coming from it');
+  v = calls.view(c.id);
+  assert.equal(v.status, 'escalated');
+  assert.ok(
+    v.pages.some((p) => p.urgent),
+    'the owner is paged',
+  );
+  assert.equal(counts.spark, sparkBefore, 'no model call');
+});

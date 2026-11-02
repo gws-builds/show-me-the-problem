@@ -50,7 +50,7 @@ cleanup() {
   [[ -n "$WARM_PID" ]] && { pkill -P "$WARM_PID" 2>/dev/null; kill "$WARM_PID" 2>/dev/null; } || true
   for pid in "$TIMER_PID" "$CHROME_PID" "$TUNNEL_PID" "$SERVER_PID"; do [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true; done
   for pid in "$CHROME_PID" "$TUNNEL_PID" "$SERVER_PID"; do [[ -n "$pid" ]] && wait "$pid" 2>/dev/null || true; done
-  rm -f "$HDR" "$LINKFILE" .data/tunnel.log
+  rm -f "$HDR" "$LINKFILE" .data/tunnel.log .data/open_console.html
   rm -rf .data/console-chrome
   if [[ -n "$MOVIE" && -s "$MOVIE" ]]; then echo "Console recording: $ROOT/$MOVIE ($(du -h "$MOVIE" | cut -f1))"; elif [[ -n "$MOVIE" ]]; then echo "No console recording was saved (see .data/capture.log)."; fi
   echo "Stopped: capture, console window, tunnel and server."
@@ -140,14 +140,18 @@ echo
 # --open also shows it in its own window, for watching live.
 if [[ "$CAPTURE" == 1 ]]; then
   MOVIE="recordings/console_$(date +%Y%m%d_%H%M%S).mp4"
-  node scripts/console_capture.mjs "http://127.0.0.1:$PORT/k/$CODE?to=console" "$MOVIE" > .data/capture.log 2>&1 &
+  # The URL carries the access code: environment, not argv, so `ps` never shows it (red team #7 L7).
+  CAPTURE_URL="http://127.0.0.1:$PORT/k/$CODE?to=console" node scripts/console_capture.mjs "$MOVIE" > .data/capture.log 2>&1 &
   CAPTURE_PID=$!
   echo "Agent Console: recording in the background to $MOVIE"
 fi
 if [[ "$OPEN" == 2 && -x "$CHROME" ]]; then
   # A separate, throwaway Chrome profile: never the founder's own browser profiles.
+  # Chrome opens a private local file that forwards to the coded link, so the code is not in its argv.
+  OPENER="$ROOT/.data/open_console.html"
+  (umask 077; printf '<meta http-equiv="refresh" content="0;url=http://127.0.0.1:%s/k/%s?to=console">' "$PORT" "$CODE" > "$OPENER")
   "$CHROME" --user-data-dir="$ROOT/.data/console-chrome" --no-first-run --no-default-browser-check --window-size=1280,900 \
-    --app="http://127.0.0.1:$PORT/k/$CODE?to=console" > /dev/null 2>&1 &
+    --app="file://$OPENER" > /dev/null 2>&1 &
   CHROME_PID=$!
   echo "Agent Console: also open in its own window"
 fi

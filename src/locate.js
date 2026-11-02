@@ -75,11 +75,29 @@ const KNOWN_PARTS = [
   .sort((a, b) => b.length - a.length);
 export const SPECULATE_FRESH_MS = 3000;
 
-/** The longest known part named in the caller's words, or null. */
+// Spanish callers name the same parts (red team #7 L16: "grifo" gave no early outline). Accents are
+// stripped before matching, so "tubería" is "tuberia".
+const ES_PARTS = [
+  [/\b(grifo|canilla)s?\b|\bllave del (lavabo|lavamanos|fregadero|bano|lavaplatos)\b/g, 'faucet'],
+  [/\bcalentador( de agua)?\b/g, 'water heater'],
+  [/\b(tuberia|tubo|cano)s?\b/g, 'pipe'],
+  [/\bvalvulas?\b/g, 'valve'],
+  [/\b(enchufe|tomacorriente)s?\b/g, 'outlet'],
+  [/\btermostato\b/g, 'thermostat'],
+  [/\b(caja de breakers|panel electrico|caja de fusibles)\b/g, 'breaker panel'],
+  [/\btriturador\b/g, 'garbage disposal'],
+  [/\b(estufa|hornilla|quemador)\b/g, 'stove burner'],
+  [/\bbomba de sumidero\b/g, 'sump pump'],
+];
+
+/** The longest known part named in the caller's words (English or Spanish), or null. */
 export function guessPart(text, known = KNOWN_PARTS) {
-  const t = ` ${String(text ?? '')
+  let t = ` ${String(text ?? '')
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\- ]/g, ' ')} `;
+  for (const [re, en] of ES_PARTS) t = t.replace(re, en);
   return known.find((k) => t.includes(` ${k} `) || t.includes(` ${k}s `)) ?? null;
 }
 
@@ -90,18 +108,20 @@ export function speculate(client, frame, text, { now = Date.now() } = {}) {
   const noun = nounsFor(part)[0];
   const result = client.segment(frame.dataUrl, noun);
   result.catch(() => undefined); // an unused guess that failed is not an error anywhere
-  return { frame, frameN: frame.n, noun, result };
+  return { frame, frameN: frame.n, noun, result, startedAt: now };
 }
 
 // The early outline covers the requested part when the nouns name the same thing ("faucet" and
-// "kitchen faucet"), and is used while its frame is still close to what the caller is pointing at.
-export const SPEC_USE_MS = 2500;
+// "kitchen faucet"), and is used while it is recent. The window counts from when the guess started, not
+// from the frame's arrival: Spark plans for 2-3 s, so a frame-age window often expired first (RT7 L2).
+export const SPEC_USE_MS = 4000;
 const sameThing = (a, b) => a === b || a.includes(b) || b.includes(a);
 
 /** The frame find_part should look at: the early outline's own frame when that guess fits, else the latest. */
 export function frameFor(part, latest, spec, now) {
   const noun = nounsFor(part)[0]; // none for an empty or symbol-only part (red team #7 L1)
-  if (spec && noun && sameThing(noun, spec.noun) && now - spec.frame.at <= SPEC_USE_MS) return spec.frame;
+  if (spec && noun && sameThing(noun, spec.noun) && now - (spec.startedAt ?? spec.frame.at) <= SPEC_USE_MS)
+    return spec.frame;
   return latest;
 }
 

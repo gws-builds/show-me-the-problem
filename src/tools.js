@@ -3,7 +3,7 @@
 // the model's own words: propose_quote goes through the verifier, and
 // book_visit only queues a request for the owner's tap.
 import { verify, hazardIn } from './verifier.js';
-import { frameFor, locate } from './locate.js';
+import { frameFor, locate, MIN_SCORE } from './locate.js';
 import { SHUTOFF_PLAYBOOK, fixtureFor, HYPOTHESES } from './evidence.js';
 import { noContact, noPrice } from './filters.js';
 import { safeLine } from './tour.js';
@@ -157,6 +157,30 @@ export function speakable(session, line) {
 
 export { noContact } from './filters.js';
 
+// How long a confident outline of the same part answers a repeated find_part without a new SAM call.
+export const OUTLINE_REUSE_MS = 4000;
+
+/** What find_part returns to Spark: the session's current outline of `part`. */
+function outlineOutput(part, method, noun, session) {
+  return {
+    part,
+    method,
+    noun,
+    boxes: session.boxes().map(({ ordinal, x1, y1, x2, y2, width, height, score, geo }) => ({
+      ordinal,
+      x1,
+      y1,
+      x2,
+      y2,
+      width,
+      height,
+      score,
+      area: Number(geo.area.toFixed(3)),
+    })),
+    guidance: session.guidance()?.state ?? null,
+  };
+}
+
 /**
  * Runs one tool call against the session. Returns { output, say?, status? }.
  * ctx: { client, session, priceList, calendar, notifyOwner }
@@ -168,12 +192,36 @@ export async function runTool(name, args, ctx) {
       const part = String(args.part ?? '').slice(0, 60);
       // The outline started while Spark planned used an earlier frame; looking at that same frame is
       // what makes the head start count (red team #6 B-1: by now 1-3 newer frames have arrived).
-      const frame = frameFor(part, session.latestFrame(), ctx.spec ?? null, ctx.now?.() ?? Date.now());
+      const t = ctx.now?.() ?? Date.now();
+      // Spark often asks for the same part again right after outlining it (to see it "locked"). A confident
+      // outline of that part from the last few seconds answers at once: each extra SAM and grounding round
+      // cost 3-5 s and pushed slow turns past the turn limit (eval th01, Nov 2). A fresh tap always re-runs.
+      const prev = session.locateMeta?.();
+      const top = session.boxes()[0];
+      const tapped = session.tap?.() && t - session.tap().at < OUTLINE_REUSE_MS;
+      if (
+        prev &&
+        !args.recheck && // the camera tracking and tap paths always look again
+        !tapped &&
+        session.lastPart() === part &&
+        top &&
+        (top.score ?? 1) >= MIN_SCORE &&
+        t - prev.at < OUTLINE_REUSE_MS
+      ) {
+        session.log({
+          kind: 'sam_reuse',
+          part,
+          frame: prev.frameN,
+          text: `Outline of "${part}" from ${t - prev.at} ms ago reused.`,
+        });
+        return { output: outlineOutput(part, prev.method, prev.noun, session) };
+      }
+      const frame = frameFor(part, session.latestFrame(), ctx.spec ?? null, t);
       if (!frame)
         return { output: { error: 'no camera frame yet' }, say: 'Can you open the camera link I texted you?' };
       const found = await locate(ctx.client, frame, part, {
         tap: session.tap?.() ?? null,
-        now: ctx.now?.() ?? Date.now(),
+        now: t,
         spec: ctx.spec ?? null,
       });
       session.setBoxes(part, found.records, frame.at, {
@@ -184,25 +232,7 @@ export async function runTool(name, args, ctx) {
         luma: frame.luma ?? null,
         dataUrl: frame.dataUrl,
       });
-      return {
-        output: {
-          part,
-          method: found.method,
-          noun: found.noun,
-          boxes: found.records.map(({ ordinal, x1, y1, x2, y2, width, height, score, geo }) => ({
-            ordinal,
-            x1,
-            y1,
-            x2,
-            y2,
-            width,
-            height,
-            score,
-            area: Number(geo.area.toFixed(3)),
-          })),
-          guidance: session.guidance()?.state ?? null,
-        },
-      };
+      return { output: outlineOutput(part, found.method, found.noun, session) };
     }
     case 'direct_camera': {
       // Honest about what SAM has not found: after a miss, the line starts with "I can't see the <part> yet."

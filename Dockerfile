@@ -1,5 +1,5 @@
 # Public demo image (Cloud Run or any container host). One instance only: calls live in memory.
-FROM node:22-slim
+FROM node:22.23.4-slim
 WORKDIR /app
 COPY package.json ./
 COPY src ./src

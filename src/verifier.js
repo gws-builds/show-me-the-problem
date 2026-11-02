@@ -31,6 +31,10 @@ const HAZARDS = [
   /\b(puddle|pool|wet|damp|drip\w*|leak\w*)\b.{0,30}\b(electrical panel|panel|breakers?|breaker box|fuse box|outlets?|sockets?)\b/i,
   /\b(fork|knife|key|paper ?clip|screwdriver)\b.{0,25}\b(outlet|socket|plug)\b|\b(outlet|socket)\b.{0,25}\b(fork|knife|key|paper ?clip)\b/i,
   /\bcaja de (breakers|fusibles|luz)\b.{0,25}\bmojad\w*|\bmojad\w*.{0,25}\bcaja de (breakers|fusibles|luz)\b|\b(hormigue\w*|cosquill\w*)\b.{0,30}\b(grifo|llave|tubo|ducha)\b/i,
+  // Red team #8 M5: carbon-monoxide symptoms near a fuel-burning appliance (the commonest real winter call),
+  // and water coming through the ceiling around a light.
+  /\b(headaches?|dizz\w*|nause\w*|light-?headed|drowsy|sleepy)\b.{0,60}\b(furnace|boiler|heater|stove|fireplace|generator|garage)\b|\b(furnace|boiler|heater|stove|fireplace|generator)\b.{0,60}\b(headaches?|dizz\w*|nause\w*|light-?headed)\b|\b(dolor(es)? de cabeza|mare\w*|n[aá]usea\w*)\b.{0,60}\b(calefacci\w*|caldera|calentador|estufa|horno)\b/i,
+  /\b(water|leak\w*|drip\w*)\b.{0,40}\bceiling\b.{0,25}\b(lights?|fixtures?|lamps?|fans?)\b/i,
 ];
 
 // "No burning or scorching" is the absence of a hazard. A match counts unless a

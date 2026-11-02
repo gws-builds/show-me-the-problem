@@ -152,7 +152,15 @@ function renderWorkOrder(wo, evidence) {
     if (key !== stillKey) {
       stillKey = key;
       $('woImg').onload = draw;
-      $('woImg').src = `/api/calls/${id}/frames/${ev.frame}?t=${encodeURIComponent(owner)}`;
+      // The token goes in a header, never the URL, so it stays out of proxy logs (red team #7 L6).
+      fetch(`/api/calls/${id}/frames/${ev.frame}`, { headers: { 'x-owner-token': owner } })
+        .then((r) => (r.ok ? r.blob() : null))
+        .then((b) => {
+          if (!b || key !== stillKey) return; // a newer still was asked for meanwhile (red team #8 L2)
+          if ($('woImg').src.startsWith('blob:')) URL.revokeObjectURL($('woImg').src);
+          $('woImg').src = URL.createObjectURL(b);
+        })
+        .catch(() => {});
     } else draw();
   }
 }
@@ -195,6 +203,8 @@ async function poll() {
       $('doneCard').hidden = false;
       $('doneH').textContent = v.booking.approved ? `Booked: ${v.booking.slot.label}` : 'Declined';
       $('calRow').hidden = !v.booking.approved;
+      // shortcut: the calendar link keeps the owner token in the URL, because Safari opens a .ics only from a
+      // real link; a one-time download ticket would remove it.
       if (v.booking.approved) $('cal').href = `/api/calls/${id}/booking.ics?t=${encodeURIComponent(owner)}`;
       $('woH').textContent = 'Technician work order';
       renderWorkOrder(v.booking.workOrder && { ...v.booking.workOrder, review: v.booking.review }, v.evidence);

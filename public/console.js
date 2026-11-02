@@ -64,6 +64,13 @@ if (page === 'console') {
   // The console's read-only link for one call: #<id>.<viewToken>.
   let [id = '', view = ''] = follow ? [] : location.hash.slice(1).split('.');
   const seen = (path) => fetch(`/api/calls/${id}${path}`, { headers: { 'x-view-token': view } });
+  // Images load with the token in a header, never in the URL, so it stays out of proxy logs (red team #7 L6).
+  const imgWithToken = async (img, src) => {
+    const r = await fetch(src, { headers: { 'x-view-token': view } }).catch(() => null);
+    if (!r?.ok) return;
+    if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(await r.blob());
+  };
   let frameKey = '';
   let lastView = null;
   const el = (tag, cls, text) => {
@@ -205,12 +212,43 @@ if (page === 'console') {
         return line('', e.kind, JSON.stringify(e).slice(0, 200));
     }
   };
+  // Evidence frames never change, so each is fetched once per call and kept as a blob URL: the panels are
+  // rebuilt every 1.5 s, and refetching made the thumbnails flash and pile up (red team #8 H3).
+  let thumbs = { id: '', urls: new Map() };
   const thumb = (n, live) => {
     if (!n || !live) return null;
+    if (thumbs.id !== id) {
+      for (const u of thumbs.urls.values()) if (typeof u === 'string') URL.revokeObjectURL(u);
+      thumbs = { id, urls: new Map() };
+    }
     const i = el('img');
     i.alt = `frame ${n}`;
-    i.loading = 'lazy';
-    i.src = `/api/calls/${id}/frames/${n}?t=${encodeURIComponent(view)}`;
+    const have = thumbs.urls.get(n);
+    if (typeof have === 'string') i.src = have;
+    else {
+      const cache = thumbs;
+      const pending =
+        have ??
+        fetch(`/api/calls/${id}/frames/${n}`, { headers: { 'x-view-token': view } })
+          .then((r) => (r.ok ? r.blob() : null))
+          .then((b) => {
+            const u = b ? URL.createObjectURL(b) : null;
+            if (u && cache === thumbs) cache.urls.set(n, u);
+            else {
+              if (u) URL.revokeObjectURL(u);
+              cache.urls.delete(n);
+            }
+            return u;
+          })
+          .catch(() => {
+            cache.urls.delete(n);
+            return null;
+          });
+      if (!have) thumbs.urls.set(n, pending);
+      pending.then((u) => {
+        if (u && cache === thumbs) i.src = u;
+      });
+    }
     return i;
   };
   const render = (v, live) => {
@@ -344,7 +382,7 @@ if (page === 'console') {
           $('still').hidden = false;
           draw();
         };
-        $('still').src = `/api/calls/${id}/still?k=${key}&t=${encodeURIComponent(view)}`;
+        imgWithToken($('still'), `/api/calls/${id}/still?k=${key}`);
       } else draw();
       setTimeout(poll, 1500);
       return;
