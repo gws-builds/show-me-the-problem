@@ -17,6 +17,7 @@
   {"name": "Dirty or broken roller ring", "evidence": "Crusted food on the wheels or track, a missing wheel, or the ring off the track, seen with the tray lifted out."},
   {"name": "Worn or broken hub (coupler)", "evidence": "With the tray lifted out, the hub is cracked, rounded, missing, or turns freely by hand while the shaft under it stays still."},
   {"name": "Failed turntable motor", "evidence": "Tray, ring and hub all fine and the turntable is switched on, but the hub never turns while heating. Only the technician confirms this; the motor sits behind the cabinet."},
+  {"name": "Blown fuse (callers often suspect this)", "evidence": "A blown main fuse leaves the whole microwave dead: no display, light, fan or heat. If the display, light and heat work and only the tray stops, the fault is the hub, the turntable motor or its wiring, not the main fuse. Fuses and wiring sit behind the cabinet; only the technician checks them."},
   {"name": "Not heating (magnetron, diode or door switch)", "evidence": "Runs with light, fan and turntable but a cup of water is not warm after one minute. Inside parts are for the technician only."},
   {"name": "Vent fan or light out (over-the-range)", "evidence": "No fan at any speed or no cooktop light, with the rest of the microwave working."}
  ],
