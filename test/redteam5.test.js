@@ -46,6 +46,9 @@ test('B6: "latest" only ever finds a call started from the same place, with its 
   assert.equal(calls.latest({ creator: 'cookie-1' }).id, mine.id);
   assert.equal(calls.latest({ creator: 'cookie-3' }), null);
   assert.equal(calls.latest({}), null, 'no cookie and not local: nothing');
+  // Recording session (Nov 2): the Mac's console recorder follows the founder's phone, another browser.
+  const phone = calls.create({ ip: 'phone', live: true, staff: false, creator: 'phone-cookie' });
+  assert.equal(calls.latest({ creator: 'console-cookie', any: true }).id, phone.id);
 });
 
 test('S1: one person cannot spend past their hourly budget, so the session stop is never drained by one code holder', () => {

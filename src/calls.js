@@ -1001,10 +1001,10 @@ export function createCalls({
       say(c, r.say, 'touring');
       return { ok: true, room: c.tour.room };
     },
-    /** The newest call (the console follows it during a recording session). */
-    /** The newest call this browser started (or, for the recording Mac, this local address), with its view link. */
-    latest({ creator = null, ip = null } = {}) {
-      const mine = (c) => (creator && c.creator === creator) || (ip && c.ip === ip);
+    /** The newest call this browser started (or, for the recording Mac, this local address), with its view link.
+     *  `any`: the newest call of all, only in a private recording session where every call is the founder's. */
+    latest({ creator = null, ip = null, any = false } = {}) {
+      const mine = (c) => any || (creator && c.creator === creator) || (ip && c.ip === ip);
       let best = null;
       for (const c of calls.values()) if (mine(c) && (!best || c.createdAt >= best.createdAt)) best = c;
       return best ? { id: best.id, viewToken: best.viewToken } : null;

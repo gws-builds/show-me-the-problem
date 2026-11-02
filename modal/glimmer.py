@@ -26,7 +26,7 @@ PORT = 8000
 image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
     .entrypoint([])
-    .pip_install("vllm", "huggingface_hub[hf_transfer]")
+    .pip_install("vllm==0.32.0", "huggingface_hub[hf_transfer]")  # the version the live deploy runs (GET /version, Nov 2)
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/cache/hf", "VLLM_CACHE_ROOT": "/cache/vllm"})
 )
 cache = modal.Volume.from_name("glimmer-cache", create_if_missing=True)

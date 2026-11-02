@@ -15,7 +15,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-PORT=8642; TUNNEL=1; CAPTURE=1; OPEN=1; STOP=5; DURATION=0
+PORT=8642; TUNNEL=1; CAPTURE=1; OPEN=1; STOP=25; DURATION=0
 ENV_FILE="${META_ENV_FILE:-$ROOT/../.secrets/meta_model_api.env}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
@@ -91,7 +91,7 @@ fi
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then die "port $PORT is already in use (another server?)"; fi
 
 # --- 1. server (127.0.0.1 only) ---
-HOST=127.0.0.1 PORT="$PORT" SPEND_STOP_USD="$STOP" SESSION_RESET=1 TRUST_PROXY=1 node src/server.mjs > .data/server.log 2>&1 &
+HOST=127.0.0.1 PORT="$PORT" SPEND_STOP_USD="$STOP" SESSION_RESET=1 TRUST_PROXY=1 RECORDING_SESSION=1 node src/server.mjs > .data/server.log 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 50); do [[ -s .data/access_code ]] && grep -q "snap-to-booked on" .data/server.log 2>/dev/null && break; sleep 0.2; done
 kill -0 "$SERVER_PID" 2>/dev/null || die "the server did not start (see .data/server.log)"

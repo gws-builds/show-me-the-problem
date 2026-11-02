@@ -24,11 +24,11 @@ import { upgrade, connectWebSocket } from './ws.js';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
 fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
-// SPEND_STOP_USD: a hard stop for this server run (default $5), on top of the per-call caps and the account-wide stops.
+// SPEND_STOP_USD: a hard stop for this server run (default $25), on top of the per-call caps and the account-wide stops.
 // Hosted judge copy: a push for every call and every spend step (src/alerts.js; needs NTFY_TOPIC).
 const alerts = createAlerts();
 const ledger = createLedger(path.join(DATA, 'ledger.json'), {
-  sessionStopUsd: Number(process.env.SPEND_STOP_USD) || 5,
+  sessionStopUsd: Number(process.env.SPEND_STOP_USD) || 25,
   onRecord: (session) => {
     alerts.spend(session).catch(() => undefined);
   },
@@ -277,14 +277,19 @@ async function route(req, res) {
   if (req.method === 'GET' && p === '/api/health')
     return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size(), session: ledger.session() });
   // "Latest" follows calls this browser started (a random creator cookie), never an address shared by a
-  // whole office (red team #6 S-B). The one exception is a direct local connection, the recording Mac,
-  // whose headless console and phone tunnel both arrive from loopback.
+  // whole office (red team #6 S-B). The exceptions: a direct local connection, and a private recording session
+  // (RECORDING_SESSION=1, set only by scripts/record_session.sh), where the Mac's console recorder must follow
+  // the calls the founder starts on his phone (a different browser, so a different creator cookie).
   if (req.method === 'GET' && p === '/api/calls/latest') {
     const local = process.env.TRUST_PROXY !== '1' && /^(127\.|::1$|::ffff:127\.)/.test(req.socket.remoteAddress ?? '');
     return send(
       res,
       200,
-      calls.latest({ creator: cookieValue(req.headers.cookie, CREATOR_COOKIE), ip: local ? key : null }) ?? {
+      calls.latest({
+        creator: cookieValue(req.headers.cookie, CREATOR_COOKIE),
+        ip: local ? key : null,
+        any: process.env.RECORDING_SESSION === '1',
+      }) ?? {
         id: null,
       },
     );

@@ -25,17 +25,6 @@
         <div class="cue-banner">You can stop recording now</div>
         <p>Tap the red indicator at the top of the screen, then Stop. Nothing else to do.</p>
       </div>
-      <div class="card script" id="script" hidden>
-        <div class="row">
-          <strong id="scriptTitle"></strong><button class="secondary mini" id="finish">Finish take</button>
-        </div>
-        <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
-        <ol class="small" id="scriptSay"></ol>
-        <p class="small" id="ownerStep" hidden>
-          <b>Owner step:</b> you play the owner now.
-          <a id="ownerLink" href="#" target="_blank" rel="noopener">Open the owner page</a> and tap Approve and book.
-        </p>
-      </div>
       <div class="card consent" id="consent">
         <p>
           This call uses your camera and microphone so the office can see the problem. Frames and audio are used for
@@ -57,6 +46,18 @@
         <div class="agent-line caption" id="line" aria-live="polite">…</div>
       </div>
       <div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
+      <!-- Under the video, so the camera stays at the top of the screen recording. -->
+      <div class="card script" id="script" hidden>
+        <div class="row">
+          <strong id="scriptTitle"></strong><button class="secondary mini" id="finish">Finish take</button>
+        </div>
+        <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
+        <ol class="small" id="scriptSay"></ol>
+        <p class="small" id="ownerStep" hidden>
+          <b>Owner step:</b> you play the owner now.
+          <a id="ownerLink" href="#" target="_blank" rel="noopener">Open the owner page</a> and tap Approve and book.
+        </p>
+      </div>
       <div class="card">
         <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>
         <button class="talk" id="talk" disabled>Hold to talk</button>

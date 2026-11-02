@@ -143,6 +143,7 @@ button:disabled {
   padding: 12px;
   font-size: 1rem;
   background: transparent;
+  color: var(--text);
   border: 2px solid currentColor;
 }
 /* The agent's line sits on the video as a caption, so a phone never scrolls to read or answer it (red team 10/31). */
@@ -181,7 +182,8 @@ button:disabled {
     max-height: 56vh;
   }
 }
-input[type='text'] {
+input[type='text'],
+input[type='tel'] {
   font: inherit;
   flex: 1;
   min-width: 0;
