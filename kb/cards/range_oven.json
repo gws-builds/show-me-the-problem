@@ -1,0 +1,25 @@
+{
+ "id": "range_oven", "title": "Oven and range (bake, broil, burners that won't light)", "room": "kitchen", "primary": false,
+ "match": ["oven", "won't heat", "not heating", "bake", "broil", "bake element", "broil element", "igniter", "clicking", "won't light", "doesn't light", "burner won't light", "oven door", "self clean", "temperature off", "range"],
+ "parts": [
+  {"id": "oven", "label": "Oven", "sam": "oven", "looks": "The cavity below the cooktop with racks inside and a window in the door.", "normal": "Heats to the set temperature; door closes flat.", "abnormal": "Stays cold, heats only from the top or bottom, or the door gasket is torn."},
+  {"id": "bake_element", "label": "Bake element", "sam": "heating element", "looks": "On an electric oven, the black metal loop on the oven floor (or hidden under a flat panel).", "normal": "Glows evenly orange when baking.", "abnormal": "A blister, break or bright spot, or no glow while baking."},
+  {"id": "broil_element", "label": "Broil element", "sam": "heating element", "looks": "The metal loop on the oven ceiling.", "normal": "Glows evenly when broiling.", "abnormal": "A break, blister or no glow."},
+  {"id": "oven_igniter", "label": "Oven igniter (gas)", "sam": "igniter", "looks": "On a gas oven, a small grey block under the oven floor panel, next to the burner tube.", "normal": "Glows bright orange, then the burner lights within about a minute.", "abnormal": "Glows dull for minutes without the burner lighting."},
+  {"id": "door_gasket", "label": "Oven door gasket", "sam": "gasket", "looks": "The woven or rubber seal around the oven opening.", "normal": "Whole and springy.", "abnormal": "Torn, flattened or missing in places."}
+ ],
+ "faults": [
+  {"name": "Burned-out bake or broil element (electric)", "evidence": "A visible break, blister or bright spot on the element, or no glow while that mode runs."},
+  {"name": "Weak oven igniter (gas)", "evidence": "The igniter glows for more than about a minute and a half without the burner lighting, seen through the floor slots."},
+  {"name": "Surface burner keeps clicking or won't light (gas)", "evidence": "Clicking with no flame, or a burner cap sitting crooked or wet; a crooked cap is often the whole fault."},
+  {"name": "Worn door gasket", "evidence": "Torn or flattened seal, with heat escaping at the top of the door."},
+  {"name": "Temperature sensor or control fault", "evidence": "An oven thermometer reads far from the set temperature after 20 minutes. The technician confirms."}
+ ],
+ "hazards": [
+  {"id": "oven_gas_smell", "label": "Gas smell", "category": "combustion", "escalate": true, "threshold": "The caller smells gas (rotten egg). Leave the home and call the gas utility from outside; do not touch switches."}
+ ],
+ "may": ["Set the burner caps straight and dry before trying again.", "Put an oven thermometer on the middle rack and read it after 20 minutes.", "Look at the elements with the oven off and cold."],
+ "must_not": ["Touch an element or igniter while the oven is on or hot.", "Take the oven floor panel or back panel off.", "Use the oven or a burner to heat the home.", "Light a gas burner with a match because the igniter clicks."],
+ "tour": {"open": "Open the oven door and show me the inside, with the oven off and cold.", "checkpoints": [{"part": "bake_element", "hint": "Point at the oven floor."}, {"part": "broil_element", "hint": "Tilt up to the oven ceiling. Tap Light if it is dark."}, {"part": "door_gasket", "hint": "Show me the seal around the oven opening."}]},
+ "sources": ["nfpa-cooking", "usfa-cooking", "usfa-heating"]
+}

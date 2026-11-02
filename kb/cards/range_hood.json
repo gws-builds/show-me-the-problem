@@ -1,0 +1,23 @@
+{
+ "id": "range_hood", "title": "Range hood and vent fan", "room": "kitchen", "primary": false,
+ "match": ["range hood", "hood fan", "hood", "vent hood", "exhaust fan", "kitchen fan", "hood light", "hood not working", "fan rattles", "fan noisy", "weak suction", "smoke not pulling"],
+ "parts": [
+  {"id": "hood", "label": "Range hood", "sam": "range hood", "looks": "The canopy or slim box above the cooktop, with switches on the front edge or underside.", "normal": "Fan runs at each speed and pulls steam up; light works.", "abnormal": "Fan dead at every speed, grinding or rattling, or smoke drifting past it."},
+  {"id": "hood_filter", "label": "Grease filter", "sam": "grease filter", "looks": "The metal mesh or baffle panels underneath the hood.", "normal": "Light film of grease at most.", "abnormal": "Thick, dripping grease, or a filter missing."},
+  {"id": "hood_switch", "label": "Fan and light switches", "sam": "switch", "looks": "The buttons or slide switches on the hood's front edge.", "normal": "Each press changes the fan speed or light.", "abnormal": "A stuck or broken button, or no response at all."},
+  {"id": "hood_light", "label": "Hood light", "sam": "light bulb", "looks": "The small bulb or LED panel under the hood that lights the cooktop.", "normal": "Lights when switched on.", "abnormal": "Out while the fan still works (often just the bulb)."}
+ ],
+ "faults": [
+  {"name": "Clogged grease filter (weak suction)", "evidence": "Thick grease on the filter, with the fan running but steam drifting past the hood."},
+  {"name": "Fan motor or switch failure", "evidence": "No fan at any speed while the light still works, or a hum without the blades turning. The technician confirms which."},
+  {"name": "Loose fan or damper (rattle)", "evidence": "A rattle or flapping that changes with fan speed; a noise alone is a description, not proof."},
+  {"name": "Light bulb out", "evidence": "Fan works, light does not."}
+ ],
+ "hazards": [
+  {"id": "hood_grease", "label": "Heavy grease over the burners", "category": "flammables", "escalate": false, "threshold": "Thick dripping grease on the hood filters right above the burners. A spoken warning to clean or replace the filters."}
+ ],
+ "may": ["Pop the grease filters out (most have a finger latch) and show them.", "Run the fan at each speed and describe the sound.", "Turn the hood off before touching the filters."],
+ "must_not": ["Take the hood off the wall or open its wiring box.", "Reach into the fan while it can be switched on."],
+ "tour": {"open": "Show me the hood from below, with the filters and switches in view.", "checkpoints": [{"part": "hood_filter", "hint": "Point straight up at the filters. Tap Light if it is dark."}, {"part": "hood_switch", "hint": "Show me the switches and turn the fan on, low then high."}]},
+ "sources": ["nfpa-cooking", "usfa-cooking"]
+}

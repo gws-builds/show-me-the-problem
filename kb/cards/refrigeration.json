@@ -1,0 +1,29 @@
+{
+ "id": "refrigeration", "title": "Refrigerator, freezer and wine cooler", "room": "kitchen", "primary": false,
+ "match": ["fridge", "refrigerator", "freezer", "wine cooler", "wine fridge", "beverage cooler", "not cooling", "not cold", "warm fridge", "frost", "ice build up", "iced up", "ice maker", "water under", "leaking fridge", "door seal", "gasket", "compressor", "clicking fridge", "chest freezer", "deep freezer"],
+ "parts": [
+  {"id": "refrigerator", "label": "Refrigerator", "sam": "refrigerator", "looks": "The tall unit with fresh-food and freezer sections.", "normal": "Fresh food at about 37 to 40°F and the freezer at 0°F on an appliance thermometer; a quiet hum that cycles on and off.", "abnormal": "Warm food, sweating walls, or a running sound that never stops or never starts."},
+  {"id": "freezer", "label": "Freezer", "sam": "freezer", "looks": "The freezer drawer, door or chest.", "normal": "At or below 0°F with light frost at most.", "abnormal": "Soft ice cream, or a thick sheet of frost on the back wall."},
+  {"id": "wine_cooler", "label": "Wine cooler", "sam": "wine fridge", "looks": "A short glass-door unit with wine racks, built in under a counter or free-standing.", "normal": "Holds its set temperature; vents at the front or back are clear.", "abnormal": "Warm, frosted, or the fan never runs."},
+  {"id": "fridge_gasket", "label": "Door seal", "sam": "door seal", "looks": "The rubber strip around each door's edge.", "normal": "Airtight all the way round.", "abnormal": "Torn, flattened, or a gap where a strip of paper slides out easily with the door closed."},
+  {"id": "condenser_coils", "label": "Condenser coils", "sam": "coils", "looks": "The black grid or coil behind the bottom front grille or on the back of the unit.", "normal": "Mostly free of dust.", "abnormal": "Matted dust and pet hair."},
+  {"id": "evaporator_panel", "label": "Freezer back panel", "sam": "freezer", "looks": "The back wall inside the freezer, with the air vents.", "normal": "Light frost at most; vents clear.", "abnormal": "A thick even sheet of frost or ice over the panel and vents."},
+  {"id": "ice_maker", "label": "Ice maker", "sam": "ice maker", "looks": "The tray and arm in the top of the freezer.", "normal": "Arm down, bin filling.", "abnormal": "Arm up (switched off), empty bin, or ice jammed in the chute."}
+ ],
+ "faults": [
+  {"name": "Dirty condenser coils", "evidence": "Matted dust on the coils with a warm-running unit."},
+  {"name": "Leaking door seal", "evidence": "A torn or flattened seal, or a gap at the door edge; frost or sweat near that spot."},
+  {"name": "Defrost system failure", "evidence": "A thick even sheet of frost over the freezer's back panel and vents, with the fresh-food side warming up. The technician confirms which part."},
+  {"name": "Blocked air vent between freezer and fridge", "evidence": "Freezer cold but fresh food warm, with food or ice blocking the vents."},
+  {"name": "Clogged defrost drain (water under the crisper drawers)", "evidence": "Water pooling under the drawers or ice at the bottom of the freezer back wall."},
+  {"name": "Compressor start relay or fan fault", "evidence": "Clicking every few minutes from the back with the unit warm, or a condenser fan that never turns. The technician confirms."},
+  {"name": "Wine cooler at its limit", "evidence": "A thermoelectric (fan-only, no compressor) cooler in a hot room cannot cool far below room temperature; check the room and the vents first."}
+ ],
+ "hazards": [
+  {"id": "fridge_water_outlet", "label": "Water reaching electrics", "category": "water_electric", "escalate": true, "threshold": "Water on the floor from the fridge or ice maker visibly touching an outlet, a power strip or a cord."}
+ ],
+ "may": ["Put an appliance thermometer in the middle of each section and read it after a few hours.", "Close the door on a strip of paper and pull it to test the seal.", "Pull the bottom front grille off and show the coils with the unit unplugged.", "Clear food away from the vents.", "Lower the ice maker arm."],
+ "must_not": ["Chip or pry at ice with a knife or sharp tool.", "Open the back panel or touch the compressor wiring.", "Move a full fridge alone."],
+ "tour": {"open": "Open the fridge and show me the inside from about a metre back.", "checkpoints": [{"part": "evaporator_panel", "hint": "Open the freezer and point at its back wall."}, {"part": "fridge_gasket", "hint": "Run the camera slowly along the door seal."}, {"part": "condenser_coils", "hint": "Show me the grille at the bottom front, or the back of the unit. Tap Light if it is dark."}]},
+ "sources": ["fda-food-storage", "energystar-fridge"]
+}

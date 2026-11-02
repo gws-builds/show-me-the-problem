@@ -1,0 +1,31 @@
+{
+ "id": "microwave", "title": "Microwave (countertop or over-the-range, with its vent fan and light)", "room": "kitchen", "primary": false,
+ "match": ["microwave", "turntable", "glass tray", "glass plate", "turn table", "not spinning", "doesn't spin", "does not spin", "won't spin", "not turning", "roller ring", "over the range", "otr", "sparks", "sparking", "arcing", "not heating", "door latch", "vent fan", "hood fan", "exhaust fan"],
+ "parts": [
+  {"id": "microwave", "label": "Microwave", "sam": "microwave", "looks": "A metal box with a glass door and a keypad on the right; over-the-range models hang above the cooktop with a vent grille along the top.", "normal": "Door closes firmly; light, fan and turntable run when it heats.", "abnormal": "Bent or warped door, or it hums without the tray turning."},
+  {"id": "turntable", "label": "Glass turntable", "sam": "glass plate", "looks": "The round glass tray on the floor of the cavity.", "normal": "Sits flat with its three bumps underneath locked into the hub, and turns slowly while heating.", "abnormal": "Sits crooked, rocks, is cracked, or stays still while the oven runs."},
+  {"id": "roller_ring", "label": "Roller ring", "sam": "roller ring", "looks": "A plastic ring with small wheels under the glass tray.", "normal": "Clean wheels resting in the round track on the cavity floor.", "abnormal": "Food crusted on the wheels or track, a wheel missing, or the ring off its track."},
+  {"id": "turntable_hub", "label": "Turntable hub (coupler)", "sam": "coupler", "looks": "The small plastic star or D-shaped piece in the centre of the cavity floor that the tray sits on.", "normal": "Sits fully down on its shaft and turns with the motor.", "abnormal": "Cracked, worn round, missing, or it spins freely on the shaft."},
+  {"id": "microwave_door", "label": "Door, hinges and latch", "sam": "microwave door", "looks": "The glass door with a metal mesh inside, the hinges on the left and the latch hooks on the right edge.", "normal": "Closes flat and firmly with a click.", "abnormal": "Gaps, a bent corner, a broken latch hook, or a door that does not close properly."},
+  {"id": "control_panel", "label": "Keypad", "sam": "keypad", "looks": "The buttons and display on the right side.", "normal": "Display lit; a Turntable on/off button on many over-the-range models.", "abnormal": "Blank display, or the turntable switched off on the keypad."},
+  {"id": "vent_grille", "label": "Vent grille and fan", "sam": "vent grille", "looks": "The slotted strip along the top front of an over-the-range microwave; the fan pulls air from the grease filters underneath.", "normal": "Fan runs at each speed without rattling.", "abnormal": "No fan at any speed, grinding, or a loud rattle."},
+  {"id": "grease_filter", "label": "Grease filter", "sam": "grease filter", "looks": "The metal mesh panels on the underside of an over-the-range microwave or a range hood.", "normal": "Light film of grease at most.", "abnormal": "Thick, dripping grease or a filter missing."}
+ ],
+ "faults": [
+  {"name": "Turntable switched off on the keypad", "evidence": "A Turntable or Turntable on/off key on the keypad and the tray still while the oven heats; turning it on makes it spin. Many over-the-range models have this key."},
+  {"name": "Tray not seated on the hub", "evidence": "The glass tray rocks or sits crooked, and the bumps underneath are not in the hub's slots."},
+  {"name": "Dirty or broken roller ring", "evidence": "Crusted food on the wheels or track, a missing wheel, or the ring off the track, seen with the tray lifted out."},
+  {"name": "Worn or broken hub (coupler)", "evidence": "With the tray lifted out, the hub is cracked, rounded, missing, or turns freely by hand while the shaft under it stays still."},
+  {"name": "Failed turntable motor", "evidence": "Tray, ring and hub all fine and the turntable is switched on, but the hub never turns while heating. Only the technician confirms this; the motor sits behind the cabinet."},
+  {"name": "Not heating (magnetron, diode or door switch)", "evidence": "Runs with light, fan and turntable but a cup of water is not warm after one minute. Inside parts are for the technician only."},
+  {"name": "Vent fan or light out (over-the-range)", "evidence": "No fan at any speed or no cooktop light, with the rest of the microwave working."}
+ ],
+ "hazards": [
+  {"id": "microwave_arcing", "label": "Sparks or scorch inside the microwave", "category": "scorch", "escalate": false, "threshold": "Visible sparks, a burnt spot or melted area on the cavity walls or the small cover panel on the side wall, or the caller says it sparks. Stop using it until the technician checks it; not an emergency unless there is flame or smoke."},
+  {"id": "microwave_grease", "label": "Heavy grease on the vent filters", "category": "flammables", "escalate": false, "threshold": "Thick dripping grease on the filters under the microwave or hood, right above the burners. A spoken warning to clean or replace the filters."}
+ ],
+ "may": ["Look at the keypad for a Turntable or Turntable on/off key and press it.", "Lift the glass tray and the roller ring out, wipe the track, and set them back with the bumps in the hub's slots.", "Hold a cup of water inside and run it for one minute to test heating.", "Unplug it or switch its breaker off before wiping inside the cavity."],
+ "must_not": ["Remove the outer cover or open the cabinet (parts inside hold a dangerous charge even when unplugged).", "Run it empty or with metal or foil inside.", "Use it if the door is bent, warped or does not close firmly."],
+ "tour": {"open": "Open the microwave door and show me the inside, with the glass tray in view.", "checkpoints": [{"part": "control_panel", "hint": "Show me the keypad up close. Look for a Turntable key."}, {"part": "turntable_hub", "hint": "Lift the glass tray and the roller ring out and point at the centre of the floor so I can see the hub."}, {"part": "microwave_door", "hint": "Close the door and show me its edges and the hinges on the left."}]},
+ "sources": ["fda-microwave", "nfpa-cooking"]
+}

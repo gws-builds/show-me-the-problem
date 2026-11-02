@@ -328,6 +328,86 @@
    "priceCents": 19900,
    "trade": "plumbing",
    "labelEs": "Prueba e informe del preventor de reflujo comercial"
+  },
+  {
+   "id": "ap-mw-diag",
+   "jobType": "microwave",
+   "label": "Microwave diagnosis: not heating, sparks or door (applied to repair)",
+   "priceCents": 9900,
+   "trade": "appliance",
+   "labelEs": "Diagnóstico de microondas: no calienta, chispas o puerta (se aplica a la reparación)"
+  },
+  {
+   "id": "ap-mw-turn",
+   "jobType": "microwave",
+   "label": "Microwave turntable repair: hub and motor (parts included)",
+   "priceCents": 16900,
+   "trade": "appliance",
+   "labelEs": "Reparación del plato giratorio del microondas: acople y motor (piezas incluidas)"
+  },
+  {
+   "id": "ap-otr-fan",
+   "jobType": "microwave",
+   "label": "Over-the-range microwave vent fan or light repair",
+   "priceCents": 18900,
+   "trade": "appliance",
+   "labelEs": "Reparación del ventilador o la luz del microondas sobre la estufa"
+  },
+  {
+   "id": "ap-hood",
+   "jobType": "range hood",
+   "label": "Range hood fan, switch or light repair",
+   "priceCents": 17900,
+   "trade": "appliance",
+   "labelEs": "Reparación del ventilador, interruptor o luz de la campana"
+  },
+  {
+   "id": "ap-oven-diag",
+   "jobType": "oven",
+   "label": "Oven or range diagnosis (applied to repair)",
+   "priceCents": 11900,
+   "trade": "appliance",
+   "labelEs": "Diagnóstico de horno o estufa (se aplica a la reparación)"
+  },
+  {
+   "id": "ap-oven-part",
+   "jobType": "oven",
+   "label": "Oven bake element, broil element or igniter replacement (part included)",
+   "priceCents": 27900,
+   "trade": "appliance",
+   "labelEs": "Cambio de resistencia de horneado, de gratinar o encendedor del horno (pieza incluida)"
+  },
+  {
+   "id": "ap-fridge-diag",
+   "jobType": "refrigerator",
+   "label": "Refrigerator or freezer not cooling diagnosis (applied to repair)",
+   "priceCents": 12900,
+   "trade": "appliance",
+   "labelEs": "Diagnóstico de refrigerador o congelador que no enfría (se aplica a la reparación)"
+  },
+  {
+   "id": "ap-fridge-defrost",
+   "jobType": "refrigerator",
+   "label": "Refrigerator or freezer defrost repair: heater, sensor or drain",
+   "priceCents": 29900,
+   "trade": "appliance",
+   "labelEs": "Reparación del descongelamiento del refrigerador o congelador: resistencia, sensor o drenaje"
+  },
+  {
+   "id": "ap-fridge-seal",
+   "jobType": "refrigerator",
+   "label": "Refrigerator or freezer door seal replacement (per door, part included)",
+   "priceCents": 21900,
+   "trade": "appliance",
+   "labelEs": "Cambio del sello de la puerta del refrigerador o congelador (por puerta, pieza incluida)"
+  },
+  {
+   "id": "ap-wine",
+   "jobType": "wine cooler",
+   "label": "Wine cooler not cooling diagnosis (applied to repair)",
+   "priceCents": 12900,
+   "trade": "appliance",
+   "labelEs": "Diagnóstico de enfriador de vino que no enfría (se aplica a la reparación)"
   }
  ]
 }

@@ -122,6 +122,12 @@ const EQUIP_ES = {
   'air conditioner': 'aire acondicionado',
   'heat pump': 'bomba de calor',
   unit: 'equipo',
+  microwave: 'microondas',
+  refrigerator: 'refrigerador',
+  freezer: 'congelador',
+  oven: 'horno',
+  'range hood': 'campana',
+  'wine cooler': 'enfriador de vino',
 };
 const equipEs = (s) => Object.entries(EQUIP_ES).reduce((t, [en, es]) => t.replace(new RegExp(`\\b${en}\\b`), es), s);
 const monthEs = (s) =>

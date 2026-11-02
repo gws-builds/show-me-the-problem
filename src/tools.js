@@ -87,7 +87,7 @@ export const DEFINITIONS = [
         type: 'string',
         enum: EQUIPMENT_KINDS,
         description:
-          'the kind of equipment: toilet, sink, water_heater, boiler, furnace, ac (also heat pumps, rooftop units, chillers), electrical (panels, outlets, switches), motor (pumps, fans, belts, other machines)',
+          'the kind of equipment: toilet, sink, water_heater, boiler, furnace, ac (also heat pumps, rooftop units, chillers), electrical (panels, outlets, switches), motor (pumps, fans, belts, appliances such as a microwave turntable, fridge compressor or hood fan, other machines)',
       },
       instruction: str(
         'one short line telling the caller where to hold the phone, e.g. "Hold your phone near the outdoor unit for a few seconds."',

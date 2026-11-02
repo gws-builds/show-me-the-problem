@@ -17,6 +17,9 @@ practice; no text is copied. Each card lists the source ids it relies on. Links 
 | epa-leaks | U.S. EPA WaterSense, Fix a Leak: https://www.epa.gov/watersense/fix-leak-week | dripping faucets, leaks under sinks, checking supply lines |
 | nrcan-maint | Natural Resources Canada, Home maintenance (ENERGY STAR new homes): https://natural-resources.canada.ca/energy-efficiency/energy-star/new-homes/maintenance | yearly service of heating equipment, filters, drains |
 | osha-elec | OSHA, Electrical hazards: https://www.osha.gov/electrical | exposed live parts, water and electricity, never touching energised parts |
+| fda-microwave | U.S. FDA, Microwave ovens (radiation-emitting products): https://www.fda.gov/radiation-emitting-products/resources-you-radiation-emitting-products/microwave-oven-radiation (opened 2026-11-02) | damaged door, hinges, latch or seals = stop using; no metal, not run empty |
+| fda-food-storage | U.S. FDA, Are you storing food safely?: https://www.fda.gov/consumers/consumer-updates/are-you-storing-food-safely (opened 2026-11-02) | fridge 40°F or below, freezer 0°F, appliance thermometer, room for air to circulate |
+| energystar-fridge | ENERGY STAR, Refrigerators: https://www.energystar.gov/products/refrigerators (opened 2026-11-02) | airtight door seals, temperature setting |
 
 What the knowledge base is not: a code book, a diagnosis, or a replacement for the technician. Every card says what a
 camera can and cannot show, and the code refuses any claim that has no visible evidence.

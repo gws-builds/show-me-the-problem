@@ -118,6 +118,23 @@ const JOB_PARTS = {
   motor: ['motor', 'drive', 'vfd', 'pump', 'fan', 'belt'],
   switchgear: ['switchgear', 'panel', 'breaker', 'disconnect', 'transformer'],
   'backflow preventer': ['backflow', 'valve', 'pipe', 'assembly'],
+  // Appliances (founder 11/02: microwave turntable, stove, range, hood fan, fridge, freezer, wine cooler).
+  microwave: [
+    'microwave',
+    'turntable',
+    'glass plate',
+    'glass tray',
+    'roller',
+    'hub',
+    'coupler',
+    'keypad',
+    'vent grille',
+    'grease filter',
+  ],
+  'range hood': ['hood', 'grease filter', 'vent', 'fan'],
+  oven: ['oven', 'range', 'stove', 'element', 'igniter', 'burner', 'gasket'],
+  refrigerator: ['refrigerator', 'fridge', 'freezer', 'door seal', 'gasket', 'coils', 'ice maker'],
+  'wine cooler': ['wine', 'cooler', 'fridge'],
 };
 
 /** wiringSettled: the camera's wiring finding was already judged in code, so the model restating it is not new evidence. */
