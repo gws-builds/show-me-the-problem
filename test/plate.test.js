@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanPlate, decodeSerial, describePlate, parsePrinted, ageYears, brandKey, plateLine } from '../src/plate.js';
 import { createSession } from '../src/agent.js';
-import { runTool } from '../src/tools.js';
+import { PLATE_READS, runTool } from '../src/tools.js';
 import { workOrder } from '../src/evidence.js';
 import { JPEG_640x480 } from './helpers.js';
 
@@ -225,7 +225,7 @@ test('read_plate: no legible plate means no age and a move-closer line; plate te
   assert.equal(s.quote(), null);
 });
 
-test('red team, cost: a model looping on read_plate gets at most 3 model reads per call', async () => {
+test('red team, cost: a model looping on read_plate gets at most PLATE_READS model reads per call', async () => {
   const s = createSession();
   s.pushFrame(JPEG_640x480);
   let looks = 0;
@@ -236,5 +236,30 @@ test('red team, cost: a model looping on read_plate gets at most 3 model reads p
     },
   };
   for (let i = 0; i < 8; i++) await runTool('read_plate', {}, { client, session: s });
-  assert.equal(looks, 3);
+  assert.equal(looks, PLATE_READS);
+});
+
+test('a label the caller asked about but could not be read is wanted again; a good read clears it (11/02 take)', async () => {
+  const s = createSession();
+  s.pushFrame(JPEG_640x480);
+  let legible = false;
+  const client = {
+    look: async () =>
+      legible
+        ? {
+            visible: true,
+            equipment: 'water heater',
+            brand: 'Navien',
+            serial: '',
+            mfg_date_printed: '06/2014',
+            legible: 0.9,
+          }
+        : { visible: false },
+  };
+  await runTool('read_plate', { equipment: 'water heater' }, { client, session: s });
+  assert.equal(s.plateWanted(), 'water heater');
+  legible = true;
+  const r = await runTool('read_plate', { equipment: 'water heater' }, { client, session: s });
+  assert.equal(r.output.read, true);
+  assert.equal(s.plateWanted(), null);
 });

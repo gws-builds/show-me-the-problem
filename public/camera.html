@@ -24,6 +24,7 @@
       <div class="card rec-cue stop" id="recStop" hidden>
         <div class="cue-banner">You can stop recording now</div>
         <p>Tap the red indicator at the top of the screen, then Stop. Nothing else to do.</p>
+        <a class="button-link" href="/go">Back to all takes</a>
       </div>
       <div class="card consent" id="consent">
         <p>
@@ -43,6 +44,7 @@
           STAGED SCENE · arranged by us for this demo; the detection is live
         </div>
         <button class="light-btn" id="torch" hidden>Light</button>
+        <button class="zoom-btn" id="zoom" hidden aria-label="Zoom: 1x. Tap to zoom in, or pinch the video.">1x</button>
         <div class="agent-line caption" id="line" aria-live="polite">…</div>
       </div>
       <div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
@@ -51,6 +53,7 @@
         <div class="row">
           <strong id="scriptTitle"></strong><button class="secondary mini" id="finish">Finish take</button>
         </div>
+        <p class="small"><a href="/go">Back to all takes</a></p>
         <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
         <ol class="small" id="scriptSay"></ol>
         <p class="small" id="ownerStep" hidden>

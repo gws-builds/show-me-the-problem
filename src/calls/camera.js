@@ -4,7 +4,7 @@
 import { isStop } from '../budget.js';
 import { scanFrame, severityOf } from '../hazards.js';
 import { maskGeometry } from '../mask.js';
-import { runTool } from '../tools.js';
+import { PLATE_READS, PLATE_RETRY_MS, runTool } from '../tools.js';
 import { tourStep, tourMemo } from '../tour.js';
 import { LIMITS, article } from './shared.js';
 
@@ -232,5 +232,22 @@ export function createCameraLoops({ now, say, note, autoTurn, exclusive }) {
     }
   }
 
-  return { track, scan, tourTick };
+  // The caller asked how old the unit is and the label was not legible: re-read it on new frames while they
+  // bring it closer or zoom, and say the age as soon as it reads. Bounded by PLATE_READS per call.
+  async function plateWatch(c) {
+    const want = c.session.plateWanted?.();
+    if (!want || c.busy || c.session.plateReads() >= PLATE_READS) return;
+    if (c.lastPlateTry && now() - c.lastPlateTry < PLATE_RETRY_MS) return;
+    c.lastPlateTry = now();
+    await exclusive(c, async () => {
+      const r = await runTool('read_plate', { equipment: want }, c.ctx).catch(() => null);
+      if (r?.output?.read && r.say) say(c, r.say, c.status);
+      else if (c.session.plateReads() >= PLATE_READS) {
+        c.session.wantPlate(null);
+        say(c, 'I still cannot read that label. The technician will check it on site.', c.status);
+      }
+    });
+  }
+
+  return { track, scan, tourTick, plateWatch };
 }

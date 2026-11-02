@@ -8,7 +8,7 @@
 // - Caller words are checked for hazards in CODE before the model sees them:
 //   a hazard ends quoting at once, pages the owner and blocks booking.
 // - Prices only come from the verifier; bookings only from the owner's tap.
-import { createSession, callerTurn, MAX_TURNS } from './agent.js';
+import { createSession, callerTurn, maxTurns } from './agent.js';
 import { PER_RUN_USD, STOP_CODES, isStop } from './budget.js';
 import { safeEqual } from './filters.js';
 import { guide, DARK_LUMA } from './guidance.js';
@@ -151,8 +151,10 @@ export function createCalls({
       say(c, 'This visit is already settled. The office will text you.', c.status);
       return;
     }
-    if (c.turns >= MAX_TURNS) {
-      say(c, 'Let me get the owner to call you back to finish this.', 'handoff');
+    if (c.turns >= maxTurns(c)) {
+      // Said once: the 11/02 panel take heard it four times in a row.
+      if (c.status !== 'handoff') say(c, 'Let me get the owner to call you back to finish this.', 'handoff');
+      else c.session.log({ kind: 'after_handoff', text: line.slice(0, 120) });
       return;
     }
     c.turns++;
@@ -255,7 +257,7 @@ export function createCalls({
   // per-call cap so a moving camera cannot buy unbounded agent turns (red team 10/31, finding 8).
   async function autoTurn(c, note) {
     // The same gates as a spoken turn: no model spend after an escalation, a decided booking or the turn cap (red team #4).
-    if (['escalated', 'booked', 'declined', 'handoff'].includes(c.status) || c.turns >= MAX_TURNS) return;
+    if (['escalated', 'booked', 'declined', 'handoff'].includes(c.status) || c.turns >= maxTurns(c)) return;
     if ((c.autoTurns = (c.autoTurns ?? 0) + 1) > LIMITS.autoTurns) {
       say(c, 'Tell me what you see, and I will take it from there.', 'waiting_caller');
       return;
@@ -271,7 +273,7 @@ export function createCalls({
     }
   }
 
-  const { track, scan, tourTick } = createCameraLoops({ now, say, note, autoTurn, exclusive });
+  const { track, scan, tourTick, plateWatch } = createCameraLoops({ now, say, note, autoTurn, exclusive });
   const listen = createListen({ now, say, exclusive, autoTurn });
 
   function startTour(c, room) {
@@ -505,6 +507,8 @@ export function createCalls({
       )
         c.tourP = tourTick(c);
       await track(c).catch(() => {});
+      if (!dark && !['escalated', 'booked', 'declined', 'handoff'].includes(c.status))
+        c.plateP = plateWatch(c).catch(() => {}); // a model read: never holds up the frame reply
       return { ok: true };
     },
 

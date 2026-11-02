@@ -148,6 +148,7 @@ const Speech = {
     // voice is fetched meanwhile, so the fade costs no time.
     const fading = Speech.isFiller && Speech.speaking && !player.paused ? fadeOut() : (Speech.stop(), null);
     const n = ++sayN;
+    if (Speech.current && !Speech.isFiller) Speech.recent = [...Speech.recent, Speech.current].slice(-3);
     Speech.speaking = true;
     Speech.current = text;
     Speech.isFiller = filler;
@@ -230,10 +231,36 @@ const Speech = {
     }
     Speech.speaking = false;
   },
-  /** Barge-in: the caller talks, so the agent stops and drops what it was about to say. */
+  // The last lines played, so an echo check sees the whole recent speech (ASR partials span line parts).
+  recent: [],
+  recentText() {
+    return [...Speech.recent, Speech.current, ...Speech.queue].join(' ');
+  },
+  // Barge-in: the caller talks, so the agent stops. What it was saying is kept until the caller's turn is
+  // in (then dropped), or comes back if that "speech" was only the agent's own voice or noise (11/02 takes:
+  // the voice went quiet while lines kept arriving on screen).
+  interrupted: null,
   hush() {
+    if (!Speech.speaking && !Speech.queue.length) return;
+    const cut = Speech.isFiller ? Speech.queue : [Speech.current, ...Speech.queue];
+    Speech.interrupted = cut.filter(Boolean);
     Speech.queue = [];
     Speech.stop();
+    clearTimeout(Speech.resumeTimer);
+    Speech.resumeTimer = setTimeout(() => Speech.resume(), 6000);
+  },
+  resume() {
+    clearTimeout(Speech.resumeTimer);
+    const lines = Speech.interrupted;
+    Speech.interrupted = null;
+    if (!lines?.length) return;
+    Speech.queue = [...lines.slice(1), ...Speech.queue];
+    if (!Speech.speaking) Speech.say(lines[0]);
+    else Speech.queue.unshift(lines[0]);
+  },
+  dropInterrupted() {
+    clearTimeout(Speech.resumeTimer);
+    Speech.interrupted = null;
   },
   /** Holds every non-urgent line while the phone records the equipment, then plays what waited. */
   hold(on) {
@@ -247,16 +274,76 @@ const Speech = {
 document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;
 
+// ---- zoom ----
+// Founder 11/02: the label could not be brought closer. The camera's own zoom where Safari offers it;
+// otherwise a digital zoom: the video is scaled from its centre and the frames sent are the same crop,
+// so outlines, taps and the models all see what the caller sees. Tap cycles 1x, 2x, 3x; pinch sets it.
+let digital = 1;
+let hwZoom = null; // { track, min, max } when the camera supports zoom
+function shown() {
+  const v = media();
+  return { sw: v.videoWidth / digital, sh: v.videoHeight / digital };
+}
+async function setZoom(z) {
+  z = Math.min(3, Math.max(1, Math.round(z * 10) / 10));
+  let hw = false;
+  if (hwZoom) {
+    try {
+      await hwZoom.track.applyConstraints({ advanced: [{ zoom: Math.min(hwZoom.max, Math.max(hwZoom.min, z)) }] });
+      hw = true;
+    } catch {
+      hwZoom = null;
+    }
+  }
+  digital = hw ? 1 : z;
+  media().style.transform = digital > 1 ? `scale(${digital})` : '';
+  $('zoom').textContent = `${Number.isInteger(z) ? z : z.toFixed(1)}x`;
+  $('zoom').setAttribute('aria-label', `Zoom: ${$('zoom').textContent}. Tap to zoom in, or pinch the video.`);
+  $('zoom').classList.toggle('on', z > 1);
+  setZoom.level = z;
+}
+setZoom.level = 1;
+function setupZoom(track) {
+  const caps = track?.getCapabilities?.() ?? {};
+  if (caps.zoom && caps.zoom.max > caps.zoom.min) hwZoom = { track, min: caps.zoom.min, max: caps.zoom.max };
+  $('zoom').hidden = false;
+  $('zoom').onclick = () => setZoom(setZoom.level >= 3 ? 1 : Math.floor(setZoom.level) + 1);
+  let pinch = null;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const ov = $('ov');
+  ov.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length === 2) pinch = { d: dist(e.touches), z: setZoom.level };
+    },
+    { passive: true },
+  );
+  ov.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      void setZoom(pinch.z * (dist(e.touches) / pinch.d));
+    },
+    { passive: false },
+  );
+  ov.addEventListener('touchend', () => {
+    pinch = null;
+  });
+}
+
 // ---- frames ----
 const grab = document.createElement('canvas');
 async function sendFrame() {
   const v = media();
   if (!v.videoWidth || (FOOTAGE && v.paused)) return;
-  const scale = Math.min(1, 768 / Math.max(v.videoWidth, v.videoHeight));
-  grab.width = Math.round(v.videoWidth * scale);
-  grab.height = Math.round(v.videoHeight * scale);
+  // Digital zoom sends the centred crop the caller sees, at up to 768 px: more detail on a label.
+  const { sw, sh } = shown();
+  const scale = Math.min(1, 768 / Math.max(sw, sh));
+  grab.width = Math.round(sw * scale);
+  grab.height = Math.round(sh * scale);
   const g = grab.getContext('2d', { willReadFrequently: true });
-  g.drawImage(v, 0, 0, grab.width, grab.height);
+  g.drawImage(v, (v.videoWidth - sw) / 2, (v.videoHeight - sh) / 2, sw, sh, 0, 0, grab.width, grab.height);
   // Mean luma on a 32x32 sample: the server's lighting check uses it (no model call).
   const d = g.getImageData(0, 0, grab.width, grab.height).data;
   let sum = 0;
@@ -280,12 +367,12 @@ async function sendFrame() {
 
 // ---- overlay ----
 function drawOverlay() {
-  const v = media();
   const view = lastView;
   const g = view?.guidance;
   // Server clock: age = (server now - guidance time) at poll + time since the poll arrived.
   const ageMs = g?.at && view.now ? view.now - g.at + (Date.now() - view.receivedAt) : 0;
-  Overlay.draw($('ov'), v.videoWidth, v.videoHeight, {
+  const { sw, sh } = shown();
+  Overlay.draw($('ov'), sw, sh, {
     records: view?.boxes ?? [],
     part: view?.part,
     guidance: g,
@@ -464,7 +551,8 @@ $('ov').addEventListener('click', async (e) => {
   const v = media();
   if (!v.videoWidth) return;
   const rect = $('ov').getBoundingClientRect();
-  const f = Overlay.fit(rect.width, rect.height, v.videoWidth, v.videoHeight);
+  const { sw, sh } = shown();
+  const f = Overlay.fit(rect.width, rect.height, sw, sh);
   const x = (e.clientX - rect.left - f.x) / f.w;
   const y = (e.clientY - rect.top - f.y) / f.h;
   if (x < 0 || y < 0 || x > 1 || y > 1) return;
@@ -575,6 +663,7 @@ async function start() {
     stream = await openCamera();
     media().srcObject = new MediaStream(stream.getVideoTracks());
     setupTorch(stream.getVideoTracks()[0]);
+    setupZoom(stream.getVideoTracks()[0]);
     window.Voice?.startFromStream(stream, id, cam);
   }
   started = true;
@@ -618,14 +707,29 @@ function checkTakeEnd(view) {
     (end.includes('warning') && (view.checklist ?? []).some((c) => c.id === 'flammables' && c.status === 'found'));
   if (done) endTake(5000);
 }
-function endTake(delay = 0) {
-  if (takeEnded) return;
+function endTake(delay = 0, now = false) {
+  if (takeEnded && !now) return;
   takeEnded = true;
-  // Let the agent finish its last line, then cue the stop.
-  const go = () => {
-    if (Speech.speaking) return setTimeout(go, 700);
+  const show = () => {
     $('recStop').hidden = false;
     $('recStop').scrollIntoView({ behavior: 'smooth' });
+  };
+  // Finish take: at once. The voice stops and the stop card shows (11/02 takes: it waited on a voice
+  // that kept talking, so the button seemed dead).
+  if (now) {
+    Speech.queue = [];
+    Speech.dropInterrupted();
+    Speech.stop();
+    show();
+    $('finish').textContent = 'Take finished';
+    $('finish').disabled = true;
+    return;
+  }
+  // Otherwise let the agent finish its last line (at most 20 s), then cue the stop.
+  const until = Date.now() + delay + 20000;
+  const go = () => {
+    if (Speech.speaking && Date.now() < until) return setTimeout(go, 700);
+    show();
     cue('You can stop recording now.');
   };
   setTimeout(go, delay);
@@ -671,7 +775,7 @@ async function setupTake() {
       $('tourGo').click();
     }
   };
-  $('finish').onclick = () => endTake(0);
+  $('finish').onclick = () => endTake(0, true);
 }
 if (TAKE) setupTake();
 if (FOOTAGE) {

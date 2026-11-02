@@ -266,7 +266,8 @@ input[type='tel'] {
 }
 .stage .staged-label {
   position: absolute;
-  top: 10px;
+  /* Below the Light and zoom buttons, so neither covers the label (11/02 takes: it read "arranged by u"). */
+  top: 62px;
   left: 10px;
   right: 10px;
   background: #fde047;
@@ -546,6 +547,40 @@ a.button {
   border-radius: 10px;
   background: var(--accent);
   color: #04211c;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Zoom: hardware zoom where the camera offers it, otherwise a centred crop that is also what the models get. */
+.stage .zoom-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: 1px solid #fff;
+  white-space: nowrap;
+}
+.stage video {
+  transform-origin: center center;
+}
+.stage .zoom-btn.on {
+  background: #fff;
+  color: #0b1220;
+}
+.button-link {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  padding: 0 16px;
+  margin-top: 8px;
+  border-radius: 10px;
+  background: var(--accent, #22c3a6);
+  color: #0b1220;
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;

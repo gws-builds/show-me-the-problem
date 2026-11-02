@@ -23,7 +23,8 @@ const fn = (name, description, properties, required = Object.keys(properties)) =
 });
 const str = (description) => ({ type: 'string', description });
 
-export const PLATE_READS = 3;
+export const PLATE_READS = 6;
+export const PLATE_RETRY_MS = 4000; // a wanted label is re-read at most every 4 s
 
 export const DEFINITIONS = [
   fn(
@@ -388,6 +389,9 @@ export async function runTool(name, args, ctx) {
       const p = describePlate(cleanPlate(j), { now: new Date(ctx.now?.() ?? Date.now()) });
       if (!p) {
         session.log({ kind: 'plate', ok: false, frame: frame.n });
+        // The caller asked: code keeps trying on the next frames while they bring the label closer (11/02 take:
+        // the next turn moved on and the age was never read).
+        session.wantPlate?.(args.equipment || 'equipment');
         // No spoken line from code: the agent decides whether to ask for a closer view or carry on with the job
         // (eval wh02, Oct 30: a forced "move closer to the sticker" derailed a plain water heater call).
         return {
@@ -406,6 +410,7 @@ export async function runTool(name, args, ctx) {
         support: `Muse Spark read the plate on this frame; ${p.date?.basis === 'printed' ? 'date printed on the plate' : p.date ? `age by code from ${p.date.ruleLabel} (kb/serials.json)` : 'no date rule'}`,
       });
       session.setPlate?.({ ...p, evidence: entry.id });
+      session.wantPlate?.(null);
       session.log({ kind: 'plate', ok: true, frame: n, summary: p.summary });
       return {
         output: {

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createLedger } from '../src/budget.js';
 import { createClient } from '../src/meta.js';
 import { createCalls, LIMITS } from '../src/calls.js';
+import { maxTurns, MAX_TURNS, TOUR_TURNS } from '../src/agent.js';
 
 const PRICES = [{ id: 'wh-tpr', jobType: 'water heater', label: 'Relief valve replacement', priceCents: 24900 }];
 const JPEG = 'data:image/jpeg;base64,' + 'A'.repeat(400);
@@ -235,6 +236,20 @@ test('a call that never converges hands off at the turn cap instead of spending 
   const v = calls.view(c.id);
   assert.equal(v.status, 'handoff');
   assert.ok(counts.spark <= 12);
+});
+
+test('the turn-cap handoff line is said once, not on every later turn (11/02 panel take)', async () => {
+  const { calls } = setup({ agent: Array.from({ length: 200 }, () => ['ask_caller', { question: 'More?' }]) });
+  const c = calls.create({ ip: '1.1.2.2' });
+  for (let i = 0; i < 16; i++) await calls.text(c.id, c.camToken, `answer ${i}`);
+  const v = calls.view(c.id);
+  assert.equal(v.status, 'handoff');
+  assert.equal(v.says.filter((x) => /call you back/.test(x.text)).length, 1);
+});
+
+test('a call with a guided tour gets more turns before the handoff (callers ask about each part)', async () => {
+  assert.equal(maxTurns({ tour: null }), MAX_TURNS);
+  assert.equal(maxTurns({ tour: { done: false } }), MAX_TURNS + TOUR_TURNS);
 });
 
 test('tracking: after "move the camera", SAM re-checks new frames and the agent continues when the part is in view', async () => {

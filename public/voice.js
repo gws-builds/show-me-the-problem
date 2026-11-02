@@ -132,15 +132,19 @@ window.Voice = (() => {
         state('hearing you');
       } else if (m.type === 'partial') {
         $('partial').textContent = m.text;
-        // Barge-in on words that are not the agent's own line coming back through the speaker.
-        if (window.Speech?.speaking && !echoOf(m.text, window.Speech.current)) window.Speech.hush();
+        // Barge-in on words that are not the agent's own lines coming back through the speaker. Two such words
+        // at least: on a loudspeaker one misheard echo word cut lines mid-word and dropped the queue (11/02 takes).
+        if (window.Speech?.speaking && !echoOf(m.text, window.Speech.recentText())) window.Speech.hush();
       } else if (m.type === 'final') {
+        window.Speech?.dropInterrupted();
         $('heard').textContent = `You said: "${m.text}"`;
         $('partial').textContent = '';
       } else if (m.type === 'thinking') {
         state('thinking');
         armFiller();
       } else if (m.type === 'ignored') {
+        // It was the agent's own voice after all: pick up where it was cut.
+        window.Speech?.resume();
         $('partial').textContent = '';
       }
       // Never leave the caller hanging: an error is said out loud, not only shown (red team 10/30).
@@ -181,7 +185,8 @@ window.Voice = (() => {
         .match(/[a-z0-9']+/g) || [];
     const h = w(heard);
     const a = new Set(w(agent));
-    return h.length > 0 && h.filter((x) => a.has(x)).length / h.length >= 0.7;
+    const foreign = h.filter((x) => !a.has(x)).length;
+    return h.length === 0 || foreign < 2 || foreign / h.length <= 0.3;
   }
 
   // Filler while tools run: if the agent has not answered within 1.2 s, say a short line.
