@@ -32,10 +32,19 @@ The camera is a sensor inside an agent that talks, decides, verifies and acts. M
 | **Muse Voice Transcribe 1.0** | Realtime over `wss://api.meta.ai/v1/asr/realtime` in ENDPOINTING mode (turn detection), English and Spanish. Our server relays 16 kHz PCM and adds the key; the browser never sees it. Push-to-talk WAV is the fallback. |
 | **Muse Wonder 1.0** | The slower reasoning model, used for the one step where time is not short: after the owner approves, it reads the whole work order and evidence ledger and writes the technician's order of checks and what the call could not establish (`src/review.js`). Code keeps only steps that cite evidence ids that exist and drops any line with a price. It runs beside the booking (about 11 s, $0.04 measured Oct 31), so it never slows the caller. |
 | **Muse Image 1.0** | After approval, an illustration for the technician, labelled "not evidence". The evidence still is the real frame with the SAM outline drawn in code. |
+| **Muse Glimmer 30B** (open weights) | Runs on the business's own GPU, not a shared API: vLLM 0.32.0, FP8, one L40S on Modal (`modal/glimmer.py`, behind a proxy key and a bearer key). After the owner approves, it reads the work order, the evidence ledger and the last frame and drafts the truck list (every item must cite an evidence id) and the confirmation text (`src/afterBooking.js`), with a strict JSON schema. Code drops uncited items, prices, links and payment asks; nothing reaches the customer until the owner taps Send. The call photo and the caller's words never leave the business's GPU for this step. |
 
 **Structured outputs.** Every JSON answer from Muse Spark and Muse Wonder (hazard scan, inspection, rating plate, tour step, grounding points, technician review) is requested with a strict JSON schema (`src/schemas.js`, Responses API `text.format`), checked against api.meta.ai on Nov 1. Code no longer fishes JSON out of free text; the old parser stays only as a fallback.
 
-**The voice is the only part that is not Meta.** Meta's catalogue has no text-to-speech model, so the agent's finished lines are read out by Deepgram Aura-2 (`src/tts.js`), with the browser's built-in speech synthesis as the fallback. Deepgram only turns the agent's own words into sound: all listening, seeing, deciding and answering is done by the Meta models above.
+**The voice is the only model that is not Meta.** Meta's catalogue has no text-to-speech model, so the agent's finished lines are read out by Deepgram Aura-2 (`src/tts.js`), with the browser's built-in speech synthesis as the fallback. Deepgram only turns the agent's own words into sound: all listening, seeing, deciding and answering is done by the Meta models above. Two non-model services are infrastructure: Telnyx sends the confirmation text the owner approves (`src/sms.js`), and Modal hosts the GPU that runs Muse Glimmer.
+
+```
+ phone camera + mic ──► server (code gates, budget, evidence ledger) ──► owner page (approve) ──► calendar invite + text
+        │                     │            │             │                                           ▲
+        ▼                     ▼            ▼             ▼                                           │
+ Muse Voice Transcribe   Muse Spark    SAM 3.1     Muse Wonder / Muse Image             Muse Glimmer 30B on our GPU
+ (realtime ASR)          (agent+tools) (outlines)  (after approval)                     (truck list + confirmation draft)
+```
 
 ## How the camera part works
 
@@ -71,15 +80,15 @@ The caller's language is detected from their words. The model writes its lines i
 
 ## Safety is in code, not in the prompt
 
-- **Spoken hazards end quoting before any model call.** Gas, sparks, smoke, scorching, exposed wiring, water on electrical, carbon monoxide and structural damage, in English and Spanish ("huele a gas", "chispas"), with negation handling ("no huele a gas" is not a hazard).
+- **Spoken hazards end quoting before any model call.** Gas (including a hissing meter), sparks, smoke, scorching, exposed wiring, water on electrical, a tingle from a faucet, something pushed into an outlet, carbon monoxide and structural damage, in English and Spanish ("huele a gas", "chispas"), with negation handling ("no huele a gas" is not a hazard). Once a call is escalated it stays escalated: a model turn already running cannot make it bookable again.
 - **Camera hazards need two models.** Spark lists what it sees (flammables near a burner, water near electrical, exposed wiring, scorch). SAM must outline the named object at confidence 0.5 or more. Otherwise the check shows "unconfirmed" and nothing happens. Agreement on an escalating category pages the owner and blocks quotes and booking. Flammables near heat get a spoken warning and an owner note, and the call goes on. Electrical checks are visual only: the app never claims a measurement.
 - **The checklist shows clean results too.** Each check is clear or found, with the frame it used, so a clean result has evidence.
-- **Prices come only from the owner's list.** `propose_quote` goes through `verifier.js`: a real row of the list, and a SAM outline with confidence 0.5 or more. Otherwise "the technician confirms on site".
+- **Prices come only from the owner's list.** `propose_quote` goes through `verifier.js`: a real row of the list, and a SAM outline with confidence 0.5 or more. Otherwise "the technician confirms on site". Every other line the model writes passes a price filter in code (`src/filters.js`): a sentence with an amount, a number in words ("eighty-nine for the faucet", "ochenta y nueve dólares"), a figure next to a money or visit word, another currency or "free visit" is replaced. Times, years, sizes and ratings are not.
 - **Hypotheses need evidence.** `record_hypothesis` is refused unless it cites ledger entries from a frame observation, an outline or the caller's words.
 - **Water shut-off steps are fixed text in code.** Anything about gas is refused in code.
 - **Nothing is booked by the model.** Only the owner's token approves, and never on a hazard call. The demo calendar is three weekday windows in the business's time zone; an approved visit becomes a calendar invite (`.ics`). This repository does not book into Jobber.
 - **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call ($0.60 for a guided tour); each session has a hard **session spend stop** (`SPEND_STOP_USD`, $25 by default) counted from the ledger when the session began and kept in the ledger, so a crash or restart does not reset it (`SESSION_RESET=1` starts a new one; the recording script does); the public demo switches to replays at $80 of the credit; everything stops at $100.
-- **Access code on every page and API.** A random code is made at each server start and written to `.data/access_code` (mode 600), never logged or committed. `/k/<code>` sets an HttpOnly, SameSite=Strict cookie and redirects, so the code leaves the address bar; without it, pages redirect to a code-entry page, APIs answer 401 and the voice WebSocket is closed before any model call. 20 wrong codes in 10 minutes lock that client out. This sits on top of the per-call tokens.
+- **Access code on every page and API.** A random code is made at each server start and written to `.data/access_code` (mode 600), never logged or committed. `/k/<code>` sets an HttpOnly, SameSite=Lax cookie (Lax so the link still works when opened from an email or text) and redirects, so the code leaves the address bar; without it, pages redirect to a code-entry page, APIs answer 401 and the voice WebSocket is closed before any model call. 20 wrong codes in 10 minutes lock that client out. This sits on top of the per-call tokens.
 - **Bounds for strangers:** frame and audio size and rate, one message at a time, 6 calls per IP per hour, 10 live calls at once, 15-minute calls, a WebSocket origin check, and voice tokens sent in the first message, never in a URL.
 - **The owner approves.** In the judge demo the person who starts a call also plays the owner, and the page says so; set `OWNER_LINK_TO_CALLER=0` for a real business, and only staff get the owner link.
 - **Each call is private to its own links.** The live view, camera stills and evidence frames need that call's caller, owner or console link; the shared access code alone shows nothing, and the console's "latest call" only follows calls this browser started (a random cookie), not an address an office shares. At most two calls are open at once from one place, and live calls count at their full cap against the hourly budget. One person's model spend is capped per hour, so a shared code cannot drain the session stop for everyone else.
@@ -105,16 +114,18 @@ After the owner approves, the visit is a calendar invite (`src/ics.js`, RFC 5545
 ## Run it
 
 ```bash
-npm run check                         # eslint + prettier + 202 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
+npm run check                         # eslint + prettier + 207 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
+node eval/fetch_photos.mjs            # once: downloads the eval photos (freely licensed, not committed)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
+npm start                             # no key: open "Recorded calls" to replay real takes from data/replays
 ```
 
 On the start page, **Start a call** gives three links: the camera page (the caller), the owner page (approve), and the Agent Console (every step, check, evidence entry, cost and latency, live). **Recorded calls** lists replays.
 
 Every page needs the access code: open `http://127.0.0.1:8642/k/<code from .data/access_code>`.
 
-The phone camera needs HTTPS. For a recording session, `scripts/record_session.sh` starts the server on 127.0.0.1, a Cloudflare quick tunnel to it (temporary https URL, no account), prints the phone link with the code as text and a terminal QR (`scripts/qr.mjs`, no dependencies), opens the Agent Console in its own window (`/console#latest` follows the newest call) and records the Mac screen into `recordings/`; Ctrl-C stops all of it. `--no-tunnel` runs it locally. The phone opens **Pick a take** (`/go`): each take starts a call with a script card, a "start your screen recording now" cue that waits for "I'm recording", and a "you can stop recording now" cue at the end (`public/takes.json`).
+The phone camera needs HTTPS. For a recording session, `scripts/record_session.sh` starts the server on 127.0.0.1, a Cloudflare quick tunnel to it (temporary https URL, no account), prints the phone link with the code as text and a terminal QR (`scripts/qr.mjs`, no dependencies), opens the Agent Console in its own window (`/console#latest` follows the newest call) and records the Mac screen into `recordings/`; Ctrl-C stops all of it. `--no-tunnel` runs it locally. In this private session (`RECORDING_SESSION=1`) the founder's takes are not held to the per-place limits (the session spend stop still applies), only the Mac's own console recorder follows the newest call, and the Muse Glimmer GPU is kept warm so the owner step never waits for a cold start. The phone opens **Pick a take** (`/go`): each take starts a call with a script card, a "start your screen recording now" cue that waits for "I'm recording", and a "you can stop recording now" cue at the end (`public/takes.json`).
 
 ## Deploy (one container, not used for the recordings)
 
@@ -192,7 +203,8 @@ We report what was measured, never a perfect score.
 |---|---|
 | Everything in this repository: agent loop, tools, grounding, mask decoding, guidance, realtime voice relay, camera hazards, checklist, evidence ledger, work order, verifier, budget ledger, pages, eval, tests | **New** (Oct 27 – Nov 4, 2026) |
 | Unmanually, the AI office manager product that answers the business's phone | Pre-existing. It is not in this repository. The demo uses a fictional business, a fictional price list and an in-memory calendar. |
-| Deepgram Aura-2 for the agent's voice (text-to-speech only), browser speech synthesis as fallback | Deepgram (no Meta TTS exists) |
+| Deepgram Aura-2 for the agent's voice (text-to-speech only), browser speech synthesis as fallback | Pre-existing third-party service (no Meta TTS exists); the integration code is new |
+| Telnyx (texting) and Modal (GPU host for Muse Glimmer) | Third-party infrastructure; the code that uses them is new |
 
 ## License
 

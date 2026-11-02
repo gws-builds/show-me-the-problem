@@ -100,7 +100,8 @@ const sameThing = (a, b) => a === b || a.includes(b) || b.includes(a);
 
 /** The frame find_part should look at: the early outline's own frame when that guess fits, else the latest. */
 export function frameFor(part, latest, spec, now) {
-  if (spec && sameThing(nounsFor(part)[0], spec.noun) && now - spec.frame.at <= SPEC_USE_MS) return spec.frame;
+  const noun = nounsFor(part)[0]; // none for an empty or symbol-only part (red team #7 L1)
+  if (spec && noun && sameThing(noun, spec.noun) && now - spec.frame.at <= SPEC_USE_MS) return spec.frame;
   return latest;
 }
 

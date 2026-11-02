@@ -6,17 +6,20 @@ import { timingSafeEqual } from 'node:crypto';
 // Model-written lines never carry a price: only the verifier's answer to propose_quote may
 // (red team 10/31: a caller could talk the agent into "the visit is $1"). A sentence with
 // an amount is replaced in code.
-const AMOUNT = /\$\s*\d|\b\d[\d,.]*\s*(dollars?|bucks|usd|d[oó]lares)\b|\bfree of charge\b|\bno charge\b/i;
+const AMOUNT =
+  /[$€£¥]\s*\d|\b\d[\d,.]*\s*(dollars?|bucks|usd|eur(?:os?)?|d[oó]lares)\b|\bfree (?:of charge|visit|call|quote|inspection|estimate)\b|\bno (?:charge|cost)\b|\bcosts? nothing\b|\bgratis\b|\b\d{1,3}(?:,\d{3})+\b/i;
 // A price said in words gets past a digit check (red team #6 B-6: "two hundred bucks", "one fifty for the
 // visit", "that is 150"). A sentence is priced when it has a number (in words, or a bare 2-4 digit figure that
-// is not a time or a measurement) together with a money word, or a number followed by "for the visit/job".
-const NUM_WORD = String.raw`(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|cien|ciento|doscientos|trescientos|quinientos|mil)`;
-const BARE_NUM = String.raw`\b\d{2,4}\b(?!\s*(?:am|pm|a\.m|p\.m|:|%|°|degrees?|minutes?|mins?|hours?|years?|gallons?|gal|psi|amps?|volts?|btu|kw|lbs?|feet|ft|inch|in\b))`;
+// is not a time, a year or a measurement) together with a money word, or a number followed by "for the visit/job".
+// Red team #7 M6 added the words around a price ("the visit is 89", "around 89 total", "normally 89 but for
+// you 1"), Spanish tens, other currencies and "free visit".
+const NUM_WORD = String.raw`(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|grand|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)`;
+const BARE_NUM = String.raw`(?<!\bto\s)\b(?!(?:19|20)\d{2}\b)\d{2,4}\b(?![\s-]*(?:to\s+\d|am|pm|a\.m|p\.m|:|%|°|degrees?|seconds?|secs?|minutes?|mins?|hours?|days?|weeks?|months?|years?|a[nñ]os|gallons?|gal|litres?|liters?|psi|amps?|volts?|watts?|btu|kw|lbs?|feet|ft|foot|inch(?:es)?|in\b|cm|mm|metres?|meters?))`;
 const MONEY_WORD =
-  /\b(?:price[sd]?|cost[s]?|charges?|fees?|run(?:s)? (?:you|about|around)|bucks|dollars?|quote[sd]?|pay|precio|cuesta|cobra|cobramos|d[oó]lares)\b/i;
+  /\b(?:price[sd]?|cost[s]?|charges?|fees?|run(?:s)? (?:you|about|around)|bucks|dollars?|quote[sd]?|pay|visit|total|bill|parts|labou?r|flat|rate|about|around|roughly|near|usually|normally|typically|for you|precio|cuesta|cobra|cobramos|d[oó]lares|son)\b/i;
 const NUMBER = new RegExp(`\\b${NUM_WORD}\\b|${BARE_NUM}`, 'i');
 const FOR_THE_JOB = new RegExp(
-  `\\b${NUM_WORD}\\b(?:[\\s-]+${NUM_WORD}\\b)*\\s+for the (?:visit|job|repair|call|service|work)`,
+  `(?:\\b${NUM_WORD}\\b(?:[\\s-]+${NUM_WORD}\\b)*|\\b\\d{2,5}\\b)\\s+for (?:the|your|this|that) [a-z]`,
   'i',
 );
 const priced = (sentence) =>

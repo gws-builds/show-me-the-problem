@@ -182,7 +182,9 @@ export function createCalls({
     // `parts`: the line as whole sentences, so the phone plays the first while the rest are made.
     const entry = { n: c.says.length + 1, text: spoken, parts: sentences(spoken), status, at: now() };
     c.says.push(entry);
-    c.status = status ?? c.status;
+    // Escalation is sticky: a turn already running when a scan or sound check escalated cannot turn the call
+    // back into a bookable one (red team #7 M8).
+    if (c.status !== 'escalated') c.status = status ?? c.status;
     // Latency (founder 11/01): the line goes out the moment it exists (voice socket + voice made now),
     // not when the phone next polls and then asks for the audio.
     try {
@@ -397,9 +399,6 @@ export function createCalls({
     });
   }
 
-  // Camera hazards: Spark lists what it sees, SAM must outline it (>= 0.5) before anything happens.
-  // Runs beside the conversation, never blocking it. Escalating categories end quoting and page
-  // the owner; flammables near heat are a spoken warning plus an owner note, and the call goes on.
   // One confirmed camera finding (Spark + SAM agree), from the hazard scan or the tour: checklist,
   // owner page, spoken line. Escalating ones end quoting; the rest are a warning and the call goes on.
   async function raise(c, f, n, source) {
@@ -793,8 +792,10 @@ export function createCalls({
         else if (c.session.checklist.get('lighting').status !== 'clear' || n % 10 === 0)
           c.session.checklist.set('lighting', 'clear', c.session.keepFrame(n), `Light ${l}/255`);
       }
+      // No more scans once the call has an outcome: they would only spend (red team #7 L10).
       if (
         !dark &&
+        !['escalated', 'booked', 'declined', 'handoff'].includes(c.status) &&
         !c.scanning &&
         c.scans < LIMITS.hazardScans &&
         (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs)
@@ -888,7 +889,6 @@ export function createCalls({
         say(c, r.note ?? 'I could not make out the sound. Hold the phone near it for about 8 seconds.', c.status);
         return { findings: [] };
       }
-      // A dangerous sound (buzzing panel, arcing, delayed ignition) is said in code first, never left to the model.
       // A dangerous sound (buzzing panel, arcing, delayed ignition) is handled in code, never left to the
       // model: the warning is said, the owner is paged and the call is escalated, so nothing gets booked (red team #5).
       const danger = r.findings.find((f) => f.hazard);
@@ -903,6 +903,9 @@ export function createCalls({
           `Please keep away from it and don't touch anything. ${danger.meaning} I am getting the owner on this right now.`,
           'escalated',
         );
+        // On the safety checklist too, so request_booking's camera-hazard check also refuses (red team #7 M8).
+        c.session.checklist.add('sound', 'Hazard sound (Listen)', 'sound', 'escalate');
+        c.session.checklist.set('sound', 'found', null, `${danger.sound}: ${danger.detail}`);
         c.session.log({
           kind: 'code_gate',
           name: 'sound hazard',

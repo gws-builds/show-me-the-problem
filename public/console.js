@@ -15,7 +15,9 @@ if (page === 'index') {
     }
     $('camLink').href = `/call${footage ? `?footage=${encodeURIComponent(footage)}` : ''}#${j.id}.${j.camToken}`;
     $('camLink').textContent = footage ? 'Open the footage call' : 'Open the camera';
-    $('ownerLink').href = `/owner#${j.id}.${j.ownerToken}`;
+    // With OWNER_LINK_TO_CALLER=0 a caller gets no owner token: no link then (red team #7 L15).
+    $('ownerLink').hidden = !j.ownerToken;
+    if (j.ownerToken) $('ownerLink').href = `/owner#${j.id}.${j.ownerToken}`;
     $('consoleLink').href = `/console#${j.id}.${j.viewToken}`;
     $('links').hidden = false;
   }

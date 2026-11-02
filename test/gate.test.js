@@ -65,7 +65,7 @@ const freePort = () =>
       s.close(() => r(p));
     });
   });
-async function startServer() {
+async function startServer(extraEnv = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-srv-'));
   const port = await freePort();
   const env = {
@@ -75,6 +75,7 @@ async function startServer() {
     DATA_DIR: dir,
     SPEND_STOP_USD: '0.5',
     META_API_KEY: '',
+    ...extraEnv,
   };
   const child = spawn(process.execPath, ['src/server.mjs'], {
     cwd: new URL('..', import.meta.url).pathname,
@@ -176,4 +177,30 @@ test('server: every page and API needs the code; /k/ sets a Lax cookie (survives
   for (let i = 0; i < 20; i++) await get(`/k/wrong-${i}-xxxxxxxxx`);
   assert.equal((await get('/api/health', { 'x-access-code': 'wrong-again-xxxxxx' })).status, 429);
   assert.equal((await get('/api/health', { 'x-access-code': srv.code })).status, 200);
+});
+
+test('recording session (red team #7 H1, H2, M4): the phone is not limited, only the Mac console follows its calls, the code link opens the start page', async (t) => {
+  const srv = await startServer({ RECORDING_SESSION: '1', TRUST_PROXY: '1', SPEND_STOP_USD: '5' });
+  t.after(() => {
+    srv.child.kill();
+    fs.rmSync(srv.dir, { recursive: true, force: true });
+  });
+  const k = await fetch(`${srv.base}/k/${srv.code}`, { redirect: 'manual' });
+  assert.equal(k.headers.get('location'), '/');
+  const cookie = k.headers.get('set-cookie').split(';')[0];
+  // The phone arrives through the tunnel (an X-Forwarded-For) with its own creator cookie.
+  const phone = { cookie: `${cookie}; stb_creator=${'p'.repeat(32)}`, 'x-forwarded-for': '203.0.113.5' };
+  const ids = [];
+  for (let i = 0; i < 3; i++) {
+    const r = await fetch(`${srv.base}/api/calls`, { method: 'POST', headers: phone });
+    assert.equal(r.status, 200, `take ${i + 1} is not refused by the per-place limits`);
+    ids.push((await r.json()).id);
+  }
+  const latest = (headers) => fetch(`${srv.base}/api/calls/latest`, { headers }).then((r) => r.json());
+  assert.equal((await latest({ cookie })).id, ids[2], 'the Mac console (loopback, no proxy header) follows the phone');
+  assert.equal(
+    (await latest({ cookie: `${cookie}; stb_creator=${'q'.repeat(32)}`, 'x-forwarded-for': '198.51.100.7' })).id,
+    null,
+    'another browser through the tunnel does not',
+  );
 });

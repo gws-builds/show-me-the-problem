@@ -63,7 +63,7 @@ export function createTts({
 // (founder 11/01: stream the first sentence, but never cut one in the middle). A short line, or one
 // with no clear sentence end, stays whole. Abbreviations and decimals never end a sentence; very short
 // sentences ride with the next one so the voice keeps its rhythm; at most 4 parts.
-const ABBREV = /\b(?:mr|mrs|ms|dr|st|vs|approx|no|e\.g|i\.e|etc|sr|jr|ft|in|lb|oz|min|max)\.$/i;
+const ABBREV = /\b(?:mr|mrs|ms|dr|st|vs|approx|e\.g|i\.e|etc|sr|jr|ft|lb|oz|min|max)\.$/i;
 export function sentences(text, { minChars = 25, maxParts = 4 } = {}) {
   const t = String(text ?? '').trim();
   if (t.length < 80) return [t].filter(Boolean);

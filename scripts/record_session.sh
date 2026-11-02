@@ -36,7 +36,7 @@ done
 
 die() { echo "Stopped: $*" >&2; exit 1; }
 mkdir -p .data recordings; chmod 700 .data
-SERVER_PID=""; TUNNEL_PID=""; CAPTURE_PID=""; CHROME_PID=""; TIMER_PID=""; MOVIE=""
+SERVER_PID=""; TUNNEL_PID=""; CAPTURE_PID=""; CHROME_PID=""; TIMER_PID=""; WARM_PID=""; MOVIE=""
 HDR=".data/session_header"; LINKFILE=".data/session_link.txt"
 
 cleanup() {
@@ -47,6 +47,7 @@ cleanup() {
   fi
   # Stop the capture first: ffmpeg finishes writing the movie on TERM (background jobs ignore INT).
   if [[ -n "$CAPTURE_PID" ]] && kill -0 "$CAPTURE_PID" 2>/dev/null; then kill -TERM "$CAPTURE_PID" 2>/dev/null || true; for _ in $(seq 1 20); do kill -0 "$CAPTURE_PID" 2>/dev/null || break; sleep 0.5; done; kill -KILL "$CAPTURE_PID" 2>/dev/null || true; fi
+  [[ -n "$WARM_PID" ]] && { pkill -P "$WARM_PID" 2>/dev/null; kill "$WARM_PID" 2>/dev/null; } || true
   for pid in "$TIMER_PID" "$CHROME_PID" "$TUNNEL_PID" "$SERVER_PID"; do [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true; done
   for pid in "$CHROME_PID" "$TUNNEL_PID" "$SERVER_PID"; do [[ -n "$pid" ]] && wait "$pid" 2>/dev/null || true; done
   rm -f "$HDR" "$LINKFILE" .data/tunnel.log
@@ -76,7 +77,16 @@ GL_FILE="${GLIMMER_ENV_FILE:-$ROOT/../.secrets/glimmer_modal.env}"
 if [[ -z "${GLIMMER_API_KEY:-}" && -f "$GL_FILE" ]]; then
   set -a; . "$GL_FILE"; set +a
 fi
-[[ -n "${GLIMMER_API_KEY:-}" && -n "${GLIMMER_URL:-}" ]] && echo "Glimmer follow-up: on (the GPU starts when a booking waits for the owner)" || echo "Glimmer follow-up: off"
+if [[ -n "${GLIMMER_API_KEY:-}" && -n "${GLIMMER_URL:-}" ]]; then
+  echo "Glimmer follow-up: on (GPU kept warm during this session, so no owner step waits for a cold start)"
+  # The GPU scales down after 2 idle minutes and a cold start takes up to ~5: a health ping every 90 s keeps
+  # it up for the session only (about 2 USD of GPU an hour); cleanup stops the pings.
+  ( while :; do curl -s -o /dev/null -m 600 -H "Authorization: Bearer $GLIMMER_API_KEY" -H "Modal-Key: ${GLIMMER_PROXY_KEY:-}" \
+      -H "Modal-Secret: ${GLIMMER_PROXY_SECRET:-}" "${GLIMMER_URL%/v1*}/health" > /dev/null 2>&1; sleep 90; done ) &
+  WARM_PID=$!
+else
+  echo "Glimmer follow-up: off"
+fi
 
 # Confirmation as a real text (src/sms.js): the business line's Telnyx key and number, from local
 # files only. SMS_FROM lives in ../.secrets/snap_sms.env; the key in the workspace's Telnyx.env.

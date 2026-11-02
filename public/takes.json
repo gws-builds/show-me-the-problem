@@ -1,8 +1,8 @@
 [
  {"id": "faucet", "title": "Faucet drip (main take)", "setup": "Kitchen sink, lamp on. Clear the counter: no people, mail or house numbers.",
   "point": "The whole faucet from half a metre, then the underside of the spout and handle.",
-  "say": ["\"Hi. My kitchen faucet drips. Not into the sink: from underneath, under the handle.\"", "Answer its questions in a few words.", "When you hear a price: \"Okay, book it.\""],
-  "end": ["booked", "awaiting_owner"]},
+  "say": ["\"Hi. My kitchen faucet drips. Not into the sink: from underneath, under the handle.\"", "Answer its questions in a few words.", "When you hear a price: \"Okay, book it.\"", "When Owner step appears: open the owner page, tap Approve and book, show the work order for 5 seconds."],
+  "owner": true, "end": ["booked", "awaiting_owner"]},
  {"id": "faucet-dark", "title": "Faucet underside in the dark (Light button)", "setup": "Sink cabinet light off. Kitchen lights low.",
   "point": "The underside of the faucet and handle base, close up.",
   "say": ["\"It drips from under the handle, but it's dark down here.\"", "When it says it is too dark, tap Light (top of the camera view).", "\"Can you see it now?\""],

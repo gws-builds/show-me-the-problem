@@ -20,11 +20,17 @@ const HAZARDS = [
   // Overheating or failing electrical parts, a burning smell, a discharging relief valve, water through a
   // light fitting, and a gas appliance that booms on ignition (red team #6 B-5). Sediment knocks in a water
   // heater are routine, so "bang" counts only for burners, furnaces and boilers.
-  /\b(breakers?|outlets?|sockets?|switch(es)?|panels?|plugs?|cords?)\b.{0,25}\b(is|are|feels?|getting|gets|got|very|really|so)\s+(hot|warm)\b|\b(breakers?|outlets?|sockets?|switch(es)?|panels?|plugs?|cords?)\b.{0,25}\b(discolou?r\w*|buzz\w*|crackl\w*|sizzl\w*)|\b(buzz\w*|crackl\w*|sizzl\w*)\b.{0,15}\b(breakers?|outlets?|sockets?|panels?)\b/i,
+  /\b(breakers?|outlets?|sockets?|switch(es)?|panels?|(?<!\b(?:sink|tub|bath|drain|basin)\s)plugs?|cords?)\b.{0,25}\b(is|are|feels?|getting|gets|got|very|really|so)\s+(hot|warm)\b|\b(breakers?|outlets?|sockets?|switch(es)?|panels?|plugs?|cords?)\b.{0,25}\b(discolou?r\w*|buzz\w*|crackl\w*|sizzl\w*)|\b(buzz\w*|crackl\w*|sizzl\w*)\b.{0,15}\b(breakers?|outlets?|sockets?|panels?)\b/i,
   /\bsmell\w*\b.{0,25}\bburn\w*|\bburn\w*\b.{0,15}\b(smell|odou?r)\b/i,
   /\b(relief|t ?& ?p|tp|pressure)\s*valves?\b.{0,30}\b(spray\w*|blow\w*|spit\w*|discharg\w*|gush\w*|pour\w*)/i,
   /\bwater\b.{0,30}\b(through|from|in|into|out of)\s+(the\s+)?(ceiling\s+)?(light|fixture|lamp|ceiling fan)s?\b/i,
   /\b(boom\w*|bang\w*|explo\w*|puff\w*)\b.{0,30}\b(furnace|boiler|burner|ignit\w*)|\b(furnace|boiler|burner)s?\b.{0,30}\b(boom\w*|bang\w*|explo\w*)/i,
+  // Red team #7 M7: stray voltage, a hissing gas meter, water at the panel, something pushed into an outlet.
+  /\b(tingl\w*|zap\w*|jolt\w*)\b.{0,40}\b(touch\w*|faucet|tap|sink|pipe|shower|tub|appliance|washer|dryer|fridge)\b|\b(touch\w*|faucet|tap|sink|pipe|shower|tub)\b.{0,40}\b(tingl\w*|zap\w*|jolt\w*)/i,
+  /\bhiss\w*\b.{0,30}\b(gas|meter|propane)\b|\b(gas|propane)\s+(meter|line|pipe|tank)\b.{0,30}\bhiss\w*/i,
+  /\b(puddle|pool|wet|damp|drip\w*|leak\w*)\b.{0,30}\b(electrical panel|panel|breakers?|breaker box|fuse box|outlets?|sockets?)\b/i,
+  /\b(fork|knife|key|paper ?clip|screwdriver)\b.{0,25}\b(outlet|socket|plug)\b|\b(outlet|socket)\b.{0,25}\b(fork|knife|key|paper ?clip)\b/i,
+  /\bcaja de (breakers|fusibles|luz)\b.{0,25}\bmojad\w*|\bmojad\w*.{0,25}\bcaja de (breakers|fusibles|luz)\b|\b(hormigue\w*|cosquill\w*)\b.{0,30}\b(grifo|llave|tubo|ducha)\b/i,
 ];
 
 // "No burning or scorching" is the absence of a hazard. A match counts unless a

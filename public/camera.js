@@ -609,7 +609,8 @@ function checkTakeEnd(view) {
     $('ownerStep').hidden = false;
     $('ownerLink').href = `/owner#${id}.${ownerTok}`;
   }
-  const end = take.end ?? [];
+  // A take with an owner step (the main take) ends only once the owner has approved (red team #7 M1).
+  const end = (take.end ?? []).filter((x) => !(take.owner && x === 'awaiting_owner'));
   const done =
     ['escalated', 'handoff', 'declined'].includes(view.status) ||
     end.includes(view.status) ||

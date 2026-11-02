@@ -14,6 +14,7 @@ window.Voice = (() => {
   let ptt = null; // { chunks: [] } while holding to talk
   let rec = null; // { chunks: [] } while listening to the equipment
   let micTrack = null; // the live mic, so Listen can switch its voice filters off while recording
+  let micSource = null; // its node in the audio graph, swapped if the filters do not come back
   // Founder 11/01: an acknowledgement the instant the caller stops talking ("On it"), then "just a few
   // moments longer" if the answer is still coming at ~5 s, and a last reassurance after 11 s. The lines
   // are made once when the call starts and kept on the phone, so they play with no wait. Never the same
@@ -63,6 +64,7 @@ window.Voice = (() => {
     await ctx.audioWorklet.addModule('/pcm-worklet.js');
     node = new AudioWorkletNode(ctx, 'pcm16k');
     sourceNode.connect(node);
+    micSource = sourceNode;
     node.port.onmessage = (e) => {
       const buf = e.data;
       if (ptt) ptt.chunks.push(new Int16Array(buf));
@@ -87,6 +89,24 @@ window.Voice = (() => {
     if (ws?.readyState === 1 && ws.ready) ws.send(JSON.stringify({ type: 'playback', playing: Boolean(e.detail) }));
   });
 
+  // iOS Safari may not turn echo cancellation back on for a live track; then take a fresh mic track
+  // with the filters and swap it into the graph (red team #7 H3).
+  async function restoreFilters(filters) {
+    await micTrack?.applyConstraints(filters).catch(() => {});
+    if (!micTrack || micTrack.getSettings?.().echoCancellation !== false) return;
+    try {
+      const fresh = (await navigator.mediaDevices.getUserMedia({ audio: filters })).getAudioTracks()[0];
+      const src = ctx.createMediaStreamSource(new MediaStream([fresh]));
+      src.connect(node);
+      micSource?.disconnect();
+      micTrack.stop();
+      micTrack = fresh;
+      micSource = src;
+    } catch {
+      // Keep the old track: unfiltered audio is still better than no audio.
+    }
+  }
+
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${location.host}/api/calls/${callId}/voice`);
@@ -105,7 +125,8 @@ window.Voice = (() => {
         ws.ready = true;
         state('listening (hands-free)');
       } else if (m.type === 'speechStart') {
-        if (window.Speech?.speaking) window.Speech.hush();
+        // No hush here: on a loudspeaker the agent's own voice can start a "speech" too. The first partial
+        // that is not its own line coming back does the barge-in (red team #7 H3).
         state('hearing you');
       } else if (m.type === 'partial') {
         $('partial').textContent = m.text;
@@ -243,7 +264,7 @@ window.Voice = (() => {
     window.Speech?.hold(false);
     if (b) b.textContent = 'Checking the sound…';
     state('listening (hands-free)');
-    await micTrack?.applyConstraints(voiceFilters).catch(() => {});
+    await restoreFilters(voiceFilters);
     try {
       // Still answering the last thing said? Try again shortly (409), at most three times.
       let r;

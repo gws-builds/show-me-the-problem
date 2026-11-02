@@ -24,6 +24,7 @@ import { upgrade, connectWebSocket } from './ws.js';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.DATA_DIR || path.join(ROOT, '.data');
 fs.mkdirSync(path.join(DATA, 'runs'), { recursive: true });
+const REPLAY_DIRS = [path.join(DATA, 'runs'), path.join(ROOT, 'data', 'replays')];
 // SPEND_STOP_USD: a hard stop for this server run (default $25), on top of the per-call caps and the account-wide stops.
 // Hosted judge copy: a push for every call and every spend step (src/alerts.js; needs NTFY_TOPIC).
 const alerts = createAlerts();
@@ -41,6 +42,8 @@ setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
 // The owner of the deployment can open live calls past the public limits with this header.
 const STAFF_KEY = process.env.STAFF_KEY || '';
+// Set only by scripts/record_session.sh: a private session on the founder's Mac, reached by his phone.
+const RECORDING = process.env.RECORDING_SESSION === '1';
 // Judge demo default: the person who starts a call also plays the owner. Set to 0 for a real business.
 const OWNER_LINK_TO_CALLER = process.env.OWNER_LINK_TO_CALLER !== '0';
 const CREATOR_COOKIE = 'stb_creator';
@@ -111,9 +114,11 @@ const calls = createCalls({
 setInterval(() => calls.sweep(), 60_000).unref();
 // Stopping the server (end of a recording session) keeps the calls still open as replays.
 for (const sig of ['SIGTERM', 'SIGINT'])
-  process.once(sig, () => {
+  process.once(sig, async () => {
     try {
       calls.endAll();
+      // The last spend write must land before exit (red team #7 L9), but never hold shutdown long.
+      await Promise.race([ledger.saved(), new Promise((r) => setTimeout(r, 1000))]);
     } finally {
       process.exit(0);
     }
@@ -226,7 +231,7 @@ async function route(req, res) {
     res.writeHead(302, {
       ...HEADERS,
       'Set-Cookie': gate.cookie(secure),
-      Location: NEXT[url.searchParams.get('to')] ?? '/go',
+      Location: NEXT[url.searchParams.get('to')] ?? '/', // record_session.sh asks for ?to=go itself (red team #7 M4)
     });
     return res.end();
   }
@@ -242,18 +247,22 @@ async function route(req, res) {
   const clip = p.match(/^\/footage\/([a-z0-9-]+\.mp4)$/);
   if (req.method === 'GET' && clip && FOOTAGE.some((x) => x.file === clip[1])) return sendClip(req, res, clip[1]);
   if (req.method === 'GET' && p === '/api/runs') {
-    // Replay fallback: the latest recorded calls (events and lines only, never media).
-    const dir = path.join(DATA, 'runs');
-    const list = fs
-      .readdirSync(dir)
-      .filter((f) => /^[a-f0-9]{32}\.json$/.test(f))
-      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+    // Replay fallback: the latest recorded calls (events and lines only, never media), plus the takes
+    // committed in data/replays, so a clone without a Meta key still shows real calls (red team #7 M3).
+    const list = REPLAY_DIRS.flatMap((dir) =>
+      fs.existsSync(dir)
+        ? fs
+            .readdirSync(dir)
+            .filter((f) => /^[a-f0-9]{32}\.json$/.test(f))
+            .map((f) => ({ f: path.join(dir, f), t: fs.statSync(path.join(dir, f)).mtimeMs }))
+        : [],
+    )
       .sort((a, b) => b.t - a.t)
       .slice(0, 10)
       // Only the staff's own recorded takes are listed: a judge's call (their words) is never shown to the next judge.
       .map(({ f }) => {
         try {
-          const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          const r = JSON.parse(fs.readFileSync(f, 'utf8'));
           if (r.staff === false) return null;
           return {
             id: r.id,
@@ -288,7 +297,11 @@ async function route(req, res) {
       calls.latest({
         creator: cookieValue(req.headers.cookie, CREATOR_COOKIE),
         ip: local ? key : null,
-        any: process.env.RECORDING_SESSION === '1',
+        // Only the Mac's own console recorder: loopback with no proxy header (the tunnel always adds one).
+        any:
+          RECORDING &&
+          !req.headers['x-forwarded-for'] &&
+          /^(127\.|::1$|::ffff:127\.)/.test(req.socket.remoteAddress ?? ''),
       }) ?? {
         id: null,
       },
@@ -299,9 +312,13 @@ async function route(req, res) {
     // the STAFF_KEY holder skips the per-person hourly limit: a shared judge code must not unlock
     // unlimited calls (red team 10/30). The session spend stop and per-call caps apply to everyone.
     const given = String(req.headers['x-staff-key'] ?? '');
-    const staff = Boolean(
-      STAFF_KEY && given.length === STAFF_KEY.length && timingSafeEqual(Buffer.from(given), Buffer.from(STAFF_KEY)),
-    );
+    // In a private recording session every call is the founder's take: no per-place limits (red team #7 H2);
+    // the session spend stop and per-call caps still apply.
+    const staff =
+      RECORDING ||
+      Boolean(
+        STAFF_KEY && given.length === STAFF_KEY.length && timingSafeEqual(Buffer.from(given), Buffer.from(STAFF_KEY)),
+      );
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
     const creator = cookieValue(req.headers.cookie, CREATOR_COOKIE) || randomBytes(16).toString('hex');
     const made = calls.create({ ip: key, live: true, staff, footage, creator });
@@ -400,9 +417,11 @@ async function route(req, res) {
   }
   const r = p.match(/^\/api\/runs\/([a-f0-9]{32})$/);
   if (req.method === 'GET' && r) {
-    const f = path.join(DATA, 'runs', `${r[1]}.json`);
-    if (!fs.existsSync(f)) return send(res, 404, { error: 'No such recorded call.' });
-    return send(res, 200, JSON.parse(fs.readFileSync(f, 'utf8')));
+    const f = REPLAY_DIRS.map((d) => path.join(d, `${r[1]}.json`)).find((x) => fs.existsSync(x));
+    const run = f ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
+    // A judge's call (their words) is not shown to the next code holder, even by id (red team #7 L5).
+    if (!run || run.staff === false) return send(res, 404, { error: 'No such recorded call.' });
+    return send(res, 200, run);
   }
   return send(res, 404, { error: 'Not found' });
 }
