@@ -65,9 +65,10 @@ if (page === 'console') {
   let [id = '', view = ''] = follow ? [] : location.hash.slice(1).split('.');
   const seen = (path) => fetch(`/api/calls/${id}${path}`, { headers: { 'x-view-token': view } });
   // Images load with the token in a header, never in the URL, so it stays out of proxy logs (red team #7 L6).
-  const imgWithToken = async (img, src) => {
+  // `current()`: false once a newer frame (or another call) was asked for, so a late answer never shows (red team #9 L2).
+  const imgWithToken = async (img, src, current = () => true) => {
     const r = await fetch(src, { headers: { 'x-view-token': view } }).catch(() => null);
-    if (!r?.ok) return;
+    if (!r?.ok || !current()) return;
     if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
     img.src = URL.createObjectURL(await r.blob());
   };
@@ -382,7 +383,8 @@ if (page === 'console') {
           $('still').hidden = false;
           draw();
         };
-        imgWithToken($('still'), `/api/calls/${id}/still?k=${key}`);
+        const forId = id;
+        imgWithToken($('still'), `/api/calls/${id}/still?k=${key}`, () => frameKey === key && id === forId);
       } else draw();
       setTimeout(poll, 1500);
       return;

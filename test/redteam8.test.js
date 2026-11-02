@@ -122,3 +122,115 @@ test('L7: a short echo right after the phone starts talking is dropped; the same
   await utter('the water heater');
   assert.deepEqual(said, ['the water heater'], 'the same words 3 s into playback reach the agent');
 });
+
+test('red team #9: trade sentences with numbers are not prices (durations, slots, dials, model numbers, gauges)', () => {
+  for (const line of [
+    'The earliest visit is Tuesday, Nov 10, 9-11 AM.',
+    'I can book a visit for Thursday, Nov 12, 1-3 PM.',
+    'Your visit is Monday, Nov 16, 9-11 AM.',
+    'The visit window is between 9 and 11.',
+    'Set the thermostat to about 120.',
+    'The pressure is usually around 60.',
+    'Let the water run for 30, then check it again.',
+    'Hold the reset button for 10.',
+    'Wait for 15, then turn it back on.',
+    'Breaker 15 is usually the water heater.',
+    'The Moen 1225 cartridge usually fails first.',
+    'It is just the 1225 cartridge.',
+    'That is a 10k BTU heater.',
+    'The dryer runs on 240.',
+    'It only works on a 240 line.',
+    'Usually 12 or 14 gauge wire.',
+    'Use the one for the hot side.',
+    'Look for the one for the shut-off.',
+    'The valve is about 18 inches up.',
+    'It is about 50 gallon.',
+    'Normally the gas valve has two positions, about 90 degrees apart.',
+    'The heater is about twenty five years old.',
+    'Turn it about a quarter turn.',
+    'Under the sink, about two feet back.',
+    'The breaker labelled 20 is just above it.',
+    'Your tank holds roughly 40.',
+    'Just point it at the label for a second.',
+    'Hold it there for 5 seconds.',
+    'The 2.5 gallon expansion tank sits over the heater.',
+    'Only one of the two lines is warm.',
+    'Model 0.75 inch.',
+    'It runs about 3.50 amps.',
+    'The circuit is 240V, up to 25 ft.',
+    'Son las 10.',
+    'The visit includes a check of all 12 breakers.',
+    'Over 100 degrees is too hot.',
+    'The visit is about an hour.',
+    'Most tanks last about eight to twelve years.',
+    'It usually takes twenty or thirty minutes.',
+    'The anode rod is usually about forty inches long.',
+    'There are usually two or three screws.',
+    'The total is two breakers tripped.',
+    'The charge light blinks three times.',
+    'Turn it to 120 and wait about 30 minutes.',
+    'Visit 1 of 2.',
+    'The 40 is the gas valve dial setting, normally on VACATION.',
+  ])
+    assert.equal(noPrice(line).blocked, false, line);
+});
+
+test('red team #9: price phrasings are blocked (out the door, all in, two forty nine, on the house, call it 89)', () => {
+  for (const line of [
+    'It comes to 89 even.',
+    'That is eighty-nine bucks... I mean 89.',
+    'Ninety nine.',
+    'It would be one forty nine.',
+    'Labor is one fifty.',
+    'About one fifty.',
+    'Just under ninety.',
+    'Eighty-nine total.',
+    'Around 90ish.',
+    'Eighty nine dollars.',
+    'The visit is a hundred.',
+    'The visit is a buck fifty.',
+    'It is 89 out the door.',
+    'It is 89 all in.',
+    'Call it 89.',
+    'Figure 89.',
+    'I would say 89.',
+    'It is 149.',
+    'The flush is 189.',
+    'That one is one eighty-nine.',
+    'Usually a hundred and eighty nine.',
+    'We charge one hundred.',
+    'It is free.',
+    'No cost to you.',
+    'It is on the house.',
+    'Cuesta ochenta y nueve.',
+    'Son ochenta y nueve.',
+    'Sale en ochenta.',
+    'It is 89 for everything.',
+    '89 for both.',
+    'Cost: 89.',
+    '$89',
+    '89 bucks',
+    'eighty nine fifty',
+    'A visit is a hundred and twenty.',
+    'Roughly two hundred.',
+    'Two hundred.',
+    'Two hundred and forty nine.',
+    'Two forty nine.',
+    'Two forty-nine for the valve.',
+    'It is two forty nine.',
+    'That is two-forty-nine.',
+    'The job is 249.',
+  ])
+    assert.equal(noPrice(line).blocked, true, line);
+});
+
+test('red team #9: idioms and unrelated mentions do not escalate as carbon monoxide or a ceiling leak', () => {
+  for (const said of [
+    'This heater has been such a headache',
+    'I get dizzy on ladders, the furnace filter is up high',
+    'The leak is under the sink, and the ceiling fan in the kitchen works fine',
+    'water on the floor, the ceiling light is off',
+  ])
+    assert.ok(!hazardIn(said), said);
+  assert.ok(hazardIn('We all feel dizzy when the furnace runs'));
+});

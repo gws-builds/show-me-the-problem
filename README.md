@@ -114,7 +114,7 @@ After the owner approves, the visit is a calendar invite (`src/ics.js`, RFC 5545
 ## Run it
 
 ```bash
-npm run check                         # eslint + prettier + 211 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
+npm run check                         # eslint + prettier + 221 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 node eval/fetch_photos.mjs            # once: downloads the eval photos (freely licensed, not committed)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models

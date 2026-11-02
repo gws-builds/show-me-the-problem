@@ -202,6 +202,11 @@ export function createCameraLoops({ now, say, note, autoTurn, exclusive }) {
           `tour: ${it.hazard.label}`,
         );
       if (c.status === 'escalated') return;
+      // The owner decided while this step ran: the tour stays over and says nothing more (red team #9 L1).
+      if (c.status === 'booked' || c.status === 'declined') {
+        c.tour.done = true;
+        return;
+      }
       // A step that finished while the caller was being answered keeps its labels but not its line.
       const held = !r.done && (c.busy || now() < (c.holdTourUntil ?? 0));
       if (r.say && !held) {

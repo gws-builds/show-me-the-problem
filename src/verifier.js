@@ -32,9 +32,11 @@ const HAZARDS = [
   /\b(fork|knife|key|paper ?clip|screwdriver)\b.{0,25}\b(outlet|socket|plug)\b|\b(outlet|socket)\b.{0,25}\b(fork|knife|key|paper ?clip)\b/i,
   /\bcaja de (breakers|fusibles|luz)\b.{0,25}\bmojad\w*|\bmojad\w*.{0,25}\bcaja de (breakers|fusibles|luz)\b|\b(hormigue\w*|cosquill\w*)\b.{0,30}\b(grifo|llave|tubo|ducha)\b/i,
   // Red team #8 M5: carbon-monoxide symptoms near a fuel-burning appliance (the commonest real winter call),
-  // and water coming through the ceiling around a light.
-  /\b(headaches?|dizz\w*|nause\w*|light-?headed|drowsy|sleepy)\b.{0,60}\b(furnace|boiler|heater|stove|fireplace|generator|garage)\b|\b(furnace|boiler|heater|stove|fireplace|generator)\b.{0,60}\b(headaches?|dizz\w*|nause\w*|light-?headed)\b|\b(dolor(es)? de cabeza|mare\w*|n[aá]usea\w*)\b.{0,60}\b(calefacci\w*|caldera|calentador|estufa|horno)\b/i,
-  /\b(water|leak\w*|drip\w*)\b.{0,40}\bceiling\b.{0,25}\b(lights?|fixtures?|lamps?|fans?)\b/i,
+  // and water coming through the ceiling around a light. Red team #9: only a symptom someone has ("everyone
+  // has a headache", "the kids are dizzy") tied to the appliance ("near/since/when the furnace"), never an
+  // idiom ("this heater has been such a headache") or an unrelated one ("dizzy on ladders").
+  /\b(?:have|has|had|having|got|feel\w*|felt|getting|are|am|is|were|was|all|everyone|we're|i'm|they're)\s+(?:(?:a|bad|terrible|really|so|very|all)\s+){0,2}(?:headaches?|dizzy|dizziness|nause\w*|light-?headed|drowsy)\b.{0,50}\b(?:since|when|after|near|around|whenever|while|by|next to|every time)\b.{0,25}\b(?:furnace|boiler|heater|stove|fireplace|generator|heat)\b|\b(?:dolor(?:es)? de cabeza|mare\w*|n[aá]usea\w*)\b.{0,50}\b(?:desde|cuando|cerca)\b.{0,25}\b(?:calefacci\w*|caldera|calentador|estufa|horno)\b/i,
+  /\b(?:water|leak\w*|drip\w*)\b.{0,25}\b(?:through|from|out of|around|into)\s+(?:the\s+)?ceiling\b.{0,25}\b(?:lights?|fixtures?|lamps?|fans?)\b/i,
 ];
 
 // "No burning or scorching" is the absence of a hazard. A match counts unless a

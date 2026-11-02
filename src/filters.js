@@ -20,24 +20,47 @@ const AMOUNT =
 const ONES = String.raw`(?:one|two|three|four|five|six|seven|eight|nine|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)`;
 const TENS = String.raw`(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|veinte|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)`;
 const NUM_WORD = String.raw`(?:${ONES}|ten|eleven|twelve|fifteen|${TENS}|hundred|thousand|grand|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)`;
-const UNIT = String.raw`(?:to\s+\d|am\b|pm\b|a\.m|p\.m|:|%|°|degrees?|seconds?|secs?|minutes?|mins?|hours?|days?|weeks?|months?|years?|a[nñ]os|gallons?|gal\b|litres?|liters?|psi|amps?|volts?|watts?|btu|kw\b|lbs?|pounds?|feet|ft\b|foot|inch(?:es)?|in\b|cm\b|mm\b|metres?|meters?|steps?|turns?|quarters?|sides?|things?|times?|parts?|pieces?|screws?|wires?|pipes?|valves?|breakers?|of\b|or\b|more\b|moments?|ways?|people|kids?)`;
+const UNIT = String.raw`(?:to\s+\d|am\b|pm\b|a\.m|p\.m|:|%|°|degrees?|seconds?|secs?|minutes?|mins?|hours?|days?|weeks?|months?|years?|a[nñ]os|gallons?|gal\b|litres?|liters?|psi|amps?|volts?|watts?|btu|kw\b|lbs?|pounds?|feet|ft\b|foot|inch(?:es)?|in\b|cm\b|mm\b|metres?|meters?|steps?|turns?|quarters?|sides?|things?|times?|parts?|pieces?|screws?|wires?|pipes?|valves?|breakers?|of\b|or\b|more\b|moments?|ways?|people|kids?|gauge|awg|setting)`;
 const NOT_UNIT = String.raw`(?![\s-]*(?:and\s+\w+[\s-]+)?${UNIT})`;
-const BARE_NUM = String.raw`(?<!\bto\s)\b(?!(?:19|20)\d{2}\b)\d{2,4}\b${NOT_UNIT}`;
+const MONTH = String.raw`(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?`;
+const BARE_NUM = String.raw`(?<!\bto\s)(?<!\bto (?:about|around|roughly)\s)(?<!\b${MONTH}\s)(?<!\b\d{1,2}\s(?:and|or)\s)(?<!\blas\s)\b(?!(?:19|20)\d{2}\b)\d{2,4}\b${NOT_UNIT}`;
 const DECIMAL = String.raw`\b\d+\.\d{2}\b${NOT_UNIT}`;
-const WORD_AMOUNT = String.raw`(?:\b(?:a\s+|one\s+)?(?:hundred|thousand|grand|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)\b|\b${TENS}[\s-]+(?:y\s+)?${ONES}\b|\b${ONES}\s+${TENS}\b)${NOT_UNIT}`;
 const STRONG =
-  /\b(?:price[sd]?|cost[s]?|charge[sd]?|fees?|bucks|dollars?|quote[sd]?|pay(?:ing)? (?:about|around|just|only|\$|\d)|bill|total|rate|labou?r|precio|cuesta|cobra|cobramos|d[oó]lares)\b/i;
+  /\b(?:price[sd]?|cost[s]?|charge[sd]?|fees?|bucks?|dollars?|quote[sd]?|pay(?:ing)? (?:about|around|just|only|\$|\d)|bill|total|rate|labou?r|precio|cuesta|cobra|cobramos|d[oó]lares)\b/i;
 const SOFT =
-  /\b(?:visit|about|around|roughly|near|usually|normally|typically|for you|son|flat|would be|comes to|runs|just|only|under|over|vale|give or take|including|includes)\b/i;
+  /\b(?:visit|about|around|roughly|near|usually|normally|typically|for you|son|flat|would be|under|over|vale|give or take|including|includes|just under|just over)\b/i;
 const ANY_NUMBER = new RegExp(`\\b${NUM_WORD}\\b${NOT_UNIT}|${BARE_NUM}|${DECIMAL}`, 'i');
-const AMOUNT_LIKE = new RegExp(`${BARE_NUM}|${DECIMAL}|${WORD_AMOUNT}`, 'i');
+
+// A whole price word by word: it contains a tens or hundreds word ("fifty", "eighty-nine", "two forty nine",
+// "a hundred and fifty", "eighty nine fifty"); never a bare "one" or "two" ("use the one for the hot side",
+// red team #9 L5).
+const BIG = String.raw`(?:${TENS}|ten|eleven|twelve|fifteen|hundred|thousand|grand|cien|ciento|doscientos|trescientos|cuatrocientos|quinientos|mil)`;
+const PIECE = String.raw`(?:${ONES}|${BIG})`;
+const WORD_PRICE = String.raw`\b(?:(?:a|${ONES})[\s-]+)?${BIG}(?:[\s-]+(?:and\s+|y\s+)?${PIECE})*\b`;
+const FIGURE = String.raw`\$?\d{2,5}(?:\.\d{2})?`;
+const END = String.raw`(?=\s*(?:[.!?,;]|$|and\b|plus\b|total\b|even\b|flat\b|bucks?\b))`;
+// After a number in words, skip any further number words before looking for the unit ("twenty five years").
+const WORDS_NOT_UNIT = String.raw`(?![\s-]*(?:(?:and\s+|y\s+)?${PIECE}[\s-]+)*${UNIT})`;
+const AMOUNT_LIKE = new RegExp(`${BARE_NUM}|${DECIMAL}|${WORD_PRICE}${WORDS_NOT_UNIT}`, 'i');
+// Lines about the equipment itself (a dial, a breaker, a model number, a pressure) use numbers that are not
+// money; a soft word there ("usually", "about") is not enough to call it a price (red team #9 M2).
+const EQUIPMENT_TALK =
+  /\b(?:thermostat|dial|setting|breaker|model|cartridge|serial|pressure|temperature|gauge|tank|wire|valve position|label(?:l?ed)?|number)\b/i;
 const ALWAYS = new RegExp(
   [
     DECIMAL,
-    String.raw`\bfor\s+(?:just\s+|only\s+)?\d{2,5}(?:\.\d{2})?(?=\s*(?:[.!?,;]|$|and\b|plus\b|total\b|flat\b))`,
+    // "We do it for 89." A duration ("let it run for 30", "hold it for 10") has no doing-the-job verb (red team #9 M2).
+    String.raw`\b(?:do|does|did|fix|fixes|repair|replace|replaces|install|get it done|charge)\b[^.!?]{0,25}\bfor\s+(?:just\s+|only\s+)?${FIGURE}${END}`,
+    // "Just 89 and we are done", "it comes to 89 even", "call it 89": a figure ending the phrase, not "just the 1225 cartridge".
+    String.raw`\b(?:just|only|runs|comes to|call it)\s+${FIGURE}${END}`,
+    // The whole sentence is an amount: "It is 149.", "Two hundred.", "That's eighty nine."
+    String.raw`^\s*(?:(?:it|that|that one|this|the visit|the job|the flush|the repair)(?:'s|\s+is|\s+will be|\s+would be)\s+)?(?:${FIGURE}|${WORD_PRICE})\s*[.!]?\s*$`,
+    String.raw`\b(?:it|that|this|the visit|the call|the quote|the job)(?:'s|\s+is|\s+will be|\s+would be)\s+(?:totally\s+|completely\s+)?free\b`,
     String.raw`\bplus (?:tax|hst|gst|vat)\b`,
-    String.raw`\b\d+(?:\.\d+)?k\b`,
-    `(?:\\b${NUM_WORD}\\b(?:[\\s-]+${NUM_WORD}\\b)*|\\b\\d{2,5}\\b)\\s+for (?:the|your|this|that) [a-z]`,
+    String.raw`\b\d{2,5}\s*(?:ish\b|out the door|all in\b|for (?:everything|both|all of it)\b)|\bon the house\b`,
+    String.raw`\b(?:figure|i would say|i'd say|sale en|sale por)\s+(?:${FIGURE}|${WORD_PRICE})\b`,
+    String.raw`\b\d+(?:\.\d+)?k\b${NOT_UNIT}`,
+    String.raw`(?:${WORD_PRICE}|\b\d{2,5}\b)\s+for (?:the|your|this|that) [a-z]`,
   ].join('|'),
   'i',
 );
@@ -45,7 +68,7 @@ const priced = (sentence) =>
   AMOUNT.test(sentence) ||
   ALWAYS.test(sentence) ||
   (STRONG.test(sentence) && ANY_NUMBER.test(sentence)) ||
-  (SOFT.test(sentence) && AMOUNT_LIKE.test(sentence));
+  (SOFT.test(sentence) && !EQUIPMENT_TALK.test(sentence) && AMOUNT_LIKE.test(sentence));
 export const NO_PRICE_LINE = "The price comes only from the owner's list, once I have seen the problem.";
 export function noPrice(text) {
   const parts = String(text ?? '').split(/(?<=[.!?])\s+/);
