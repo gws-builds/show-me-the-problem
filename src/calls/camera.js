@@ -225,7 +225,11 @@ export function createCameraLoops({ now, say, note, autoTurn, exclusive }) {
       c.session.log({ kind: 'error', text: `tour: ${String(err.message).slice(0, 120)}` });
       if (isStop(err)) {
         c.tour.done = true;
-        say(c, 'I have to stop the tour here. The owner will call you back.', 'handoff');
+        say(
+          c,
+          'I have to stop the tour here. Thank you for showing me around. The owner will call you back to go over what we saw.',
+          'handoff',
+        );
       }
     } finally {
       c.touring = false;

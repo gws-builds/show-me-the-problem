@@ -127,6 +127,7 @@ function setup({
       );
     }
     seen.spark++;
+    seen.agentInput = JSON.stringify(body.input);
     const next = agent.shift();
     return new Response(
       JSON.stringify({
@@ -347,6 +348,17 @@ test('tour: a question mid-tour is answered first, then the tour picks up where 
   assert.ok(after.length, 'the tour went on after the question');
   assert.match(after[0], /^Back to the tour\. /);
   assert.equal(after.filter((t) => t.startsWith('Back to the tour.')).length, 1, 'said once, not on every step');
+});
+
+test('tour: a "what is this" question gets the labels outlined on screen, so the voice says the same names (11/02)', async () => {
+  const steps = [
+    { room: 'boiler_room', items: [{ part: 'expansion_tank', status: 'normal', x: 500, y: 500 }], move: 'closer' },
+  ];
+  const { calls, c, seen } = setup({ tour: (i) => steps[Math.min(i, steps.length - 1)] });
+  calls.tour(c.id, c.camToken, 'boiler_room');
+  await frames(calls, c, 1);
+  await calls.voiceTurn(c.id, 'What is this?');
+  assert.match(seen.agentInput, /Outlined on the caller's screen right now: Expansion tank/);
 });
 
 test('a caller turn that hangs is answered with a retry line, and its late result is never spoken', async () => {

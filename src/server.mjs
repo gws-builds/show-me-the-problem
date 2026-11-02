@@ -11,6 +11,7 @@ import { createGlimmer } from './afterBooking.js';
 import { createAlerts } from './alerts.js';
 import { createLedger } from './budget.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
+import { createPromptGuard } from './promptGuard.js';
 import { callerIp, placeKey } from './clientIp.js';
 import { loadCorpus } from './corpus.js';
 import { createGate, writeCode, cookieValue } from './gate.js';
@@ -68,6 +69,7 @@ const calls = createCalls({
   priceList,
   glimmer: createGlimmer(),
   sms: createSms(),
+  guard: createPromptGuard(),
   onSay: (c, entry) => {
     sockets.get(c.id)?.({ type: 'say', n: entry.n, text: entry.text, parts: entry.parts, status: entry.status });
     // The natural voice is made now and kept, so the phone's /say request is served from memory.

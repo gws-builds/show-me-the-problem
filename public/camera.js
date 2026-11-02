@@ -275,19 +275,55 @@ document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;
 
 // ---- zoom ----
-// Founder 11/02: the label could not be brought closer. The camera's own zoom where Safari offers it;
-// otherwise a digital zoom: the video is scaled from its centre and the frames sent are the same crop,
-// so outlines, taps and the models all see what the caller sees. Tap cycles 1x, 2x, 3x; pinch sets it.
+// Founder 11/02: the label could not be brought closer, and tight spaces need the wide view. The camera's own
+// zoom where Safari offers it; otherwise a digital zoom: the video is scaled from its centre and the frames sent
+// are the same crop, so outlines, taps and the models all see what the caller sees. 0.5x is the phone's
+// ultra-wide lens (a separate camera in Safari), offered only when the phone has one. Tap cycles 1x, 2x, 3x,
+// then 0.5x; pinch sets it.
 let digital = 1;
 let hwZoom = null; // { track, min, max } when the camera supports zoom
+let wideId = null; // the ultra-wide back camera's deviceId, when there is one
+let lens = 'main';
 function shown() {
   const v = media();
   return { sw: v.videoWidth / digital, sh: v.videoHeight / digital };
 }
+const zoomCaps = (track) => {
+  const caps = track?.getCapabilities?.() ?? {};
+  hwZoom = caps.zoom && caps.zoom.max > caps.zoom.min ? { track, min: caps.zoom.min, max: caps.zoom.max } : null;
+};
+// iPhone Safari runs one camera at a time, so the old lens is stopped before the other one opens.
+async function switchLens(which) {
+  if (lens === which) return true;
+  const video = which === 'wide' ? { ...VIDEO, deviceId: { exact: wideId } } : { ...VIDEO };
+  if (which === 'wide') delete video.facingMode;
+  media()
+    .srcObject?.getVideoTracks()
+    .forEach((t) => t.stop());
+  let s;
+  try {
+    s = await navigator.mediaDevices.getUserMedia({ video });
+  } catch {
+    if (which !== 'wide') return false;
+    wideId = null; // the ultra-wide would not open: back to the main lens, without 0.5x from now on
+    await switchLens('main');
+    return false;
+  }
+  const t = s.getVideoTracks()[0];
+  media().srcObject = new MediaStream([t]);
+  lens = which;
+  zoomCaps(t);
+  setupTorch(t);
+  return true;
+}
 async function setZoom(z) {
-  z = Math.min(3, Math.max(1, Math.round(z * 10) / 10));
+  const minZ = wideId || (hwZoom && hwZoom.min < 1) ? 0.5 : 1;
+  z = Math.min(3, Math.max(minZ, Math.round(z * 10) / 10));
+  // Below 1x: the camera's own zoom if it goes there (some Android phones), else the ultra-wide lens at 0.5x.
+  if (z < 1 && !(hwZoom && hwZoom.min < 1)) z = (await switchLens('wide')) ? 0.5 : 1;
+  if (z >= 1 && lens === 'wide') await switchLens('main');
   let hw = false;
-  if (hwZoom) {
+  if (hwZoom && lens === 'main') {
     try {
       await hwZoom.track.applyConstraints({ advanced: [{ zoom: Math.min(hwZoom.max, Math.max(hwZoom.min, z)) }] });
       hw = true;
@@ -295,19 +331,32 @@ async function setZoom(z) {
       hwZoom = null;
     }
   }
-  digital = hw ? 1 : z;
+  digital = hw || z < 1 ? 1 : z;
   media().style.transform = digital > 1 ? `scale(${digital})` : '';
   $('zoom').textContent = `${Number.isInteger(z) ? z : z.toFixed(1)}x`;
-  $('zoom').setAttribute('aria-label', `Zoom: ${$('zoom').textContent}. Tap to zoom in, or pinch the video.`);
-  $('zoom').classList.toggle('on', z > 1);
+  $('zoom').setAttribute('aria-label', `Zoom: ${$('zoom').textContent}. Tap to change, or pinch the video.`);
+  $('zoom').classList.toggle('on', z !== 1);
   setZoom.level = z;
 }
 setZoom.level = 1;
+async function findWideLens() {
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+    // Safari names it "Back Ultra Wide Camera" (English labels only; other languages simply get no 0.5x).
+    wideId = cams.find((d) => /ultra.?wide/i.test(d.label) && !/dual|triple/i.test(d.label))?.deviceId || null;
+  } catch {
+    wideId = null;
+  }
+}
 function setupZoom(track) {
-  const caps = track?.getCapabilities?.() ?? {};
-  if (caps.zoom && caps.zoom.max > caps.zoom.min) hwZoom = { track, min: caps.zoom.min, max: caps.zoom.max };
+  zoomCaps(track);
+  void findWideLens();
   $('zoom').hidden = false;
-  $('zoom').onclick = () => setZoom(setZoom.level >= 3 ? 1 : Math.floor(setZoom.level) + 1);
+  $('zoom').onclick = () => {
+    const l = setZoom.level;
+    const canWide = wideId || (hwZoom && hwZoom.min < 1);
+    void setZoom(l < 1 ? 1 : l >= 3 ? (canWide ? 0.5 : 1) : Math.floor(l) + 1);
+  };
   let pinch = null;
   const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const ov = $('ov');
@@ -321,9 +370,13 @@ function setupZoom(track) {
   ov.addEventListener(
     'touchmove',
     (e) => {
-      if (!pinch || e.touches.length !== 2) return;
+      if (!pinch || e.touches.length !== 2 || pinch.busy) return;
       e.preventDefault();
-      void setZoom(pinch.z * (dist(e.touches) / pinch.d));
+      // A lens switch takes a moment; one at a time, so a pinch does not open the camera over and over.
+      pinch.busy = true;
+      void setZoom(pinch.z * (dist(e.touches) / pinch.d)).finally(() => {
+        if (pinch) pinch.busy = false;
+      });
     },
     { passive: false },
   );

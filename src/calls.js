@@ -17,6 +17,7 @@ import { guessPart, speculate } from './locate.js';
 import { runTool } from './tools.js';
 import { createTour, openLine, tourMemo, TOUR } from './tour.js';
 import { sentences } from './tts.js';
+import { GUARD_LINE } from './promptGuard.js';
 import { hazardIn } from './verifier.js';
 import { createBooking } from './calls/booking.js';
 import { createCameraLoops } from './calls/camera.js';
@@ -40,6 +41,7 @@ export function createCalls({
   onListen = null,
   sms = null,
   later = (fn, ms) => setTimeout(fn, ms).unref?.(),
+  guard = null, // Prompt Guard 2 (src/promptGuard.js), or null when it is not running
 }) {
   const calls = new Map();
   const ipHits = new Map();
@@ -124,6 +126,11 @@ export function createCalls({
       c.tracking = { part: r.track || c.session.lastPart() || '', checks: 0, lastAt: 0 };
   }
 
+  const wrapUpLine = (c) =>
+    c.tour
+      ? "That's all I can cover on this call. Thank you for showing me around. The owner will call you back to go over what we saw and book a visit if you need one."
+      : "That's all I can cover on this call. Thank you for showing me. The owner will call you back to finish this and book a visit if you need one.";
+
   async function turn(c, line) {
     if (c.status === 'escalated') {
       say(
@@ -152,12 +159,26 @@ export function createCalls({
       return;
     }
     if (c.turns >= maxTurns(c)) {
-      // Said once: the 11/02 panel take heard it four times in a row.
-      if (c.status !== 'handoff') say(c, 'Let me get the owner to call you back to finish this.', 'handoff');
+      // Said once: the 11/02 panel take heard it four times in a row. The same cap holds on real calls (it bounds
+      // the cost of one call), so it closes the call politely instead of just stopping.
+      if (c.status !== 'handoff') say(c, wrapUpLine(c), 'handoff');
       else c.session.log({ kind: 'after_handoff', text: line.slice(0, 120) });
       return;
     }
     c.turns++;
+    // Prompt Guard 2 scores the words before the agent sees them; a flagged turn never reaches the model and
+    // still counts toward the cap, so retrying costs the attacker turns.
+    const g = guard ? await guard.check(line) : null;
+    if (g?.blocked) {
+      c.session.log({
+        kind: 'code_gate',
+        name: 'prompt_guard',
+        text: `Prompt Guard 2 flagged the caller's words (score ${g.score.toFixed(2)}); not sent to the agent.`,
+      });
+      say(c, GUARD_LINE, c.status);
+      return;
+    }
+    if (guard && !g) c.session.log({ kind: 'guard_unavailable', text: 'Prompt Guard did not answer; turn continued.' });
     c.session.heard(line);
     const cl = c.session.checklist;
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
@@ -166,6 +187,14 @@ export function createCalls({
       c.history.push({
         role: 'user',
         content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question with answer_caller, from this and the current frame, in one or two sentences; the tour then continues.`,
+      });
+    // The voice must use the names the caller is reading on screen (11/02 boiler-room take: the outline said
+    // "Water heater" and "Water softener" while the spoken answers said "boiler").
+    const onScreen = (c.tour?.current ?? []).map((id) => c.tour.found.get(id)?.label).filter(Boolean);
+    if (onScreen.length)
+      c.history.push({
+        role: 'user',
+        content: `Outlined on the caller's screen right now: ${onScreen.join(', ')}. If the caller asks what something is, name it with exactly these labels; if you think a label is wrong, look again with inspect_frame before saying a different name.`,
       });
     // The first useful words come from code the moment the caller stops, not after Spark's 2-5 s plan
     // (red team #6, latency 1): "Let me look at the water heater." Only for a part we know, with a live
