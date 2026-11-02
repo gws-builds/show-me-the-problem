@@ -32,3 +32,15 @@ test('injected text cannot add calendar fields, and an undated slot makes no inv
   assert.ok(!/\r\nATTENDEE:/.test(ics) && !/\r\nEND:VEVENT\r\nEND:VEVENT/.test(ics));
   assert.equal(bookingIcs({ uid: 'x', slot: { label: 'Tuesday' }, title: 't' }), null);
 });
+
+test('S-D: a lone carriage return cannot start a new calendar line', () => {
+  const ics = bookingIcs({
+    uid: 'x',
+    slot,
+    title: 'Visit',
+    details: 'Leak\rATTENDEE:mailto:evil@example.com\rATTACH:https://evil.example/a',
+  });
+  assert.ok(!/\r(?!\n)/.test(ics), 'no CR outside CRLF line ends');
+  assert.ok(!/\r\nATTENDEE|\r\nATTACH/.test(ics));
+  assert.match(bookingIcs({ uid: 'x', slot, title: 't', details: 'a\nb' }), /DESCRIPTION:a\\nb/);
+});

@@ -20,3 +20,24 @@ export function callerIp(req, { trust = process.env.TRUST_PROXY === '1', hops = 
   }
   return req.socket.remoteAddress || 'unknown';
 }
+
+/**
+ * The key limits are counted by: an IPv4 address as is, an IPv6 address by its /64 network, since one
+ * phone or home rotates through many addresses in it (red team #6 S-A). IPv4-mapped IPv6 is IPv4.
+ */
+export function placeKey(ip) {
+  const s = String(ip ?? '')
+    .trim()
+    .toLowerCase();
+  const v4 = s.match(/^(?:::ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (v4) return v4[1];
+  if (!s.includes(':')) return s || 'unknown';
+  const [head, tail = ''] = s.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
+}

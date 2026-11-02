@@ -17,6 +17,14 @@ const HAZARDS = [
   /\bcables?\b.{0,15}\b(pelad|expuest|suelt|desnud|quemad)\w*|\b(me )?dio (una )?(descarga|toque|calambre)\b|\belectrocut\w*/i,
   /\bagua\b.{0,25}\b(panel|tablero|breaker|enchufe|toma ?corriente|cables?|el[eé]ctric\w*)|\b(panel|tablero|enchufe)\b.{0,20}\b(mojad\w*|agua|inundad\w*)/i,
   /\bmon[oó]xido\b|\b(alarma|detector)\b.{0,20}\b(mon[oó]xido|de co)\b|\btecho\b.{0,15}\b(hundi|colaps|cedi|cay)\w*|\bderrumb\w*/i,
+  // Overheating or failing electrical parts, a burning smell, a discharging relief valve, water through a
+  // light fitting, and a gas appliance that booms on ignition (red team #6 B-5). Sediment knocks in a water
+  // heater are routine, so "bang" counts only for burners, furnaces and boilers.
+  /\b(breakers?|outlets?|sockets?|switch(es)?|panels?|plugs?|cords?)\b.{0,25}\b(is|are|feels?|getting|gets|got|very|really|so)\s+(hot|warm)\b|\b(breakers?|outlets?|sockets?|switch(es)?|panels?|plugs?|cords?)\b.{0,25}\b(discolou?r\w*|buzz\w*|crackl\w*|sizzl\w*)|\b(buzz\w*|crackl\w*|sizzl\w*)\b.{0,15}\b(breakers?|outlets?|sockets?|panels?)\b/i,
+  /\bsmell\w*\b.{0,25}\bburn\w*|\bburn\w*\b.{0,15}\b(smell|odou?r)\b/i,
+  /\b(relief|t ?& ?p|tp|pressure)\s*valves?\b.{0,30}\b(spray\w*|blow\w*|spit\w*|discharg\w*|gush\w*|pour\w*)/i,
+  /\bwater\b.{0,30}\b(through|from|in|into|out of)\s+(the\s+)?(ceiling\s+)?(light|fixture|lamp|ceiling fan)s?\b/i,
+  /\b(boom\w*|bang\w*|explo\w*|puff\w*)\b.{0,30}\b(furnace|boiler|burner|ignit\w*)|\b(furnace|boiler|burner)s?\b.{0,30}\b(boom\w*|bang\w*|explo\w*)/i,
 ];
 
 // "No burning or scorching" is the absence of a hazard. A match counts unless a

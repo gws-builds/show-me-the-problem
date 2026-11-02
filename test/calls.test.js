@@ -216,7 +216,11 @@ test('two messages at once: the second is refused, not run in parallel', async (
 test('per-IP and total live-call limits; replay-only once the credit line is reached', () => {
   // A still clock: the default one moves 2 s per read, which would let idle calls expire mid-loop.
   const { calls } = setup({ clock: () => 1_000_000 });
-  for (let i = 0; i < LIMITS.callsPerIpPerHour; i++) calls.create({ ip: '9.9.9.9' });
+  // At most two open at once from one place; the hourly count still applies as calls end.
+  const open = [calls.create({ ip: '9.9.9.9' }), calls.create({ ip: '9.9.9.9' })];
+  assert.throws(() => calls.create({ ip: '9.9.9.9' }), /Two calls are already open/);
+  for (const c of open) calls.end(c.id);
+  for (let i = 2; i < LIMITS.callsPerIpPerHour; i++) calls.end(calls.create({ ip: '9.9.9.9' }).id);
   assert.throws(() => calls.create({ ip: '9.9.9.9' }), { code: 'RATE_LIMIT' });
   for (let i = 0; calls.size() < LIMITS.maxLiveCalls; i++) calls.create({ ip: `8.8.8.${i}` });
   assert.throws(() => calls.create({ ip: '7.7.7.7' }), { code: 'BUSY' });
@@ -447,7 +451,7 @@ test('listen_to_equipment: the AI asks, the phone is told to record, and a buzzi
   });
   const c = calls.create({ ip: '1.1.9.8' });
   // No live microphone: the tool says so instead of pretending.
-  await calls.text(c.id, c.camToken, 'My breaker panel is buzzing');
+  await calls.text(c.id, c.camToken, 'There is a strange noise from my breaker panel');
   assert.equal(asked.length, 0);
   // With the microphone live, the same request reaches the phone.
   const d = setup({
@@ -456,7 +460,7 @@ test('listen_to_equipment: the AI asks, the phone is told to record, and a buzzi
   });
   const c2 = d.calls.create({ ip: '1.1.9.9' });
   d.calls.setVoice(c2.id, { end() {}, closed: false });
-  await d.calls.text(c2.id, c2.camToken, 'My breaker panel is buzzing');
+  await d.calls.text(c2.id, c2.camToken, 'There is a strange noise from my breaker panel');
   assert.deepEqual(asked, ['electrical']);
   assert.ok(d.calls.view(c2.id).says.some((x) => /near the panel/.test(x.text)));
   const n = 16000 * 8;

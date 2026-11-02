@@ -50,8 +50,8 @@ test('voice caps: per line, per call and per run; no key means browser voice', a
   assert.ok(await tts.speak('a', 'hello'));
   const long = (i) => `${String(i).padStart(2, '0')}${'x'.repeat(TTS_LIMITS.line - 2)}`;
   let ok = 0;
-  for (let i = 0; i < 20; i++) if (await tts.speak('b', long(i))) ok++;
-  assert.equal(ok, TTS_LIMITS.perCall / TTS_LIMITS.line);
+  for (let i = 0; i < 30; i++) if (await tts.speak('b', long(i))) ok++;
+  assert.equal(ok, Math.floor(TTS_LIMITS.perCall / TTS_LIMITS.line));
   assert.equal((await tts.speak('c', 'y'.repeat(5000))) !== null, true); // trimmed to one line
   assert.ok(tts.used() <= TTS_LIMITS.perRun);
   assert.equal(hits, 1 + ok + 1);

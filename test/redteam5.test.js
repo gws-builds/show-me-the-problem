@@ -38,8 +38,14 @@ test('B6: "latest" only ever finds a call started from the same place, with its 
   const calls = setup();
   const a = calls.create({ ip: 'judge-a', live: true, staff: false });
   calls.create({ ip: 'judge-b', live: true, staff: false });
-  assert.deepEqual(calls.latest('judge-a'), { id: a.id, viewToken: a.viewToken });
-  assert.equal(calls.latest('someone-else'), null);
+  assert.deepEqual(calls.latest({ ip: 'judge-a' }), { id: a.id, viewToken: a.viewToken });
+  assert.equal(calls.latest({ ip: 'someone-else' }), null);
+  // S-B (red team #6): behind one office address, each browser follows only its own calls.
+  const mine = calls.create({ ip: 'office', live: true, staff: false, creator: 'cookie-1' });
+  calls.create({ ip: 'office', live: true, staff: false, creator: 'cookie-2' });
+  assert.equal(calls.latest({ creator: 'cookie-1' }).id, mine.id);
+  assert.equal(calls.latest({ creator: 'cookie-3' }), null);
+  assert.equal(calls.latest({}), null, 'no cookie and not local: nothing');
 });
 
 test('S1: one person cannot spend past their hourly budget, so the session stop is never drained by one code holder', () => {
@@ -116,4 +122,35 @@ test('booking: the approved visit is a calendar invite for the owner only, and t
   assert.equal(r.quotedCents, 24900);
   assert.equal(r.booked, true);
   assert.ok(r.minutesToQuote >= 0 && r.minutesToQuote <= r.callMinutes);
+});
+
+test('S-A (red team #6): live calls count at their cap, two at a time per place, and a tour needs room in the budget', () => {
+  const calls = setup();
+  const a = calls.create({ ip: 'judge-a', live: true, staff: false });
+  const b = calls.create({ ip: 'judge-a', live: true, staff: false });
+  assert.throws(() => calls.create({ ip: 'judge-a', live: true, staff: false }), /Two calls are already open/);
+  // $0.25 + $0.25 reserved; a tour raises one call to $0.60: 0.85, inside $1.50.
+  assert.equal(calls.tour(a.id, a.camToken, 'auto').ok, true);
+  // A second tour would reserve 0.60 + 0.60 = 1.20: still inside; a third call cannot open while two are live.
+  assert.equal(calls.tour(b.id, b.camToken, 'auto').ok, true);
+  calls.end(a.id);
+  const c = calls.create({ ip: 'judge-a', live: true, staff: false });
+  calls.clientOf(c.id).recordUsage('muse-spark-1.3', { input_tokens: 500_000, output_tokens: 0 });
+  assert.throws(() => calls.tour(c.id, c.camToken, 'auto'), /not available on this call/);
+});
+
+test('latency (red team #6): a named part gets a spoken line from code before Spark answers; no frame, no line', async () => {
+  const calls = setup();
+  const a = calls.create({ ip: 'judge-a', live: true, staff: false });
+  await calls.text(a.id, a.camToken, 'my water heater is leaking').catch(() => undefined);
+  assert.ok(
+    !calls.viewAs(a.id, a.camToken).says.some((s) => /Let me look/.test(s.text)),
+    'no camera yet: nothing to look at',
+  );
+  const b = calls.create({ ip: 'judge-b', live: true, staff: false });
+  await calls.frame(b.id, b.camToken, 'data:image/jpeg;base64,' + 'A'.repeat(400));
+  await calls.text(b.id, b.camToken, 'my water heater is leaking').catch(() => undefined);
+  const said = calls.viewAs(b.id, b.camToken).says.map((s) => s.text);
+  assert.equal(said[1], 'Let me look at the water heater.');
+  assert.equal(calls.sayable(b.id, b.camToken, 'Let me look at the water heater.'), true);
 });

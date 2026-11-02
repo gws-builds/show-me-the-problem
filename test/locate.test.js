@@ -256,3 +256,26 @@ test('the part the caller names is outlined while Spark plans, and used only for
   await new Promise((r) => setTimeout(r, 5));
   assert.ok(failing, 'an unused failed guess never surfaces as an unhandled rejection');
 });
+
+test("B-1: find_part looks at the early outline's own frame while it is fresh, even after newer frames arrive", async () => {
+  const { frameFor, SPEC_USE_MS } = await import('../src/locate.js');
+  const calls = [];
+  const client = {
+    segment: async (_img, noun) => {
+      calls.push(noun);
+      return [
+        { ordinal: 1, x1: 10, y1: 10, x2: 200, y2: 200, width: 640, height: 480, score: 0.9, geo: { area: 0.1 } },
+      ];
+    },
+  };
+  const early = { ...frame, n: 5, at: 1000 };
+  const spec = speculate(client, early, 'my kitchen faucet drips', { now: 1000 });
+  const latest = { ...frame, n: 8, at: 3000 };
+  const chosen = frameFor('kitchen faucet', latest, spec, 3000);
+  assert.equal(chosen.n, 5, 'the early frame, not the newest');
+  const hit = await locate(client, chosen, 'kitchen faucet', { spec });
+  assert.equal(hit.method, 'text (early)');
+  assert.equal(calls.length, 1, 'one SAM call for the turn, not two');
+  assert.equal(frameFor('kitchen faucet', latest, spec, 1000 + SPEC_USE_MS + 1).n, 8, 'too old: the latest frame');
+  assert.equal(frameFor('water heater', latest, spec, 3000).n, 8, 'a different part: the latest frame');
+});

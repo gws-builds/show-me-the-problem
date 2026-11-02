@@ -12,14 +12,14 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import { draftFollowUp } from './afterBooking.js';
 import { createSession, callerTurn, MAX_TURNS } from './agent.js';
-import { STOP_CODES, isStop } from './budget.js';
+import { PER_RUN_USD, STOP_CODES, isStop } from './budget.js';
 import { workOrder } from './evidence.js';
 import { bookingIcs } from './ics.js';
 import { safeEqual } from './filters.js';
 import { guide, DARK_LUMA } from './guidance.js';
 import { scanFrame, severityOf } from './hazards.js';
 import { toLang } from './i18n.js';
-import { speculate } from './locate.js';
+import { guessPart, speculate } from './locate.js';
 import { maskGeometry } from './mask.js';
 import { reviewWorkOrder } from './review.js';
 import { normaliseMobile } from './sms.js';
@@ -71,6 +71,7 @@ export const LIMITS = {
   // Model spend one person (IP) may cause in an hour, so a shared judge code cannot drain the session stop
   // for everyone (red team #5 S1: about 8 tour calls emptied a $5 stop). Staff calls are not counted.
   usdPerIpPerHour: 1.5,
+  liveCallsPerIp: 2, // calls open at once from one place, so one person cannot hold the live slots
   trackChecks: 8, // SAM re-checks while the caller moves the camera (each updates the guidance arrow)
   trackEveryMs: 1500,
   hazardScans: 12, // camera hazard scans per call (2 min of camera at one per 10 s) (Spark lists, SAM must agree)
@@ -265,7 +266,19 @@ export function createCalls({
         role: 'user',
         content: `${tourMemo(c.tour).replace('The caller may now ask for a price; quote only what was seen.', 'The tour is still going.')} Answer the caller's question with answer_caller, from this and the current frame, in one or two sentences; the tour then continues.`,
       });
-    c.history.push({ role: 'user', content: `Caller: ${line}` });
+    // The first useful words come from code the moment the caller stops, not after Spark's 2-5 s plan
+    // (red team #6, latency 1): "Let me look at the water heater." Only for a part we know, with a live
+    // frame, outside a tour, on an English call; Spark is told it was said so it does not repeat it.
+    const named = guessPart(line);
+    const ack =
+      named && !c.tour && c.session.latestFrame() && (c.session.lang?.() ?? 'en') === 'en'
+        ? `Let me look at the ${named}.`
+        : null;
+    if (ack) say(c, ack, c.status);
+    c.history.push({
+      role: 'user',
+      content: `Caller: ${line}${ack ? `\n(Code already said to the caller: "${ack}" Leave say_now empty this turn.)` : ''}`,
+    });
     try {
       await runTurn(c);
     } catch (err) {
@@ -343,10 +356,13 @@ export function createCalls({
       return;
     }
     c.history.push({ role: 'user', content: note });
+    c.autoRunning = true;
     try {
       await runTurn(c);
     } catch (err) {
       if (err.code !== 'STALE' && isStop(err)) say(c, 'Let me get the owner to call you back.', 'handoff');
+    } finally {
+      c.autoRunning = false;
     }
   }
 
@@ -573,6 +589,7 @@ export function createCalls({
   function startTour(c, room) {
     if (c.status === 'escalated') return null;
     if (c.tour && !c.tour.done) return { already: true, room: c.tour.room };
+    if (!mayRaise(c, TOUR.runCapUsd)) return null; // this place's hourly budget cannot cover a tour
     c.tour = createTour({ room });
     c.tour.refsFor = (q) => c.session.references?.(q, 2) ?? []; // cited trade-manual excerpts for this room
     c.session.setTourRoom(c.tour.room === 'auto' ? null : c.tour.room);
@@ -587,6 +604,20 @@ export function createCalls({
     });
     return { say: line };
   }
+
+  // What one place may still cost in the hour: finished calls at what they spent, live calls at their cap,
+  // so six calls opened at once cannot each start a tour inside the budget (red team #6 S-A).
+  function reservedHere(ip) {
+    const hourAgo = now() - 3_600_000;
+    const finished = (ipSpend.get(ip) ?? []).filter((x) => x.at > hourAgo).reduce((a, x) => a + x.usd, 0);
+    const live = [...calls.values()]
+      .filter((x) => x.ip === ip)
+      .reduce((a, x) => a + Math.max(x.client.spent(), x.client.cap?.() ?? PER_RUN_USD), 0);
+    return finished + live;
+  }
+  /** Whether this call may raise its cap to `usd` without its place passing the hourly budget. */
+  const mayRaise = (c, usd) =>
+    c.staff || reservedHere(c.ip) - (c.client.cap?.() ?? PER_RUN_USD) + usd <= LIMITS.usdPerIpPerHour;
 
   // Every way a call ends goes through here, so its spend counts toward its person's hour.
   function ended(c) {
@@ -643,7 +674,7 @@ export function createCalls({
       }
     },
 
-    create({ ip = 'unknown', live = false, staff = live, footage = null } = {}) {
+    create({ ip = 'unknown', live = false, staff = live, footage = null, creator = null } = {}) {
       sweep();
       if (ledger.mode() === 'stopped')
         throw new CallError(
@@ -659,11 +690,9 @@ export function createCalls({
         );
       if (calls.size >= LIMITS.maxLiveCalls)
         throw new CallError('Too many live calls right now. Try again in a few minutes.', 429, 'BUSY');
-      const hourAgo = now() - 3_600_000;
-      const spentHere =
-        (ipSpend.get(ip) ?? []).filter((x) => x.at > hourAgo).reduce((a, x) => a + x.usd, 0) +
-        [...calls.values()].filter((x) => x.ip === ip).reduce((a, x) => a + x.client.spent(), 0);
-      if (!staff && spentHere >= LIMITS.usdPerIpPerHour)
+      if (!staff && [...calls.values()].filter((x) => x.ip === ip).length >= LIMITS.liveCallsPerIp)
+        throw new CallError('Two calls are already open from here. Finish one first.', 429, 'RATE_LIMIT');
+      if (!staff && reservedHere(ip) + PER_RUN_USD > LIMITS.usdPerIpPerHour)
         throw new CallError('That is a lot of calls from one place. Try again later.', 429, 'RATE_LIMIT');
       const hits = (ipHits.get(ip) ?? []).filter((t) => now() - t < 3_600_000);
       if (hits.length >= LIMITS.callsPerIpPerHour && !staff)
@@ -674,6 +703,7 @@ export function createCalls({
         camToken: newId(),
         ownerToken: newId(),
         viewToken: newId(),
+        creator,
         ip,
         staff,
         createdAt: now(),
@@ -699,6 +729,7 @@ export function createCalls({
       c.ctx = {
         client: c.client,
         session: c.session,
+        now, // the same clock as the rest of the call (tools read frame ages and plate dates with it)
         priceList,
         calendar: nextSlots(now()),
         notifyOwner: async (m) => {
@@ -925,6 +956,8 @@ export function createCalls({
         .trim()
         .slice(0, LIMITS.textChars);
       if (!line) return { heard: '' };
+      // The caller talking outranks a turn the camera started: stop it rather than make them wait (red team #6).
+      if (c.busy && c.autoRunning) c.turnAbort?.abort();
       await waitIdle(c, LIMITS.voiceWaitMs);
       return exclusive(c, async () => {
         const before = c.says.length;
@@ -961,15 +994,19 @@ export function createCalls({
       const c = asCaller(callId, token);
       if (c.tour && !c.tour.done) return { ok: true, room: c.tour.room };
       const r = startTour(c, room);
-      if (!r) throw new CallError('This call was escalated. The owner is calling you.', 409, 'HAZARD');
+      if (!r)
+        throw c.status === 'escalated'
+          ? new CallError('This call was escalated. The owner is calling you.', 409, 'HAZARD')
+          : new CallError('A guided tour is not available on this call right now.', 429, 'RATE_LIMIT');
       say(c, r.say, 'touring');
       return { ok: true, room: c.tour.room };
     },
     /** The newest call (the console follows it during a recording session). */
-    /** The newest call started from this same place (the recording machine), with its view link; never another person's. */
-    latest(ip) {
+    /** The newest call this browser started (or, for the recording Mac, this local address), with its view link. */
+    latest({ creator = null, ip = null } = {}) {
+      const mine = (c) => (creator && c.creator === creator) || (ip && c.ip === ip);
       let best = null;
-      for (const c of calls.values()) if (c.ip === ip && (!best || c.createdAt >= best.createdAt)) best = c;
+      for (const c of calls.values()) if (mine(c) && (!best || c.createdAt >= best.createdAt)) best = c;
       return best ? { id: best.id, viewToken: best.viewToken } : null;
     },
     /** Natural voice out: only lines this call's agent said, guidance it showed, or the fixed recording cues. */
@@ -1048,7 +1085,7 @@ export function createCalls({
       // Muse Wonder reviews the approved work order for the technician, beside the booking, never blocking it.
       c.booking.review = { status: 'running' };
       // Its own allowance on top of what the call spent, so a long call still gets its plan (red team 10/31); never past MAX_RUN_USD.
-      c.client.setCap(c.client.spent() + 0.1);
+      if (mayRaise(c, c.client.spent() + 0.1)) c.client.setCap(c.client.spent() + 0.1);
       const t0 = Date.now();
       const spent0 = c.client.spent?.() ?? null;
       reviewWorkOrder(c.client, c.booking.workOrder, c.session.evidence.list())

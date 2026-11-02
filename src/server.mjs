@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { createGlimmer } from './afterBooking.js';
 import { createAlerts } from './alerts.js';
 import { createLedger } from './budget.js';
 import { createCalls, CallError, LIMITS } from './calls.js';
-import { callerIp } from './clientIp.js';
+import { callerIp, placeKey } from './clientIp.js';
 import { loadCorpus } from './corpus.js';
 import { createGate, writeCode, cookieValue } from './gate.js';
 import { createClient } from './meta.js';
@@ -41,6 +41,9 @@ setInterval(() => gate.sweep(), 60_000).unref();
 const { priceList } = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/demo-business.json'), 'utf8'));
 // The owner of the deployment can open live calls past the public limits with this header.
 const STAFF_KEY = process.env.STAFF_KEY || '';
+// Judge demo default: the person who starts a call also plays the owner. Set to 0 for a real business.
+const OWNER_LINK_TO_CALLER = process.env.OWNER_LINK_TO_CALLER !== '0';
+const CREATOR_COOKIE = 'stb_creator';
 const tts = createTts();
 // The trade library loads once (about a second) before the first call needs it.
 setImmediate(() => {
@@ -149,8 +152,8 @@ const HEADERS = {
   'Cache-Control': 'no-store',
 };
 
-const send = (res, status, body, type = 'application/json') => {
-  res.writeHead(status, { ...HEADERS, 'Content-Type': type });
+const send = (res, status, body, type = 'application/json', extra = {}) => {
+  res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 };
 
@@ -174,7 +177,7 @@ const json = async (req, max) => {
     throw new CallError('Bad JSON.');
   }
 };
-const clientIp = (req) => callerIp(req);
+const clientIp = (req) => placeKey(callerIp(req));
 
 // Footage mode: only the clips listed in public/footage/footage.json, with Range support (Safari needs it).
 const FOOTAGE = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/footage/footage.json'), 'utf8'));
@@ -273,7 +276,19 @@ async function route(req, res) {
   }
   if (req.method === 'GET' && p === '/api/health')
     return send(res, 200, { ok: true, mode: ledger.mode(), live: calls.size(), session: ledger.session() });
-  if (req.method === 'GET' && p === '/api/calls/latest') return send(res, 200, calls.latest(key) ?? { id: null });
+  // "Latest" follows calls this browser started (a random creator cookie), never an address shared by a
+  // whole office (red team #6 S-B). The one exception is a direct local connection, the recording Mac,
+  // whose headless console and phone tunnel both arrive from loopback.
+  if (req.method === 'GET' && p === '/api/calls/latest') {
+    const local = process.env.TRUST_PROXY !== '1' && /^(127\.|::1$|::ffff:127\.)/.test(req.socket.remoteAddress ?? '');
+    return send(
+      res,
+      200,
+      calls.latest({ creator: cookieValue(req.headers.cookie, CREATOR_COOKIE), ip: local ? key : null }) ?? {
+        id: null,
+      },
+    );
+  }
   if (req.method === 'POST' && p === '/api/calls') {
     // Everyone past the access code gets live calls (the founder, or a judge given the link), but only
     // the STAFF_KEY holder skips the per-person hourly limit: a shared judge code must not unlock
@@ -283,9 +298,17 @@ async function route(req, res) {
       STAFF_KEY && given.length === STAFF_KEY.length && timingSafeEqual(Buffer.from(given), Buffer.from(STAFF_KEY)),
     );
     const footage = FOOTAGE.find((x) => x.file === url.searchParams.get('footage'))?.file ?? null;
-    const made = calls.create({ ip: key, live: true, staff, footage });
+    const creator = cookieValue(req.headers.cookie, CREATOR_COOKIE) || randomBytes(16).toString('hex');
+    const made = calls.create({ ip: key, live: true, staff, footage, creator });
     if (!staff) alerts.callStarted({ ...ledger.session(), footage: Boolean(footage) }).catch(() => undefined);
-    return send(res, 200, made);
+    // The owner's approval link goes to the person starting the call only in the judge demo, where they
+    // play the owner too (the page says so). With OWNER_LINK_TO_CALLER=0 only staff get it (red team #6 S-C).
+    const { ownerToken: _owner, ...forCaller } = made;
+    const body = staff || OWNER_LINK_TO_CALLER ? made : forCaller;
+    const secure = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket.encrypted);
+    return send(res, 200, body, 'application/json', {
+      'Set-Cookie': `${CREATOR_COOKIE}=${creator}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200${secure ? '; Secure' : ''}`,
+    });
   }
   const m = p.match(CALL_ROUTE);
   if (m) {
@@ -349,9 +372,10 @@ async function route(req, res) {
       const text = String((await json(req, 1400)).text ?? '');
       if (!calls.sayable(id, cam, text))
         return send(res, 403, { error: "Only the agent's own lines are spoken.", code: 'NOT_SAYABLE' });
+      if (!tts.on) return send(res, 503, { error: 'No natural voice on this server.', code: 'NO_TTS_KEY' });
       const audio = await tts.speak(id, text, calls.langOf?.(id) ?? 'en').catch(() => null);
-      if (!audio)
-        return send(res, 503, { error: 'Natural voice unavailable; the browser voice is used.', code: 'NO_TTS' });
+      // A miss (slow reply, the per-call cap) is retried by the phone on the next line, not the end of the voice.
+      if (!audio) return send(res, 503, { error: 'Natural voice missed this line.', code: 'TTS_MISSED' });
       return send(res, 200, audio, 'audio/mpeg');
     }
     if (req.method === 'POST' && action === 'tour')
@@ -426,6 +450,7 @@ function voiceUpgrade(req, socket) {
       try {
         if (isBinary) session.audio(data);
         else if (/"endStream"/.test(data)) session.finish();
+        else if (/"playback"/.test(data)) session.playback(/"playing"\s*:\s*true/.test(String(data)));
       } catch {
         try {
           session.end();

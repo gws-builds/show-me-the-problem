@@ -53,6 +53,13 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
   let unmetered = 0;
   let total = 0;
   let speechEndAt = null;
+  // Whether the phone was playing the agent's voice when the caller started talking. Only then can what
+  // ASR heard be the agent's own line coming back (red team #6 B-4: "cold" after "Hot or cold?" was dropped).
+  let playing = false;
+  let playedUntil = 0;
+  let echoPossible = true; // until the phone reports playback, keep the word check
+  let reported = false;
+  const ECHO_TAIL_MS = 1200;
   const queue = [];
   const send = (o) => {
     try {
@@ -90,7 +97,10 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       while (queue.length) up.send(queue.shift());
       return;
     }
-    if (m.type === 'speechStart') return send({ type: 'speechStart' });
+    if (m.type === 'speechStart') {
+      echoPossible = !reported || playing || now() - playedUntil < ECHO_TAIL_MS;
+      return send({ type: 'speechStart' });
+    }
     if (m.type === 'transcript') return send({ type: 'partial', text: String(m.transcript ?? '').slice(0, 300) });
     if (m.type === 'speechEnd') {
       speechEndAt = now();
@@ -107,7 +117,7 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       // The phone's own waiting lines ("Okay, one sec.") can leak back too (red team #5 S4); only a
       // multi-word match counts, so a caller's own one-word "okay" is never dropped.
       const fillerEcho = text.split(/\s+/).length >= 2 && isEcho(text, WAITING_LINES);
-      if (isEcho(text, agentLines) || fillerEcho) {
+      if (echoPossible && (isEcho(text, agentLines) || fillerEcho)) {
         calls.logEvent(callId, { kind: 'echo_dropped', text });
         return send({ type: 'ignored', text });
       }
@@ -163,6 +173,12 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       meter();
     },
     end,
+    /** The phone says when it starts and stops playing speech (agent lines and waiting lines). */
+    playback(on) {
+      reported = true;
+      if (playing && !on) playedUntil = now();
+      playing = Boolean(on);
+    },
     /** Half-close: no more audio, but keep reading until the service sends its last turn and closes. */
     finish() {
       if (closed) return;

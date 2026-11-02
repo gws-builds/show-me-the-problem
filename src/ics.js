@@ -2,12 +2,19 @@
 // calendar (Google, Apple, Outlook all open .ics) with no calendar account connected to the demo.
 // Times are floating local times: a visit at 9 AM is 9 AM wherever the owner's calendar is.
 
+// Text fields: newlines become \n; every other control character (a lone carriage return included) is
+// dropped, so injected text can never start a new calendar line (red team #6 S-D).
 const esc = (s) =>
   String(s ?? '')
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\r?\n/g, '\\n');
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/[\u0000-\u001f\u007f]/g, ' ')
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,'),
+    )
+    .join('\\n');
 // Lines longer than 75 octets are folded with CRLF + space, as the format requires.
 const fold = (line) => {
   const out = [];

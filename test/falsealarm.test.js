@@ -201,3 +201,28 @@ test('the same bare wire in a wall box still escalates in code (hazard recall ke
   assert.equal(v.checklist.find((x) => x.id === 'wiring').status, 'found');
   assert.equal(v.pages[0].urgent, true);
 });
+
+test('B-5 (red team #6): overheating parts, burning smells, a spraying relief valve, water through a light and a booming burner escalate in code; routine calls do not', async () => {
+  const { hazardIn } = await import('../src/verifier.js');
+  for (const t of [
+    'the breaker is hot to the touch',
+    'the outlet is warm and discolored',
+    'I smell something burning from the panel',
+    'the panel is buzzing loudly',
+    'the relief valve on the water heater is spraying hot water',
+    'water is coming through the ceiling light',
+    'the furnace is making a boom when it starts',
+    'the light switch is hot',
+  ])
+    assert.equal(hazardIn(t), true, t);
+  for (const t of [
+    'switch on the hot water',
+    'my water heater makes a banging noise',
+    'the breaker keeps tripping',
+    'I want to replace the light switch',
+    'the hot water tap drips',
+    'the furnace blows cold air',
+    'water under the sink near the light',
+  ])
+    assert.equal(hazardIn(t), false, t);
+});

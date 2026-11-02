@@ -19,3 +19,12 @@ test('S7: the caller is counted from the trusted end of X-Forwarded-For, never a
     'too few entries falls back, never undefined',
   );
 });
+
+test('S-A: IPv6 addresses in one /64 count as one place; IPv4 stays as is', async () => {
+  const { placeKey } = await import('../src/clientIp.js');
+  assert.equal(placeKey('2001:db8:abcd:12:1111:2222:3333:4444'), placeKey('2001:db8:abcd:12::9'));
+  assert.notEqual(placeKey('2001:db8:abcd:12::1'), placeKey('2001:db8:abcd:13::1'));
+  assert.equal(placeKey('::ffff:1.2.3.4'), '1.2.3.4');
+  assert.equal(placeKey('1.2.3.4'), '1.2.3.4');
+  assert.equal(placeKey(''), 'unknown');
+});

@@ -90,7 +90,18 @@ export function speculate(client, frame, text, { now = Date.now() } = {}) {
   const noun = nounsFor(part)[0];
   const result = client.segment(frame.dataUrl, noun);
   result.catch(() => undefined); // an unused guess that failed is not an error anywhere
-  return { frameN: frame.n, noun, result };
+  return { frame, frameN: frame.n, noun, result };
+}
+
+// The early outline covers the requested part when the nouns name the same thing ("faucet" and
+// "kitchen faucet"), and is used while its frame is still close to what the caller is pointing at.
+export const SPEC_USE_MS = 2500;
+const sameThing = (a, b) => a === b || a.includes(b) || b.includes(a);
+
+/** The frame find_part should look at: the early outline's own frame when that guess fits, else the latest. */
+export function frameFor(part, latest, spec, now) {
+  if (spec && sameThing(nounsFor(part)[0], spec.noun) && now - spec.frame.at <= SPEC_USE_MS) return spec.frame;
+  return latest;
 }
 
 // A record without a confidence counts as 1, as in the verifier (we always ask SAM for one).
@@ -131,7 +142,7 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
       ),
     );
   }
-  const early = spec && spec.frameN === frame.n && spec.noun === nouns[0] ? spec.result : null;
+  const early = spec && spec.frameN === frame.n && sameThing(spec.noun, nouns[0]) ? spec.result : null;
   if (!results.some((r) => ok(best(r.records))))
     results.push(
       await attempt(early ? 'text (early)' : 'text', nouns[0], () => early ?? client.segment(frame.dataUrl, nouns[0])),

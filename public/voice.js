@@ -81,6 +81,12 @@ window.Voice = (() => {
     window.Speech?.prefetch?.(FILLERS[window.Speech?.lang === 'es' ? 'es' : 'en'].flatMap(([, lines]) => lines));
   }
 
+  // The relay judges echo by whether the phone was talking when the caller started (red team #6 B-4).
+  // Registered once; it always uses the current socket.
+  window.addEventListener('speech:playback', (e) => {
+    if (ws?.readyState === 1 && ws.ready) ws.send(JSON.stringify({ type: 'playback', playing: Boolean(e.detail) }));
+  });
+
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${location.host}/api/calls/${callId}/voice`);
@@ -225,6 +231,7 @@ window.Voice = (() => {
     await micTrack
       ?.applyConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false })
       .catch(() => {});
+    window.Speech?.hold(true);
     rec = { chunks: [] };
     for (let s = 8; s > 0; s--) {
       if (b) b.textContent = `Listening… ${s}`;
@@ -233,6 +240,7 @@ window.Voice = (() => {
     }
     const wav = toWav(rec.chunks);
     rec = null;
+    window.Speech?.hold(false);
     if (b) b.textContent = 'Checking the sound…';
     state('listening (hands-free)');
     await micTrack?.applyConstraints(voiceFilters).catch(() => {});

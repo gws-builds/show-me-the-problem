@@ -3,7 +3,7 @@
 // the model's own words: propose_quote goes through the verifier, and
 // book_visit only queues a request for the owner's tap.
 import { verify, hazardIn } from './verifier.js';
-import { locate } from './locate.js';
+import { frameFor, locate } from './locate.js';
 import { SHUTOFF_PLAYBOOK, fixtureFor, HYPOTHESES } from './evidence.js';
 import { noContact, noPrice } from './filters.js';
 import { safeLine } from './tour.js';
@@ -165,10 +165,12 @@ export async function runTool(name, args, ctx) {
   const { session } = ctx;
   switch (name) {
     case 'find_part': {
-      const frame = session.latestFrame();
+      const part = String(args.part ?? '').slice(0, 60);
+      // The outline started while Spark planned used an earlier frame; looking at that same frame is
+      // what makes the head start count (red team #6 B-1: by now 1-3 newer frames have arrived).
+      const frame = frameFor(part, session.latestFrame(), ctx.spec ?? null, ctx.now?.() ?? Date.now());
       if (!frame)
         return { output: { error: 'no camera frame yet' }, say: 'Can you open the camera link I texted you?' };
-      const part = String(args.part ?? '').slice(0, 60);
       const found = await locate(ctx.client, frame, part, {
         tap: session.tap?.() ?? null,
         now: ctx.now?.() ?? Date.now(),

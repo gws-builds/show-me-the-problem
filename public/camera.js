@@ -34,15 +34,20 @@ function unlockAudio() {
   }
 }
 function browserSay(text) {
+  // The utterance this call makes; cancelling it later fires its end event, which must not start the next line.
+  const gen = sayN;
   try {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05;
     if (lastView?.lang === 'es') u.lang = 'es-US';
     u.onstart = () => {
+      playback(true);
       Speech.speaking = true;
       Speech.current = text;
     };
     u.onend = u.onerror = () => {
+      playback(false);
+      if (gen !== sayN) return;
       Speech.speaking = false;
       Speech.next();
     };
@@ -78,6 +83,16 @@ function fadeOut(ms = 120) {
     requestAnimationFrame(step);
   });
 }
+// Tells the voice relay when speech is coming out of the speaker, so it can tell the agent's own words
+// coming back from the caller's (voice.js listens for this event).
+let playingNow = false;
+function playback(on) {
+  if (on === playingNow) return;
+  playingNow = on;
+  window.dispatchEvent(new CustomEvent('speech:playback', { detail: on }));
+}
+player.addEventListener('playing', () => playback(true));
+for (const e of ['pause', 'ended', 'error']) player.addEventListener(e, () => playback(false));
 const Speech = {
   speaking: false,
   current: '',
@@ -94,6 +109,11 @@ const Speech = {
   later(text, { urgent = false, parts = null } = {}) {
     const lines = Array.isArray(parts) && parts.length ? parts : [text];
     void Speech.prefetch(lines.slice(1));
+    // While the phone records the equipment, lines wait (they would be in the clip); hazards still play.
+    if (Speech.held && !urgent) {
+      Speech.queue.push(...lines);
+      return undefined;
+    }
     if (urgent || !Speech.speaking || Speech.isFiller) {
       Speech.queue = lines.slice(1);
       return Speech.say(lines[0]);
@@ -180,11 +200,13 @@ const Speech = {
               Speech.next();
             }
           };
+          Speech.misses = 0;
           player.src = url;
           await player.play();
           return;
         }
-        if (r.status === 503) Speech.natural = false; // no key or cap reached: browser voice from now on
+        const why = (await r.json().catch(() => ({}))).code;
+        if (why === 'NO_TTS_KEY' || ++Speech.misses >= 3) Speech.natural = false;
       } catch {
         /* fall through to the browser voice */
       }
@@ -195,6 +217,9 @@ const Speech = {
     browserSay(text);
   },
   stop() {
+    // A line still being fetched must not start once stopped (barge-in, Listen): it is now stale.
+    sayN += 1;
+    playback(false);
     fadeGen += 1;
     try {
       player.pause();
@@ -210,6 +235,14 @@ const Speech = {
     Speech.queue = [];
     Speech.stop();
   },
+  /** Holds every non-urgent line while the phone records the equipment, then plays what waited. */
+  hold(on) {
+    Speech.held = on;
+    if (!on && !Speech.speaking) Speech.next();
+  },
+  held: false,
+  // The natural voice is given up only when the server has none, or after three misses in a row.
+  misses: 0,
 };
 document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;

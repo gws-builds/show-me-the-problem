@@ -1,8 +1,8 @@
 // Natural voice out (pre-existing Unmanually voice stack, not a Meta model: Meta's
 // catalogue has no text-to-speech as of Oct 30, 2026). Deepgram Aura-2 turns the
 // agent's line into speech; the browser voice stays as the fallback.
-// Caps: 600 characters a line, 6,000 a call, 120,000 a server run (about $3.60).
-export const TTS_LIMITS = { line: 600, perCall: 6000, perRun: 120000 };
+// Caps: 600 characters a line, 10,000 a call (a guided tour says a lot), 120,000 a server run (about $3.60).
+export const TTS_LIMITS = { line: 600, perCall: 10000, perRun: 120000 };
 
 // A Spanish call uses a Spanish Aura-2 voice (TTS_VOICE_ES to change it); not verified live on Oct 30.
 export function createTts({

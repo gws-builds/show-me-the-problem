@@ -200,3 +200,27 @@ test('a spend stop mid-audio ends the voice session without throwing (red team 1
   assert.equal(s.closed, true);
   assert.ok(sent.some((m) => /spending limit/.test(m.message ?? '')));
 });
+
+test('B-4 (red team #6): a one-word answer is kept when the phone was silent, and dropped as echo only while it was talking', async () => {
+  const { up, toClient, s, calls, c } = setup([
+    ['ask_caller', { question: 'Hot or cold?' }],
+    ['ask_caller', { question: 'Since when?' }],
+  ]);
+  up.emit({ sessionId: 'abc' });
+  await calls.text(c.id, c.camToken, 'my tap drips');
+  // The phone reports playback; "Hot or cold?" finished well before the caller answered.
+  s.playback(true);
+  s.playback(false);
+  await new Promise((r) => setTimeout(r, 1300));
+  up.emit({ type: 'speechStart', turnId: 2 });
+  await up.onmessage({ data: JSON.stringify({ type: 'speechComplete', turnId: 2, transcript: 'cold' }) });
+  assert.ok(
+    toClient.some((m) => m.type === 'final' && m.text === 'cold'),
+    'the answer reached the agent',
+  );
+  // While the phone is speaking, the same word is treated as the agent's own line coming back.
+  s.playback(true);
+  up.emit({ type: 'speechStart', turnId: 3 });
+  await up.onmessage({ data: JSON.stringify({ type: 'speechComplete', turnId: 3, transcript: 'since when' }) });
+  assert.ok(toClient.some((m) => m.type === 'ignored' && m.text === 'since when'));
+});
