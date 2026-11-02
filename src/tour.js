@@ -8,33 +8,55 @@
 //   - every line passes safeLine(): nobody is told to open an electrical cover or touch anything inside;
 //   - text in the frame (a sign saying "ignore your rules") is data: evidence that reads like an
 //     instruction is dropped, and spoken lines are composed here from card labels and short evidence.
-import { noContact } from './tools.js';
+import { noContact, noPrice } from './filters.js';
 import { retrieve, partsOf, hazardsOf, contextFor, ROOMS, ROOM_LABEL } from './kb.js';
 import { corpusContext } from './corpus.js';
 import { maskGeometry, dataUrlSize } from './mask.js';
 import { isStop } from './budget.js';
 import { AGREE_SCORE } from './hazards.js';
 
+export { noPrice, NO_PRICE_LINE } from './filters.js';
+
 // "move closer to doorway" -> "Move closer to the doorway.": a capital and a full stop on model-made directions.
-const sentence = (t) => { const x = String(t ?? '').trim().replace(/\.?$/, '.'); return x.charAt(0).toUpperCase() + x.slice(1); };
+const sentence = (t) => {
+  const x = String(t ?? '')
+    .trim()
+    .replace(/\.?$/, '.');
+  return x.charAt(0).toUpperCase() + x.slice(1);
+};
 
 export const TOUR = { steps: 16, everyMs: 4500, samPerStep: 4, itemsPerStep: 6, runCapUsd: 0.6 };
 export const STATUS = ['normal', 'attention', 'safety', 'cant_tell'];
 const RANK = { cant_tell: 0, normal: 1, attention: 2, safety: 3 };
-export const STATUS_WORDS = { normal: 'looks normal', attention: 'needs attention', safety: 'safety issue', cant_tell: "can't tell from this angle" };
+export const STATUS_WORDS = {
+  normal: 'looks normal',
+  attention: 'needs attention',
+  safety: 'safety issue',
+  cant_tell: "can't tell from this angle",
+};
 export const MOVES = {
-  pan_left: 'Turn slowly to your left.', pan_right: 'Turn slowly to your right.', step_back: 'Take a step back.', closer: 'Move a little closer.',
-  tilt_up: 'Tilt the phone up a little.', tilt_down: 'Tilt the phone down a little.', hold: 'Hold still for a moment.',
+  pan_left: 'Turn slowly to your left.',
+  pan_right: 'Turn slowly to your right.',
+  step_back: 'Take a step back.',
+  closer: 'Move a little closer.',
+  tilt_up: 'Tilt the phone up a little.',
+  tilt_down: 'Tilt the phone down a little.',
+  hold: 'Hold still for a moment.',
 };
 
 // ---- code gates on what is said ----
-const OPEN_COVER = /\b(open|remove|take off|unscrew|pull off|lift off|unbolt|pry)\b[^.!?]{0,30}\b(cover|dead ?front|panel|breaker box|electrical box|junction box|fuse box|disconnect)\b/i;
-const TOUCH_INSIDE = /\b(touch|reach in|put your hand|poke|grab|wiggle|tighten|jiggle)\b[^.!?]{0,30}\b(wires?|wiring|inside|bus ?bars?|terminals?|lugs?|conductors?)\b/i;
+const OPEN_COVER =
+  /\b(open|remove|take off|unscrew|pull off|lift off|unbolt|pry)\b[^.!?]{0,30}\b(cover|dead ?front|panel|breaker box|electrical box|junction box|fuse box|disconnect)\b/i;
+const TOUCH_INSIDE =
+  /\b(touch|reach in|put your hand|poke|grab|wiggle|tighten|jiggle)\b[^.!?]{0,30}\b(wires?|wiring|inside|bus ?bars?|terminals?|lugs?|conductors?)\b/i;
 // Spanish too (red team, Oct 30): a Spanish call must not be told "abra la tapa del panel" either.
-const OPEN_COVER_ES = /\b(abr[aei]\w*|quit[ae]\w*|retir[ae]\w*|destornill\w*|desatornill\w*|levant[ae]\w*|saqu[ae]\w*)\b[^.!?]{0,40}\b(tapa|cubierta|panel|caja (el[eé]ctrica|de (fusibles|breakers|empalme))|tablero|interruptor de desconexi[oó]n)\b/i;
-const TOUCH_INSIDE_ES = /\b(toqu[ea]\w*|meta (la|su) mano|agarr[ea]\w*|muev[ae]\w*|aprie?t[ea]\w*|ajust[ea]\w*|jal[ea]\w*)\b[^.!?]{0,40}\b(cables?|alambres?|adentro|dentro|barras?|terminales?|bornes?|conductores?)\b/i;
+const OPEN_COVER_ES =
+  /\b(abr[aei]\w*|quit[ae]\w*|retir[ae]\w*|destornill\w*|desatornill\w*|levant[ae]\w*|saqu[ae]\w*)\b[^.!?]{0,40}\b(tapa|cubierta|panel|caja (el[eé]ctrica|de (fusibles|breakers|empalme))|tablero|interruptor de desconexi[oó]n)\b/i;
+const TOUCH_INSIDE_ES =
+  /\b(toqu[ea]\w*|meta (la|su) mano|agarr[ea]\w*|muev[ae]\w*|aprie?t[ea]\w*|ajust[ea]\w*|jal[ea]\w*)\b[^.!?]{0,40}\b(cables?|alambres?|adentro|dentro|barras?|terminales?|bornes?|conductores?)\b/i;
 const NEGATION = /\b(don'?t|do not|never|without|not|no need to|no|nunca|sin|jam[aá]s)\b/i;
-export const SAFE_PANEL_LINE = 'Step back so I can see the whole panel. Please do not open the cover or touch anything inside.';
+export const SAFE_PANEL_LINE =
+  'Step back so I can see the whole panel. Please do not open the cover or touch anything inside.';
 
 /** Returns { text, blocked }. A sentence telling the caller to open an electrical cover or touch inside is replaced. */
 export function safeLine(text) {
@@ -43,28 +65,22 @@ export function safeLine(text) {
     for (const re of [OPEN_COVER, TOUCH_INSIDE, OPEN_COVER_ES, TOUCH_INSIDE_ES]) {
       const m = s.match(re);
       // A negation counts only in the same clause ("do not open", "no abra"); "No worries, open the cover" is blocked.
-      if (m && !NEGATION.test(s.slice(0, m.index).split(/[,;:]/).pop())) return { text: SAFE_PANEL_LINE, blocked: true };
+      if (m && !NEGATION.test(s.slice(0, m.index).split(/[,;:]/).pop()))
+        return { text: SAFE_PANEL_LINE, blocked: true };
     }
   }
   return { text: String(text ?? ''), blocked: false };
 }
 
-// Model-written lines never carry a price: only the verifier's answer to propose_quote may
-// (red team 10/31: a caller could talk the agent into "the visit is $1"). A sentence with
-// an amount is replaced in code.
-const AMOUNT = /\$\s*\d|\b\d[\d,.]*\s*(dollars?|bucks|usd|d[oó]lares)\b|\bfree of charge\b|\bno charge\b/i;
-export const NO_PRICE_LINE = 'The price comes only from the owner\'s list, once I have seen the problem.';
-export function noPrice(text) {
-  const parts = String(text ?? '').split(/(?<=[.!?])\s+/);
-  const kept = parts.filter((p) => !AMOUNT.test(p));
-  if (kept.length === parts.length) return { text: String(text ?? ''), blocked: false };
-  return { text: [...kept, NO_PRICE_LINE].join(' ').trim(), blocked: true };
-}
-
-const INJECT = /\b(ignore|instructions?|rules?|admin|prompt|developer|assistant|prices?|booking|book it|approve\w*|password|token|you are now|say that)\b|\bsystem\s*(prompt|message|:)|\$/i;
+const INJECT =
+  /\b(ignore|instructions?|rules?|admin|prompt|developer|assistant|prices?|booking|book it|approve\w*|password|token|you are now|say that)\b|\bsystem\s*(prompt|message|:)|\$/i;
 /** Short, printable, and never instruction-like (text read off equipment or signs is data, not a command). */
 export function cleanText(s, max = 90) {
-  const t = String(s ?? '').replace(/[\u0000-\u001f<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  const t = String(s ?? '')
+    .replace(/[\u0000-\u001f<>{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
   return INJECT.test(t) ? '' : t;
 }
 
@@ -72,11 +88,22 @@ export const roomLabel = (room) => ROOM_LABEL[room] ?? 'room';
 
 export function createTour({ room = 'auto' } = {}) {
   const r = ROOMS.includes(room) ? room : 'auto';
-  return { room: r, cards: r === 'auto' ? [] : retrieve({ room: r }, 2), step: 0, found: new Map(), current: [], lastFrame: null, done: false, lastSay: '', said: new Set() };
+  return {
+    room: r,
+    cards: r === 'auto' ? [] : retrieve({ room: r }, 2),
+    step: 0,
+    found: new Map(),
+    current: [],
+    lastFrame: null,
+    done: false,
+    lastSay: '',
+    said: new Set(),
+  };
 }
 
 export function openLine(tour) {
-  const open = tour.cards[0]?.tour?.open ?? "Let's walk through it together. Show me the whole space, slowly, from left to right.";
+  const open =
+    tour.cards[0]?.tour?.open ?? "Let's walk through it together. Show me the whole space, slowly, from left to right.";
   return safeLine(`${open} I'll name each part as I see it.`).text;
 }
 
@@ -112,11 +139,15 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Turns the model's items into checked items. Pure: no model calls. */
 export function normalizeItems(raw, tour) {
-  const parts = partsOf(tour.cards); const hazards = hazardsOf(tour.cards);
+  const parts = partsOf(tour.cards);
+  const hazards = hazardsOf(tour.cards);
   const byLabel = new Map([...parts.values()].map((p) => [p.label.toLowerCase(), p]));
   const out = new Map();
   for (const it of (Array.isArray(raw) ? raw : []).slice(0, TOUR.itemsPerStep * 2)) {
-    const name = String(it?.part ?? '').toLowerCase().trim().slice(0, 40);
+    const name = String(it?.part ?? '')
+      .toLowerCase()
+      .trim()
+      .slice(0, 40);
     let part = parts.get(name) ?? parts.get(name.replace(/[\s-]+/g, '_')) ?? byLabel.get(name) ?? null;
     if (!part) {
       if (!/^[a-z][a-z -]{1,30}$/.test(name) || name.split(/\s+/).length > 3 || !cleanText(name)) continue;
@@ -126,15 +157,33 @@ export function normalizeItems(raw, tour) {
     const evidence = cleanText(it?.evidence);
     const better = cleanText(it?.better_view, 80);
     let note = '';
-    if ((status === 'attention' || status === 'safety') && evidence.split(/\s+/).filter(Boolean).length < 2) { status = 'cant_tell'; note = 'no visible sign given: not claimed'; }
+    if ((status === 'attention' || status === 'safety') && evidence.split(/\s+/).filter(Boolean).length < 2) {
+      status = 'cant_tell';
+      note = 'no visible sign given: not claimed';
+    }
     let hazard = null;
     if (status === 'safety') {
       hazard = hazards.get(String(it?.hazard ?? '').trim()) ?? null;
-      if (!hazard) { status = 'attention'; note = 'no hazard threshold on the cards: needs attention, not a safety call'; }
+      if (!hazard) {
+        status = 'attention';
+        note = 'no hazard threshold on the cards: needs attention, not a safety call';
+      }
     }
-    const x = Number(it?.x); const y = Number(it?.y);
-    const point = Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1000 && y >= 0 && y <= 1000 ? { x, y } : null;
-    const item = { id: part.id, label: part.label, sam: part.sam || part.label.toLowerCase(), status, evidence: status === 'normal' || status === 'cant_tell' ? '' : evidence, better: status === 'cant_tell' ? better : '', hazard, point, note };
+    const x = Number(it?.x);
+    const y = Number(it?.y);
+    const point =
+      Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1000 && y >= 0 && y <= 1000 ? { x, y } : null;
+    const item = {
+      id: part.id,
+      label: part.label,
+      sam: part.sam || part.label.toLowerCase(),
+      status,
+      evidence: status === 'normal' || status === 'cant_tell' ? '' : evidence,
+      better: status === 'cant_tell' ? better : '',
+      hazard,
+      point,
+      note,
+    };
     const prev = out.get(item.id);
     if (!prev || RANK[item.status] > RANK[prev.status]) out.set(item.id, item);
   }
@@ -149,70 +198,143 @@ const top = (recs) => [...recs].sort((a, b) => (b.score ?? 1) - (a.score ?? 1))[
  */
 export async function tourStep(client, tour, frame) {
   tour.step++;
-  const j = await client.look(frame.dataUrl, tourPrompt(tour), 'low');
-  if (tour.room === 'auto' && ROOMS.includes(j?.room) && j.room !== 'other') { tour.room = j.room; tour.cards = retrieve({ room: j.room }, 2); }
+  const j = await client.look(frame.dataUrl, tourPrompt(tour), 'low', 'tour');
+  if (tour.room === 'auto' && ROOMS.includes(j?.room) && j.room !== 'other') {
+    tour.room = j.room;
+    tour.cards = retrieve({ room: j.room }, 2);
+  }
   const items = normalizeItems(j?.items, tour);
   const size = dataUrlSize(frame.dataUrl);
   // Outlines: faults first, then parts not outlined yet. Point prompt = where the label goes.
   let sam = 0;
-  const order = [...items].sort((a, b) => RANK[b.status] - RANK[a.status] || (tour.found.get(a.id)?.geo ? 1 : 0) - (tour.found.get(b.id)?.geo ? 1 : 0));
+  const order = [...items].sort(
+    (a, b) =>
+      RANK[b.status] - RANK[a.status] || (tour.found.get(a.id)?.geo ? 1 : 0) - (tour.found.get(b.id)?.geo ? 1 : 0),
+  );
   for (const it of order) {
     if (sam >= TOUR.samPerStep) break;
     if (it.point && size) {
       sam++;
       try {
-        const t = top(await client.segmentPoint(frame.dataUrl, { x: (it.point.x * size.width) / 1000, y: (it.point.y * size.height) / 1000, ...size }));
-        if (t && (t.score ?? 1) >= AGREE_SCORE) { it.geo = maskGeometry(t); it.score = t.score ?? 1; }
-      } catch (err) { if (isStop(err)) throw err; }
+        const t = top(
+          await client.segmentPoint(frame.dataUrl, {
+            x: (it.point.x * size.width) / 1000,
+            y: (it.point.y * size.height) / 1000,
+            ...size,
+          }),
+        );
+        if (t && (t.score ?? 1) >= AGREE_SCORE) {
+          it.geo = maskGeometry(t);
+          it.score = t.score ?? 1;
+        }
+      } catch (err) {
+        if (isStop(err)) throw err;
+      }
     }
   }
   // A safety call needs SAM to find the named object by its noun too (two models agree), not just a point.
   for (const it of items.filter((x) => x.status === 'safety')) {
     let score = 0;
-    try { score = top(await client.segment(frame.dataUrl, it.sam))?.score ?? 0; } catch (err) { if (isStop(err)) throw err; }
+    try {
+      score = top(await client.segment(frame.dataUrl, it.sam))?.score ?? 0;
+    } catch (err) {
+      if (isStop(err)) throw err;
+    }
     it.confirmScore = score;
-    if (score < AGREE_SCORE) { it.status = 'attention'; it.note = `SAM could not confirm "${it.sam}" (${score.toFixed(2)}): needs attention, not escalated`; }
+    if (score < AGREE_SCORE) {
+      it.status = 'attention';
+      it.note = `SAM could not confirm "${it.sam}" (${score.toFixed(2)}): needs attention, not escalated`;
+    }
   }
   // Merge into the room's list. A status only moves up (a fault seen once stays, with its frame); "can't tell" never hides one.
   const changed = [];
   for (const it of items) {
     const old = tour.found.get(it.id);
-    const entry = old ?? { id: it.id, label: it.label, status: 'cant_tell', evidence: '', better: '', frame: frame.n, firstFrame: frame.n, hazard: null, note: '' };
+    const entry = old ?? {
+      id: it.id,
+      label: it.label,
+      status: 'cant_tell',
+      evidence: '',
+      better: '',
+      frame: frame.n,
+      firstFrame: frame.n,
+      hazard: null,
+      note: '',
+    };
     if (!old || RANK[it.status] > RANK[old.status]) {
-      Object.assign(entry, { status: it.status, evidence: it.evidence, better: it.better, frame: frame.n, hazard: it.hazard ? { id: it.hazard.id, label: it.hazard.label, category: it.hazard.category, escalate: Boolean(it.hazard.escalate) } : entry.hazard, note: it.note });
+      Object.assign(entry, {
+        status: it.status,
+        evidence: it.evidence,
+        better: it.better,
+        frame: frame.n,
+        hazard: it.hazard
+          ? {
+              id: it.hazard.id,
+              label: it.hazard.label,
+              category: it.hazard.category,
+              escalate: Boolean(it.hazard.escalate),
+            }
+          : entry.hazard,
+        note: it.note,
+      });
       changed.push(entry);
     }
-    if (it.geo) { entry.geo = it.geo; entry.score = it.score; entry.geoFrame = frame.n; }
+    if (it.geo) {
+      entry.geo = it.geo;
+      entry.score = it.score;
+      entry.geoFrame = frame.n;
+    }
     tour.found.set(it.id, entry);
   }
   tour.current = items.filter((x) => x.geo).map((x) => x.id);
   tour.lastFrame = frame.n;
 
   // What to say: up to two new or changed parts, then one camera direction.
-  const news = changed.filter((e) => !tour.said.has(`${e.id}:${e.status}`)).sort((a, b) => RANK[b.status] - RANK[a.status]).slice(0, 2);
+  const news = changed
+    .filter((e) => !tour.said.has(`${e.id}:${e.status}`))
+    .sort((a, b) => RANK[b.status] - RANK[a.status])
+    .slice(0, 2);
   for (const e of news) tour.said.add(`${e.id}:${e.status}`);
   const names = news.map((e) => `${e.label}: ${STATUS_WORDS[e.status]}${e.evidence ? `, ${e.evidence}` : ''}.`);
   const unsure = items.find((x) => x.status === 'cant_tell' && x.better && !tour.said.has(`${x.id}:better`));
   const checkpoints = tour.cards[0]?.tour?.checkpoints ?? [];
   const missing = checkpoints.find((c) => !tour.found.has(c.part));
   let direction;
-  if (unsure) { tour.said.add(`${unsure.id}:better`); direction = `I can't tell the condition of the ${unsure.label.toLowerCase()} from here. ${sentence(unsure.better)}`; }
-  else if (missing) direction = missing.hint;
+  if (unsure) {
+    tour.said.add(`${unsure.id}:better`);
+    direction = `I can't tell the condition of the ${unsure.label.toLowerCase()} from here. ${sentence(unsure.better)}`;
+  } else if (missing) direction = missing.hint;
   else direction = MOVES[j?.move] ?? MOVES.pan_right;
   tour.done = tour.step >= TOUR.steps || (checkpoints.length > 0 && !missing && tour.step >= 3);
   let say = tour.done ? summary(tour) : [...names, direction].join(' ');
   if (!tour.done && !names.length && direction === tour.lastDirection) say = null; // nothing new: stay quiet
   if (!tour.done) tour.lastDirection = direction;
   // A sign or label on camera never makes the business voice read a price, number or payment ask (red team #5).
-  if (say) { say = noContact(noPrice(safeLine(say).text).text).text; tour.lastSay = say; }
+  if (say) {
+    say = noContact(noPrice(safeLine(say).text).text).text;
+    tour.lastSay = say;
+  }
   const confirmed = items.filter((x) => x.status === 'safety');
-  return { items, say, done: tour.done, escalate: confirmed.filter((x) => x.hazard?.escalate), warn: confirmed.filter((x) => !x.hazard?.escalate) };
+  return {
+    items,
+    say,
+    done: tour.done,
+    escalate: confirmed.filter((x) => x.hazard?.escalate),
+    warn: confirmed.filter((x) => !x.hazard?.escalate),
+  };
 }
 
 export function summary(tour) {
   const list = [...tour.found.values()];
-  const bad = list.filter((e) => e.status === 'attention' || e.status === 'safety').sort((a, b) => RANK[b.status] - RANK[a.status]);
-  const parts = bad.slice(0, 3).map((e) => `${e.label} ${e.status === 'safety' ? 'is a safety issue' : 'needs attention'}${e.evidence ? ` (${e.evidence})` : ''}`);
+  const bad = list
+    .filter((e) => e.status === 'attention' || e.status === 'safety')
+    .sort((a, b) => RANK[b.status] - RANK[a.status]);
+  const parts = bad
+    .slice(0, 3)
+    .map(
+      (e) =>
+        `${e.label} ${e.status === 'safety' ? 'is a safety issue' : 'needs attention'}${e.evidence ? ` (${e.evidence})` : ''}`,
+    );
   return `That's the ${roomLabel(tour.room)}. I named ${list.length} part${list.length === 1 ? '' : 's'}. ${parts.length ? `${parts.join('; ')}.` : 'Nothing that needs attention was visible.'} Everything else looked normal or I could not tell from these angles.`;
 }
 
@@ -220,9 +342,29 @@ export function summary(tour) {
 export function tourView(tour) {
   if (!tour) return null;
   return {
-    room: tour.room, roomLabel: roomLabel(tour.room), step: tour.step, steps: TOUR.steps, done: tour.done, lastFrame: tour.lastFrame, current: tour.current,
-    found: [...tour.found.values()].sort((a, b) => RANK[b.status] - RANK[a.status] || a.firstFrame - b.firstFrame)
-      .map(({ id, label, status, evidence, better, frame, geo, score, geoFrame, hazard, note }) => ({ id, label, status, statusWords: STATUS_WORDS[status], evidence, better, frame, geo: geo ?? null, score: score ?? null, geoFrame: geoFrame ?? null, hazard, note })),
+    room: tour.room,
+    roomLabel: roomLabel(tour.room),
+    step: tour.step,
+    steps: TOUR.steps,
+    done: tour.done,
+    lastFrame: tour.lastFrame,
+    current: tour.current,
+    found: [...tour.found.values()]
+      .sort((a, b) => RANK[b.status] - RANK[a.status] || a.firstFrame - b.firstFrame)
+      .map(({ id, label, status, evidence, better, frame, geo, score, geoFrame, hazard, note }) => ({
+        id,
+        label,
+        status,
+        statusWords: STATUS_WORDS[status],
+        evidence,
+        better,
+        frame,
+        geo: geo ?? null,
+        score: score ?? null,
+        geoFrame: geoFrame ?? null,
+        hazard,
+        note,
+      })),
   };
 }
 

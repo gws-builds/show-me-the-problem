@@ -12,12 +12,18 @@ import { createTts, TTS_LIMITS } from '../src/tts.js';
 
 function setup() {
   const ledger = createLedger(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'stb-tts-')), 'ledger.json'));
-  const fetchImpl = async () => new Response(JSON.stringify({ output_text: '{"findings":[]}', usage: { input_tokens: 1, output_tokens: 1 } }));
-  return createCalls({ ledger, priceList: [], makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }) });
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ output_text: '{"findings":[]}', usage: { input_tokens: 1, output_tokens: 1 } }));
+  return createCalls({
+    ledger,
+    priceList: [],
+    makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'test', live }),
+  });
 }
 
-test('only the agent\'s own lines and the fixed cues are sayable, and only with the caller token', async () => {
-  const calls = setup(); const c = calls.create({ ip: '1.1.1.1' });
+test("only the agent's own lines and the fixed cues are sayable, and only with the caller token", async () => {
+  const calls = setup();
+  const c = calls.create({ ip: '1.1.1.1' });
   await calls.text(c.id, c.camToken, 'I smell gas in the basement');
   const said = calls.view(c.id).says.at(-1).text;
   assert.ok(said.length > 0);
@@ -33,20 +39,27 @@ test('only the agent\'s own lines and the fixed cues are sayable, and only with 
 });
 
 test('voice caps: per line, per call and per run; no key means browser voice', async () => {
-  let hits = 0; const fetchImpl = async (url, init) => { hits++; assert.match(init.headers.Authorization, /^Token /); return new Response(Buffer.from('ID3')); };
+  let hits = 0;
+  const fetchImpl = async (url, init) => {
+    hits++;
+    assert.match(init.headers.Authorization, /^Token /);
+    return new Response(Buffer.from('ID3'));
+  };
   assert.equal(await createTts({ apiKey: '', fetchImpl }).speak('a', 'hi'), null);
   const tts = createTts({ apiKey: 'k', fetchImpl });
   assert.ok(await tts.speak('a', 'hello'));
   const long = (i) => `${String(i).padStart(2, '0')}${'x'.repeat(TTS_LIMITS.line - 2)}`;
-  let ok = 0; for (let i = 0; i < 20; i++) if (await tts.speak('b', long(i))) ok++;
+  let ok = 0;
+  for (let i = 0; i < 20; i++) if (await tts.speak('b', long(i))) ok++;
   assert.equal(ok, TTS_LIMITS.perCall / TTS_LIMITS.line);
-  assert.equal(await tts.speak('c', 'y'.repeat(5000)) !== null, true); // trimmed to one line
+  assert.equal((await tts.speak('c', 'y'.repeat(5000))) !== null, true); // trimmed to one line
   assert.ok(tts.used() <= TTS_LIMITS.perRun);
   assert.equal(hits, 1 + ok + 1);
   // The same line again is served from memory: no request, no charge (red team 10/31).
   const before = tts.used();
   assert.ok(await tts.speak('a', 'hello'));
-  assert.equal(hits, 1 + ok + 1); assert.equal(tts.used(), before);
+  assert.equal(hits, 1 + ok + 1);
+  assert.equal(tts.used(), before);
 });
 
 test('a failed voice request returns nothing (the page falls back to the browser voice)', async () => {
@@ -57,9 +70,48 @@ test('a failed voice request returns nothing (the page falls back to the browser
 test('a line asked for twice while it is being made is made once (server head start + phone request)', async () => {
   const { createTts } = await import('../src/tts.js');
   let n = 0;
-  const tts = createTts({ apiKey: 'k', fetchImpl: async () => { n++; await new Promise((r) => setTimeout(r, 20)); return new Response(Buffer.from('mp3')); } });
+  const tts = createTts({
+    apiKey: 'k',
+    fetchImpl: async () => {
+      n++;
+      await new Promise((r) => setTimeout(r, 20));
+      return new Response(Buffer.from('mp3'));
+    },
+  });
   const [a, b] = await Promise.all([tts.speak('c1', 'Hello there'), tts.speak('c1', 'Hello there')]);
   assert.equal(n, 1);
   assert.deepEqual(a, b);
   assert.equal(tts.used(), 'Hello there'.length);
+});
+
+test('lines are voiced a whole sentence at a time, never cut mid-sentence', async () => {
+  const { sentences } = await import('../src/tts.js');
+  assert.deepEqual(sentences('Got it, the tap drips.'), ['Got it, the tap drips.'], 'short lines stay whole');
+  const long =
+    'That drip is almost always a worn cartridge. Dr. Pipes charges $185.50 for the visit, approx. one hour. I can book Tuesday at 9 AM or Wednesday at 2 PM. Which works better for you?';
+  const parts = sentences(long);
+  assert.equal(parts.join(' '), long, 'nothing is lost or reordered');
+  assert.equal(parts[0], 'That drip is almost always a worn cartridge.');
+  assert.ok(
+    parts.every((p) => /[.!?]$/.test(p)),
+    'every part ends on a sentence end',
+  );
+  assert.ok(!parts.some((p) => /^(Pipes|one hour)/.test(p)), 'abbreviations do not split');
+  assert.ok(
+    parts.some((p) => p.includes('$185.50')),
+    'decimals stay inside their sentence',
+  );
+  const choppy = sentences(
+    'Okay. Yes. Thanks. Now let me look at the valve under the sink for a moment, please hold the phone steady.',
+  );
+  assert.ok(
+    choppy.every((p) => p.length >= 25),
+    'tiny sentences ride with the next one',
+  );
+  assert.ok(sentences('One sentence here that is long. '.repeat(12)).length <= 4);
+  assert.deepEqual(
+    sentences('¿Puede mostrarme la llave de paso debajo del fregadero? Gracias, ahora veo la tubería y el sifón.')
+      .length,
+    2,
+  );
 });

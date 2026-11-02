@@ -35,7 +35,8 @@ export const fixtureFor = FIXTURE;
 
 // Parts a technician should bring for a hypothesis. Always "verify before pickup".
 export const PARTS = {
-  cartridge: 'Replacement cartridge matching the faucet brand and model (confirm on site before pickup); cartridge puller; silicone grease',
+  cartridge:
+    'Replacement cartridge matching the faucet brand and model (confirm on site before pickup); cartridge puller; silicone grease',
   'o-ring': 'O-ring and seal kit sized for the spout; silicone grease',
   seat: 'Seats and springs kit (two-handle compression faucets)',
   'supply line': 'Braided supply lines (3/8 in compression), 2',
@@ -46,7 +47,11 @@ export const HYPOTHESES = Object.keys(PARTS);
 
 export function createEvidence() {
   const entries = [];
-  const add = (e) => { const entry = { id: `E${entries.length + 1}`, ...e, claim: String(e.claim).slice(0, 200) }; entries.push(entry); return entry; };
+  const add = (e) => {
+    const entry = { id: `E${entries.length + 1}`, ...e, claim: String(e.claim).slice(0, 200) };
+    entries.push(entry);
+    return entry;
+  };
   return {
     add,
     list: () => entries.map((e) => ({ ...e })),
@@ -55,10 +60,24 @@ export function createEvidence() {
     hypothesis({ part, why, cites }) {
       const p = String(part ?? '').toLowerCase();
       const known = HYPOTHESES.find((h) => p.includes(h)) ?? null;
-      const cited = (Array.isArray(cites) ? cites : []).map((id) => entries.find((e) => e.id === id)).filter((e) => e && ['outline', 'observation', 'caller', 'tour', 'sound'].includes(e.kind));
+      const cited = (Array.isArray(cites) ? cites : [])
+        .map((id) => entries.find((e) => e.id === id))
+        .filter((e) => e && ['outline', 'observation', 'caller', 'tour', 'sound'].includes(e.kind));
       if (!known) return { ok: false, reason: `Unknown part "${p}". Use one of: ${HYPOTHESES.join(', ')}.` };
-      if (!cited.length) return { ok: false, reason: 'Unsupported: cite at least one evidence id from a frame observation, an outline or the caller. Use inspect_frame first.' };
-      const entry = add({ kind: 'hypothesis', claim: `Likely worn part: ${known}. ${String(why ?? '').slice(0, 140)}`, part: known, cites: cited.map((e) => e.id), support: 'hypothesis', confidence: Math.min(...cited.map((e) => e.confidence ?? 0.6)) });
+      if (!cited.length)
+        return {
+          ok: false,
+          reason:
+            'Unsupported: cite at least one evidence id from a frame observation, an outline or the caller. Use inspect_frame first.',
+        };
+      const entry = add({
+        kind: 'hypothesis',
+        claim: `Likely worn part: ${known}. ${String(why ?? '').slice(0, 140)}`,
+        part: known,
+        cites: cited.map((e) => e.id),
+        support: 'hypothesis',
+        confidence: Math.min(...cited.map((e) => e.confidence ?? 0.6)),
+      });
       return { ok: true, entry };
     },
   };
@@ -71,20 +90,40 @@ export function workOrder(session, { slot = null, quote = null } = {}) {
   const hyp = ev.filter((e) => e.kind === 'hypothesis').at(-1) ?? null;
   const checks = session.checklist.list();
   return {
-    plate: session.plate?.() ? { claim: session.plate().summary, evidence: session.plate().evidence, model: session.plate().model, serial: session.plate().serial, age: session.plate().age } : null,
-    references: ev.filter((e) => e.kind === 'reference').slice(0, 4).map((e) => ({ cite: e.support, evidence: e.id })),
-    equipment: outlines.at(-1) ? { claim: outlines.at(-1).claim, evidence: outlines.at(-1).id, frame: outlines.at(-1).frame } : null,
-    observations: ev.filter((e) => e.kind === 'observation').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
+    plate: session.plate?.()
+      ? {
+          claim: session.plate().summary,
+          evidence: session.plate().evidence,
+          model: session.plate().model,
+          serial: session.plate().serial,
+          age: session.plate().age,
+        }
+      : null,
+    references: ev
+      .filter((e) => e.kind === 'reference')
+      .slice(0, 4)
+      .map((e) => ({ cite: e.support, evidence: e.id })),
+    equipment: outlines.at(-1)
+      ? { claim: outlines.at(-1).claim, evidence: outlines.at(-1).id, frame: outlines.at(-1).frame }
+      : null,
+    observations: ev
+      .filter((e) => e.kind === 'observation')
+      .map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
     tour: ev.filter((e) => e.kind === 'tour').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
     sounds: ev.filter((e) => e.kind === 'sound').map((e) => ({ claim: e.claim, evidence: e.id })),
     hypothesis: hyp ? { claim: hyp.claim, evidence: hyp.id, cites: hyp.cites } : null,
     partsToBring: hyp ? PARTS[hyp.part] : 'Standard faucet repair kit; confirm on site',
-    hazards: checks.filter((c) => c.status === 'found' || c.status === 'unconfirmed').map((c) => ({ label: c.label, status: c.status, detail: c.detail, frame: c.frame })),
+    hazards: checks
+      .filter((c) => c.status === 'found' || c.status === 'unconfirmed')
+      .map((c) => ({ label: c.label, status: c.status, detail: c.detail, frame: c.frame })),
     checks: checks.map(({ id, label, status, frame }) => ({ id, label, status, frame })),
     shutoff: ev.filter((e) => e.kind === 'shutoff').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
     quote: quote ? { label: quote.label, priceCents: quote.priceCents, source: 'owner price list' } : null,
     slot,
-    callerSaid: ev.filter((e) => e.kind === 'caller').slice(-3).map((e) => e.claim),
+    callerSaid: ev
+      .filter((e) => e.kind === 'caller')
+      .slice(-3)
+      .map((e) => e.claim),
     note: 'Built in code from the call evidence. Verify parts on site before pickup.',
   };
 }

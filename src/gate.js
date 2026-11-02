@@ -3,11 +3,14 @@
 // URL must get nothing: no page, no API, no WebSocket, no model spend.
 // - The code is random, made when the server starts, written to .data/access_code (mode 600). It is
 //   never logged or committed; scripts read it from that file.
-// - /k/<code> sets an HttpOnly, SameSite=Strict cookie and redirects, so the code leaves the address bar.
+// - /k/<code> sets an HttpOnly, SameSite=Lax cookie and redirects, so the code leaves the address bar
+//   (Lax, not Strict: the cookie must ride along on that first top-level redirect).
 //   Scripts may send it as the x-access-code header instead.
 // - Wrong codes are counted per client: 20 misses in 10 minutes and that client is refused for 10 minutes.
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+
+import { safeEqual } from './filters.js';
 
 export const COOKIE = 'smtp_access';
 export const MISS_LIMIT = 20;
@@ -29,13 +32,17 @@ export function writeCode(file) {
   return code;
 }
 
-const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-
 export function cookieValue(header, name = COOKIE) {
   for (const part of String(header ?? '').split(';')) {
     const i = part.indexOf('=');
     // A malformed cookie (e.g. "%") is no cookie, never an exception (red team 10/31: it crashed the server).
-    if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+    if (i > 0 && part.slice(0, i).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        return '';
+      }
+    }
   }
   return '';
 }
@@ -54,14 +61,17 @@ export function createGate({ code, now = () => Date.now() }) {
      */
     check(presented, key = 'unknown', { count = true } = {}) {
       // The right code always works: a stranger's wrong guesses from a shared address must not lock judges out (red team 10/31).
-      if (presented && same(String(presented), code)) return true;
+      if (presented && safeEqual(String(presented), code)) return true;
       if (recent(key).length >= MISS_LIMIT) return false;
       if (presented && count) misses.set(key, [...recent(key), now()]);
       return false;
     },
     /** The code a request carries: header first, then the cookie. Never the URL (except /k/, handled by the server). */
     presented: (req) => String(req.headers['x-access-code'] ?? '') || cookieValue(req.headers.cookie),
-    cookie: (secure) => `${COOKIE}=${encodeURIComponent(code)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200${secure ? '; Secure' : ''}`,
-    sweep() { for (const [k] of misses) if (!recent(k).length) misses.delete(k); },
+    cookie: (secure) =>
+      `${COOKIE}=${encodeURIComponent(code)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200${secure ? '; Secure' : ''}`,
+    sweep() {
+      for (const [k] of misses) if (!recent(k).length) misses.delete(k);
+    },
   };
 }

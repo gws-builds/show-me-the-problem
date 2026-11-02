@@ -28,7 +28,8 @@ test('lock needs two centred, steady frames in a row', () => {
 
 test('a dark frame asks for light before anything else', () => {
   const g = guide(null, { luma: DARK_LUMA - 1 });
-  assert.equal(g.state, 'dark'); assert.match(g.words, /light|flashlight/);
+  assert.equal(g.state, 'dark');
+  assert.match(g.words, /light|flashlight/);
   // Dim but SAM still outlines it: keep guiding. Near black: ask for light.
   assert.equal(guide({ cx: 0.5, cy: 0.1, area: 0.2 }, { luma: DARK_LUMA - 10 }).arrow, 'up');
   assert.equal(guide({ cx: 0.5, cy: 0.5, area: 0.2 }, { luma: 5 }).state, 'dark');
@@ -39,9 +40,17 @@ test('two dark frames in a row make the call say how to light it, in code, once 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stb-g-'));
   const ledger = createLedger(path.join(dir, 'l.json'));
   let calledModel = 0;
-  const fetchImpl = async () => { calledModel++; return new Response('{}'); };
+  const fetchImpl = async () => {
+    calledModel++;
+    return new Response('{}');
+  };
   let t = 0;
-  const calls = createCalls({ ledger, priceList: [], now: () => (t += 1000), makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'x', live }) });
+  const calls = createCalls({
+    ledger,
+    priceList: [],
+    now: () => (t += 1000),
+    makeClient: (live) => createClient({ ledger, fetchImpl, apiKey: 'x', live }),
+  });
   const c = calls.create({ ip: 'g' });
   const J = 'data:image/jpeg;base64,AAAA';
   await calls.frame(c.id, c.camToken, J, 20);

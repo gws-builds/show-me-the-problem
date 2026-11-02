@@ -1,50 +1,116 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Show Me the Problem: call</title><link rel="stylesheet" href="/app.css"></head>
-<body><main class="call">
-<div class="row"><strong>Northside Plumbing &amp; Heating</strong><span class="pill" id="status">connecting</span><span class="small">demo business</span></div>
-<div class="card rec-cue" id="recStart" hidden>
-  <div class="cue-banner">Start your screen recording now</div>
-  <p>Swipe down from the top-right corner, tap the round Screen Recording button, wait for the 3-2-1. Then come back here.</p>
-  <p class="small" id="takeTitle"></p>
-  <button id="recording">I'm recording</button>
-</div>
-<div class="card rec-cue stop" id="recStop" hidden>
-  <div class="cue-banner">You can stop recording now</div>
-  <p>Tap the red indicator at the top of the screen, then Stop. Nothing else to do.</p>
-</div>
-<div class="card script" id="script" hidden>
-  <div class="row"><strong id="scriptTitle"></strong><button class="secondary mini" id="finish">Finish take</button></div>
-  <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
-  <ol class="small" id="scriptSay"></ol>
-  <p class="small" id="ownerStep" hidden><b>Owner step:</b> you play the owner now. <a id="ownerLink" href="#" target="_blank" rel="noopener">Open the owner page</a> and tap Approve and book.</p>
-</div>
-<div class="card consent" id="consent">
-  <p>This call uses your camera and microphone so the office can see the problem. Frames and audio are used for this call only: they are not stored after it ends. Don't point the camera at people or house numbers.</p>
-  <p class="small footage" id="footageNote" hidden>Footage mode: a clip recorded earlier plays here, and its frames and sound go to the models live, right now. Nothing on this page is pre-computed.</p>
-  <button id="go">Turn on camera and microphone</button> <span id="err" class="small"></span>
-</div>
-<div class="stage"><video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas><div class="footage-label" id="footageLabel" hidden>RECORDED CLIP · analyzed live by the models now</div><div class="staged-label" id="staged" hidden>STAGED SCENE · arranged by us for this demo; the detection is live</div><button class="light-btn" id="torch" hidden>Light</button><div class="agent-line caption" id="line" aria-live="polite">…</div></div>
-<div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
-<div class="card">
-  <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>
-  <button class="talk" id="talk" disabled>Hold to talk</button>
-  <button class="talk listen" id="listen" disabled>Listen to it</button>
-  <form class="row mt" id="typed"><input type="text" id="t" maxlength="300" placeholder="Or type here" autocomplete="off"><button class="secondary" type="submit">Send</button></form>
-  <label class="small mt" for="mobile" id="mobileLabel">Text me the confirmation (optional)</label>
-  <form class="row" id="mobileForm"><input type="tel" id="mobile" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="416 555 0100"><button class="secondary" type="submit">Save</button></form>
-  <p class="small" id="heard"></p>
-  <p class="small" id="lat"></p>
-  <p class="small">Tap the part on screen to point at it.</p>
-</div>
-<div class="card" id="tourCard">
-  <h2>Found in this room</h2>
-  <div class="row" id="tourStart"><span class="small">Never been in here?</span>
-    <select id="room"><option value="auto">Let it tell</option><option value="boiler_room">Boiler room</option><option value="under_sink">Under the sink</option><option value="bathroom">Bathroom / toilet</option><option value="electrical_panel">Electrical panel</option><option value="commercial">Commercial equipment</option></select>
-    <button class="secondary mini" id="tourGo">Guided tour</button></div>
-  <ul class="found" id="found"></ul>
-</div>
-<div class="card"><h2>Safety and inspection checks</h2><ul class="checks" id="checks"></ul>
-  <label class="small"><input type="checkbox" id="stagedToggle"> This is a staged scene (shows a label on screen and in the console)</label></div>
-<script src="/overlay.js"></script>
-<script src="/voice.js"></script>
-<script src="/camera.js"></script>
-</main></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Show Me the Problem: call</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main class="call">
+      <div class="row">
+        <strong>Northside Plumbing &amp; Heating</strong><span class="pill" id="status">connecting</span
+        ><span class="small">demo business</span>
+      </div>
+      <div class="card rec-cue" id="recStart" hidden>
+        <div class="cue-banner">Start your screen recording now</div>
+        <p>
+          Swipe down from the top-right corner, tap the round Screen Recording button, wait for the 3-2-1. Then come
+          back here.
+        </p>
+        <p class="small" id="takeTitle"></p>
+        <button id="recording">I'm recording</button>
+      </div>
+      <div class="card rec-cue stop" id="recStop" hidden>
+        <div class="cue-banner">You can stop recording now</div>
+        <p>Tap the red indicator at the top of the screen, then Stop. Nothing else to do.</p>
+      </div>
+      <div class="card script" id="script" hidden>
+        <div class="row">
+          <strong id="scriptTitle"></strong><button class="secondary mini" id="finish">Finish take</button>
+        </div>
+        <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
+        <ol class="small" id="scriptSay"></ol>
+        <p class="small" id="ownerStep" hidden>
+          <b>Owner step:</b> you play the owner now.
+          <a id="ownerLink" href="#" target="_blank" rel="noopener">Open the owner page</a> and tap Approve and book.
+        </p>
+      </div>
+      <div class="card consent" id="consent">
+        <p>
+          This call uses your camera and microphone so the office can see the problem. Frames and audio are used for
+          this call only: they are not stored after it ends. Don't point the camera at people or house numbers.
+        </p>
+        <p class="small footage" id="footageNote" hidden>
+          Footage mode: a clip recorded earlier plays here, and its frames and sound go to the models live, right now.
+          Nothing on this page is pre-computed.
+        </p>
+        <button id="go">Turn on camera and microphone</button> <span id="err" class="small"></span>
+      </div>
+      <div class="stage">
+        <video id="v" playsinline muted autoplay></video><canvas class="overlay" id="ov"></canvas>
+        <div class="footage-label" id="footageLabel" hidden>RECORDED CLIP · analyzed live by the models now</div>
+        <div class="staged-label" id="staged" hidden>
+          STAGED SCENE · arranged by us for this demo; the detection is live
+        </div>
+        <button class="light-btn" id="torch" hidden>Light</button>
+        <div class="agent-line caption" id="line" aria-live="polite">…</div>
+      </div>
+      <div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
+      <div class="card">
+        <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>
+        <button class="talk" id="talk" disabled>Hold to talk</button>
+        <button class="talk listen" id="listen" disabled>Listen to it</button>
+        <form class="row mt" id="typed">
+          <input type="text" id="t" maxlength="300" placeholder="Or type here" autocomplete="off" /><button
+            class="secondary"
+            type="submit"
+          >
+            Send
+          </button>
+        </form>
+        <label class="small mt" for="mobile" id="mobileLabel">Text me the confirmation (optional)</label>
+        <form class="row" id="mobileForm">
+          <input
+            type="tel"
+            id="mobile"
+            inputmode="tel"
+            autocomplete="tel"
+            maxlength="20"
+            placeholder="416 555 0100"
+          /><button class="secondary" type="submit">Save</button>
+        </form>
+        <p class="small" id="heard"></p>
+        <p class="small" id="lat"></p>
+        <p class="small">Tap the part on screen to point at it.</p>
+      </div>
+      <div class="card" id="tourCard">
+        <h2>Found in this room</h2>
+        <div class="row" id="tourStart">
+          <span class="small">Never been in here?</span>
+          <select id="room">
+            <option value="auto">Let it tell</option>
+            <option value="boiler_room">Boiler room</option>
+            <option value="under_sink">Under the sink</option>
+            <option value="bathroom">Bathroom / toilet</option>
+            <option value="electrical_panel">Electrical panel</option>
+            <option value="commercial">Commercial equipment</option>
+          </select>
+          <button class="secondary mini" id="tourGo">Guided tour</button>
+        </div>
+        <ul class="found" id="found"></ul>
+      </div>
+      <div class="card">
+        <h2>Safety and inspection checks</h2>
+        <ul class="checks" id="checks"></ul>
+        <label class="small"
+          ><input type="checkbox" id="stagedToggle" /> This is a staged scene (shows a label on screen and in the
+          console)</label
+        >
+      </div>
+      <script src="/overlay.js"></script>
+      <script src="/voice.js"></script>
+      <script src="/camera.js"></script>
+    </main>
+  </body>
+</html>

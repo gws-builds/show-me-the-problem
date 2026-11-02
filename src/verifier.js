@@ -22,9 +22,14 @@ const HAZARDS = [
 // "No burning or scorching" is the absence of a hazard. A match counts unless a
 // negation sits earlier in the same clause (red team Oct 29: the model's own note
 // "no burning or scorching per caller" escalated a plain tripping breaker).
-const NEGATED = /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|hasn'?t|can'?t|cannot|sin|nunca|nada|ni|tampoco)\b/i;
+const NEGATED =
+  /\b(no|not|without|never|nothing|none|neither|nor|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|hasn'?t|can'?t|cannot|sin|nunca|nada|ni|tampoco)\b/i;
 const CLAUSE = /[.!?;,]|\b(but|and|so|though|although|yet|because|now|then|except|pero|y|porque|aunque|ahora)\b/gi;
-const lastClause = (s) => s.split(CLAUSE).filter((x) => x !== undefined).pop() ?? '';
+const lastClause = (s) =>
+  s
+    .split(CLAUSE)
+    .filter((x) => x !== undefined)
+    .pop() ?? '';
 
 // Which patterns are about bare or exposed wiring (English, Spanish). Used when code has already judged
 // the camera's wiring finding (a cord visibly not connected to power is "attention", kb/cards/outlet_cord.json).
@@ -33,7 +38,8 @@ const WIRING = new Set([2, 7]);
 // Routine HVAC and electrical part names that contain a hazard word (red team #5: "flame sensor",
 // "spark igniter", "arc fault breaker" and a chirping smoke detector all escalated, so no furnace call
 // could be quoted). They are blanked before the hazard check; "sparks from the igniter" still escalates.
-const ROUTINE = /\b(spark|hot[- ]surface)[- ]?(igniters?|ignitors?|plugs?|electrodes?)\b|\bflame[- ](sensors?|rods?|rollout switch(es)?)\b|\bpilot (light|flame)s?\b|\b(the )?flames? (goes|go|went|keeps going) out\b|\barc[- ]fault( breakers?| outlets?)?\b|\bafci\b|\bsmoke (detectors?|alarms?)\b(?!.{0,25}\b(going off|went off|sounding|won'?t stop|alarming)\b)/gi;
+const ROUTINE =
+  /\b(spark|hot[- ]surface)[- ]?(igniters?|ignitors?|plugs?|electrodes?)\b|\bflame[- ](sensors?|rods?|rollout switch(es)?)\b|\bpilot (light|flame)s?\b|\b(the )?flames? (goes|go|went|keeps going) out\b|\barc[- ]fault( breakers?| outlets?)?\b|\bafci\b|\bsmoke (detectors?|alarms?)\b(?!.{0,25}\b(going off|went off|sounding|won'?t stop|alarming)\b)/gi;
 
 function hazardInOne(text, skip = null) {
   const t = String(text).replace(ROUTINE, ' ');
@@ -41,7 +47,11 @@ function hazardInOne(text, skip = null) {
     if (skip?.has(i)) continue;
     for (const m of t.matchAll(new RegExp(re.source, 'gi'))) {
       // "gas tank, no leak visible" (eval wh01, Oct 30): a negation inside the match negates it too.
-      if (!NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index))) && !NEGATED.test(m[0].split(/\s+/).slice(1).join(' '))) return true;
+      if (
+        !NEGATED.test(lastClause(t.slice(Math.max(0, m.index - 40), m.index))) &&
+        !NEGATED.test(m[0].split(/\s+/).slice(1).join(' '))
+      )
+        return true;
     }
   }
   return false;
@@ -57,7 +67,8 @@ export function hazardIn(...texts) {
 // escalated by exactly such a note (Oct 30). Clauses that only describe a possibility, a reputation or
 // a question are dropped before the hazard words are matched. Observed signs ("scorch marks on the
 // main breaker") still escalate, and the caller's own words are never filtered.
-const HYPOTHETICAL = /\b(known|reputation|reported|history of|prone|tend(s|ency)?|risk|could|can|may|might|would|possible|possibly|potential(ly)?|if|whether|check(ed)? for|ask(ed)? about|rule out|recall(ed|s)?|inspector|flagged|older|brand)\b|\b(fire|shock|safety) hazards?\b|\?/i;
+const HYPOTHETICAL =
+  /\b(known|reputation|reported|history of|prone|tend(s|ency)?|risk|could|can|may|might|would|possible|possibly|potential(ly)?|if|whether|check(ed)? for|ask(ed)? about|rule out|recall(ed|s)?|inspector|flagged|older|brand)\b|\b(fire|shock|safety) hazards?\b|\?/i;
 const SENTENCE = /[.;!?\n]+|\b(but|and|so|though|although)\b/i;
 export function modelNoteHazardIn(...texts) {
   return modelNoteHazard(texts);
@@ -92,7 +103,12 @@ const JOB_PARTS = {
 /** wiringSettled: the camera's wiring finding was already judged in code, so the model restating it is not new evidence. */
 function modelNoteHazard(texts, { wiringSettled = false } = {}) {
   const skip = wiringSettled ? WIRING : null;
-  return texts.filter(Boolean).some((t) => String(t).split(SENTENCE).filter((x) => x && !HYPOTHETICAL.test(x)).some((x) => hazardInOne(x, skip)));
+  return texts.filter(Boolean).some((t) =>
+    String(t)
+      .split(SENTENCE)
+      .filter((x) => x && !HYPOTHETICAL.test(x))
+      .some((x) => hazardInOne(x, skip)),
+  );
 }
 
 /**
@@ -102,33 +118,82 @@ function modelNoteHazard(texts, { wiringSettled = false } = {}) {
  * boxes: SAM 3.1 detections [{ id, label, score }].
  * Returns { action: 'quote' | 'escalate' | 'ask_retake' | 'tech_confirms', ... }.
  */
-export function verify(proposal, { priceList = [], boxes = [], outlines = [], callerText = '', photoText = '', cameraHazard = false, wiringSettled = false } = {}) {
+export function verify(
+  proposal,
+  {
+    priceList = [],
+    boxes = [],
+    outlines = [],
+    callerText = '',
+    photoText = '',
+    cameraHazard = false,
+    wiringSettled = false,
+  } = {},
+) {
   const checks = [];
-  const pass = (name, ok, detail) => { checks.push({ name, ok, detail }); return ok; };
+  const pass = (name, ok, detail) => {
+    checks.push({ name, ok, detail });
+    return ok;
+  };
 
   // Hazards first: no price is ever given once one is seen.
-  if (!pass('no hazard', !(cameraHazard || proposal?.hazardSeen === true || hazardIn(callerText, photoText) || modelNoteHazard([proposal?.notes, proposal?.issue], { wiringSettled })), cameraHazard ? 'camera hazard confirmed by Spark and SAM' : 'hazard words or flag')) {
+  if (
+    !pass(
+      'no hazard',
+      !(
+        cameraHazard ||
+        proposal?.hazardSeen === true ||
+        hazardIn(callerText, photoText) ||
+        modelNoteHazard([proposal?.notes, proposal?.issue], { wiringSettled })
+      ),
+      cameraHazard ? 'camera hazard confirmed by Spark and SAM' : 'hazard words or flag',
+    )
+  ) {
     return { action: 'escalate', reason: 'Possible hazard: the owner is being called now. No price is given.', checks };
   }
   // The photo must show something SAM found with confidence: the box the model named, or else an
   // outline SAM already drew on this call (evidence ledger) at 0.5 or more. The model naming the
   // wrong ordinal after a later miss (eval ac02) is not a reason to ask for another photo.
   let box = boxes.find((b) => b.id === proposal?.boxId && b.score >= 0.5) ?? null;
-  const prior = !box ? [...outlines].filter((o) => (o.confidence ?? 0) >= 0.5).sort((a, b) => (b.frame ?? 0) - (a.frame ?? 0))[0] : null;
+  const prior = !box
+    ? [...outlines].filter((o) => (o.confidence ?? 0) >= 0.5).sort((a, b) => (b.frame ?? 0) - (a.frame ?? 0))[0]
+    : null;
   if (prior) box = { id: prior.id, label: prior.part, score: prior.confidence };
-  if (!pass('equipment is in the photo', Boolean(box && box.score >= 0.5), box ? `${prior ? `outline ${prior.id} on frame ${prior.frame}` : `box ${box.id}`} score ${box.score}` : 'no matching box')) {
+  if (
+    !pass(
+      'equipment is in the photo',
+      Boolean(box && box.score >= 0.5),
+      box
+        ? `${prior ? `outline ${prior.id} on frame ${prior.frame}` : `box ${box.id}`} score ${box.score}`
+        : 'no matching box',
+    )
+  ) {
     return { action: 'ask_retake', reason: 'We could not see the part clearly. Please send a closer photo.', checks };
   }
   // Price: only an exact row from the owner's list, with the list's own amount.
   const row = priceList.find((r) => r.id === proposal?.priceListId);
-  if (!pass('price is on the owner\'s list', Boolean(row), row ? row.label : `model chose ${proposal?.priceListId ?? 'nothing'}`)) {
+  if (
+    !pass(
+      "price is on the owner's list",
+      Boolean(row),
+      row ? row.label : `model chose ${proposal?.priceListId ?? 'nothing'}`,
+    )
+  ) {
     return { action: 'tech_confirms', reason: 'The technician confirms the price on site.', checks };
   }
   // The row must be for equipment seen on this call: a caller or a sign cannot steer a faucet call to
   // the dearest water-heater row (red team 10/31). Job types without a mapping are not blocked.
-  const seen = [box.label, ...outlines.filter((o) => (o.confidence ?? 0) >= 0.5).map((o) => o.part)].map((x) => String(x ?? '').toLowerCase());
+  const seen = [box.label, ...outlines.filter((o) => (o.confidence ?? 0) >= 0.5).map((o) => o.part)].map((x) =>
+    String(x ?? '').toLowerCase(),
+  );
   const words = JOB_PARTS[row.jobType];
-  if (!pass('price row matches the equipment seen', !words || seen.some((s) => words.some((w) => s.includes(w))), `${row.jobType} vs ${[...new Set(seen)].join(', ') || 'nothing'}`)) {
+  if (
+    !pass(
+      'price row matches the equipment seen',
+      !words || seen.some((s) => words.some((w) => s.includes(w))),
+      `${row.jobType} vs ${[...new Set(seen)].join(', ') || 'nothing'}`,
+    )
+  ) {
     return { action: 'tech_confirms', reason: 'The technician confirms the price on site.', checks };
   }
   return { action: 'quote', priceCents: row.priceCents, label: row.label, equipment: box.label, checks };

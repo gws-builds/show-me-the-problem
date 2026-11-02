@@ -15,18 +15,25 @@ const get = async (url) => {
 const cases = JSON.parse(fs.readFileSync(new URL('./cases.json', import.meta.url)));
 const dir = new URL('./photos/', import.meta.url);
 const credits = ['# Photo credits', '', 'All eval photos are from Wikimedia Commons under the licenses shown.', ''];
-const seen = new Set();
 for (const c of cases) {
   // Composites (staged scene, injection sign) are built by scripts/sim/composites.py from the photos credited there.
-  if (!c.file) { if (c.composite) credits.push(`- ${c.id}.jpg: composite made by us. ${c.composite}`); continue; }
+  if (!c.file) {
+    if (c.composite) credits.push(`- ${c.id}.jpg: composite made by us. ${c.composite}`);
+    continue;
+  }
   await new Promise((s) => setTimeout(s, 2500));
   const out = new URL(c.id + '.jpg', dir);
   const api = `https://commons.wikimedia.org/w/api.php?action=query&format=json&titles=${encodeURIComponent('File:' + c.file)}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1024`;
   const p = Object.values((await (await get(api)).json()).query.pages)[0];
   const ii = p.imageinfo?.[0];
-  if (!ii) { console.log('missing', c.id, c.file); continue; }
+  if (!ii) {
+    console.log('missing', c.id, c.file);
+    continue;
+  }
   const meta = ii.extmetadata ?? {};
-  const artist = String(meta.Artist?.value ?? 'unknown').replace(/<[^>]+>/g, '').trim();
+  const artist = String(meta.Artist?.value ?? 'unknown')
+    .replace(/<[^>]+>/g, '')
+    .trim();
   credits.push(`- ${c.id}.jpg: "${c.file}" by ${artist}, ${meta.LicenseShortName?.value ?? '?'}, ${ii.descriptionurl}`);
   if (!fs.existsSync(out)) {
     const r = await get(ii.thumburl ?? ii.url);
@@ -34,7 +41,10 @@ for (const c of cases) {
   }
   // The eval sends frames like the camera page does: longest side 768 px (macOS sips).
   const frame = new URL(`../frames/${c.id}.jpg`, dir);
-  if (!fs.existsSync(frame)) execFileSync('sips', ['-Z', '768', new URL(c.id + '.jpg', dir).pathname, '--out', frame.pathname], { stdio: 'ignore' });
+  if (!fs.existsSync(frame))
+    execFileSync('sips', ['-Z', '768', new URL(c.id + '.jpg', dir).pathname, '--out', frame.pathname], {
+      stdio: 'ignore',
+    });
   console.log('ok', c.id);
 }
 fs.writeFileSync(new URL('ATTRIBUTION.md', dir), credits.join('\n') + '\n');

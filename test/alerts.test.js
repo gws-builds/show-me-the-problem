@@ -4,7 +4,14 @@ import { createAlerts } from '../src/alerts.js';
 
 test('judge-link alerts: one per call, one per spend step, nothing without a topic', async () => {
   const sent = [];
-  const a = createAlerts({ topic: 't', stepUsd: 1, fetchImpl: async (url, init) => { sent.push(String(init.body)); return { ok: true }; } });
+  const a = createAlerts({
+    topic: 't',
+    stepUsd: 1,
+    fetchImpl: async (url, init) => {
+      sent.push(String(init.body));
+      return { ok: true };
+    },
+  });
   await a.callStarted({ spentUsd: 0.1, stopUsd: 5 });
   await a.spend({ spentUsd: 0.4, stopUsd: 5 });
   await a.spend({ spentUsd: 1.2, stopUsd: 5 });

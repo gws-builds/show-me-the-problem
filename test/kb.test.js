@@ -11,10 +11,24 @@ test('every card is well formed, sourced, and its hazards carry an evidence thre
   assert.ok(CARDS.length >= 6);
   const ids = new Set();
   for (const c of CARDS) {
-    assert.ok(c.id && c.title && ROOMS.includes(c.room), c.id); assert.ok(!ids.has(c.id)); ids.add(c.id);
+    assert.ok(c.id && c.title && ROOMS.includes(c.room), c.id);
+    assert.ok(!ids.has(c.id));
+    ids.add(c.id);
     assert.ok(c.parts.length && c.parts.every((p) => p.id && p.label && p.looks && p.sam), c.id);
-    assert.ok(c.hazards.every((h) => h.id && h.threshold && ['flammables', 'water_electric', 'wiring', 'scorch', 'combustion'].includes(h.category) && typeof h.escalate === 'boolean'), c.id);
-    assert.ok(c.sources.length && c.sources.every((s) => SOURCES.includes(`| ${s} |`)), `${c.id} cites a source not in SOURCES.md`);
+    assert.ok(
+      c.hazards.every(
+        (h) =>
+          h.id &&
+          h.threshold &&
+          ['flammables', 'water_electric', 'wiring', 'scorch', 'combustion'].includes(h.category) &&
+          typeof h.escalate === 'boolean',
+      ),
+      c.id,
+    );
+    assert.ok(
+      c.sources.length && c.sources.every((s) => SOURCES.includes(`| ${s} |`)),
+      `${c.id} cites a source not in SOURCES.md`,
+    );
   }
 });
 test('retrieval picks the card by tour room first, then by equipment words', () => {
@@ -35,7 +49,7 @@ test('the context is labelled as data, bounded, and lists thresholds and "never 
   assert.ok(contextFor(CARDS).length < 2700);
   assert.equal(contextFor([]), '');
 });
-test('the agent gets the cards for this call\'s equipment, and the console sees which', () => {
+test("the agent gets the cards for this call's equipment, and the console sees which", () => {
   const s = createSession();
   s.heard('The panel breaker keeps tripping');
   const ins = instructionsFor(s);
@@ -45,7 +59,8 @@ test('the agent gets the cards for this call\'s equipment, and the console sees 
 });
 test('parts, hazards and extra SAM nouns come from the cards', () => {
   const cards = retrieve({ room: 'boiler_room' });
-  assert.ok(partsOf(cards).has('expansion_tank')); assert.ok(hazardsOf(cards).has('flue_gap'));
+  assert.ok(partsOf(cards).has('expansion_tank'));
+  assert.ok(hazardsOf(cards).has('flue_gap'));
   assert.deepEqual(samNounsFor('expansion tank'), ['tank']);
   assert.deepEqual(samNounsFor(''), []);
 });

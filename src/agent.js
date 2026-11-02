@@ -36,20 +36,45 @@ Rules:
 
 /** Instructions plus the knowledge-base cards for this call's equipment (retrieved in code, at most two). */
 export function instructionsFor(session) {
-  const cards = retrieve({ room: session.tourRoom?.() ?? null, text: `${session.lastPart()} ${session.callerText()}` }, 2);
+  const cards = retrieve(
+    { room: session.tourRoom?.() ?? null, text: `${session.lastPart()} ${session.callerText()}` },
+    2,
+  );
   session.setCards?.(cards.map((c) => c.id));
   const kb = contextFor(cards);
   // Trade-manual excerpts for the part in view and the caller's last words (local BM25, cited, at most 2).
   const refs = session.references?.(`${session.lastPart()} ${session.callerText().split('\n').at(-1) ?? ''}`, 2) ?? [];
   const lib = corpusContext(refs, { max: 700 });
-  const es = session.lang?.() === 'es' ? 'The caller speaks Spanish: write every line the caller hears (direct_camera, ask_caller) in plain Latin American Spanish, using "usted". find_part nouns, price_list job types and tool arguments other than caller lines stay in English.' : '';
+  const es =
+    session.lang?.() === 'es'
+      ? 'The caller speaks Spanish: write every line the caller hears (direct_camera, ask_caller) in plain Latin American Spanish, using "usted". find_part nouns, price_list job types and tool arguments other than caller lines stay in English.'
+      : '';
   return [INSTRUCTIONS, es, kb, lib].filter(Boolean).join('\n\n');
 }
 
 export function createSession({ now = () => Date.now() } = {}) {
-  let frame = null; let boxes = []; let part = ''; let quote = null; let pending = null; let tap = null; let frameN = 0; let locateMeta = null; let guidance = null;
-  const lines = []; const events = []; const checklist = createChecklist(); const kept = new Map(); const evidence = createEvidence();
-  let tourRoom = null; let cards = []; const refCache = new Map(); let plate = null; let lang = 'en'; let plateReads = 0;
+  let frame = null;
+  let boxes = [];
+  let part = '';
+  let quote = null;
+  let pending = null;
+  let tap = null;
+  let frameN = 0;
+  let locateMeta = null;
+  let guidance = null;
+  let quotedAt = null;
+  const guideWords = new Set(); // every guidance line set this call, so /say may voice it later
+  const lines = [];
+  const events = [];
+  const checklist = createChecklist();
+  const kept = new Map();
+  const evidence = createEvidence();
+  let tourRoom = null;
+  let cards = [];
+  const refCache = new Map();
+  let plate = null;
+  let lang = 'en';
+  let plateReads = 0;
   return {
     /**
      * Cited trade-manual excerpts for a query (cached per query). Each passage used becomes a
@@ -57,14 +82,38 @@ export function createSession({ now = () => Date.now() } = {}) {
      * References explain; they are never accepted as evidence of the home (see evidence.hypothesis).
      */
     references(query, k = 2) {
-      const q = String(query ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      const q = String(query ?? '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 300);
       if (!q) return [];
       if (!refCache.has(q)) {
         const hits = searchCorpus(q, { k });
         refCache.set(q, hits);
-        const have = new Set(evidence.list().filter((e) => e.kind === 'reference').map((e) => e.ref));
-        for (const h of hits) if (!have.has(h.id) && have.size < 12) { have.add(h.id); evidence.add({ kind: 'reference', ref: h.id, claim: h.text.slice(0, 200), support: h.cite, url: h.url, confidence: null }); }
-        if (hits.length) events.push({ kind: 'kb_ref', query: q.slice(0, 120), refs: hits.map((h) => ({ id: h.id, cite: h.cite, score: h.score })) });
+        const have = new Set(
+          evidence
+            .list()
+            .filter((e) => e.kind === 'reference')
+            .map((e) => e.ref),
+        );
+        for (const h of hits)
+          if (!have.has(h.id) && have.size < 12) {
+            have.add(h.id);
+            evidence.add({
+              kind: 'reference',
+              ref: h.id,
+              claim: h.text.slice(0, 200),
+              support: h.cite,
+              url: h.url,
+              confidence: null,
+            });
+          }
+        if (hits.length)
+          events.push({
+            kind: 'kb_ref',
+            query: q.slice(0, 120),
+            refs: hits.map((h) => ({ id: h.id, cite: h.cite, score: h.score })),
+          });
         if (refCache.size > 40) refCache.delete(refCache.keys().next().value);
       }
       return refCache.get(q);
@@ -73,52 +122,136 @@ export function createSession({ now = () => Date.now() } = {}) {
     plate: () => plate,
     /** The caller's language, from their words (code, sticky until they clearly switch). */
     lang: () => lang,
-    setPlate(p) { plate = p; },
+    setPlate(p) {
+      plate = p;
+    },
     plateReads: () => plateReads,
-    countPlateRead() { plateReads++; },
-    setTourRoom(r) { tourRoom = r; },
-    setCards(ids) { if (ids.join() !== cards.join()) { cards = ids; events.push({ kind: 'kb', cards: ids }); } },
+    countPlateRead() {
+      plateReads++;
+    },
+    setTourRoom(r) {
+      tourRoom = r;
+    },
+    setCards(ids) {
+      if (ids.join() !== cards.join()) {
+        cards = ids;
+        events.push({ kind: 'kb', cards: ids });
+      }
+    },
     cards: () => cards,
     checklist,
     evidence,
     /** Keeps frame n as evidence: checklist and evidence entries link to it. At most 24 per call. */
     keepFrame(n, dataUrl = frame && frame.n === n ? frame.dataUrl : null) {
-      if (n != null && dataUrl && !kept.has(n)) { kept.set(n, dataUrl); if (kept.size > 24) kept.delete(kept.keys().next().value); }
+      if (n != null && dataUrl && !kept.has(n)) {
+        kept.set(n, dataUrl);
+        if (kept.size > 24) kept.delete(kept.keys().next().value);
+      }
       return kept.has(n) ? n : null;
     },
     keptFrame: (n) => kept.get(n) ?? null,
     keptFrames: () => [...kept.keys()],
-    pushFrame(dataUrl, extra = {}) { frameN++; frame = { dataUrl, at: now(), n: frameN, ...extra }; },
+    pushFrame(dataUrl, extra = {}) {
+      frameN++;
+      frame = { dataUrl, at: now(), n: frameN, ...extra };
+    },
     latestFrame: () => frame,
-    setTap(x, y) { tap = { x, y, at: now() }; events.push({ kind: 'tap', x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) }); },
+    setTap(x, y) {
+      tap = { x, y, at: now() };
+      events.push({ kind: 'tap', x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) });
+    },
     tap: () => tap,
     setBoxes(p, b, at, meta = {}) {
-      part = p; boxes = b; locateMeta = meta;
-      guidance = { ...guide(b[0]?.geo ?? null, { prev: guidance, luma: meta.luma ?? null }), frame: meta.frameN ?? null, at: now() };
+      part = p;
+      boxes = b;
+      locateMeta = meta;
+      guidance = {
+        ...guide(b[0]?.geo ?? null, { prev: guidance, luma: meta.luma ?? null }),
+        frame: meta.frameN ?? null,
+        at: now(),
+      };
       const top = b[0];
       if (top && (top.score ?? 1) >= 0.5 && meta.frameN != null) {
         const n = this.keepFrame(meta.frameN, meta.dataUrl);
-        const last = evidence.list().filter((e) => e.kind === 'outline').at(-1);
+        const last = evidence
+          .list()
+          .filter((e) => e.kind === 'outline')
+          .at(-1);
         // A new entry when the part or the method changes, or every 30 frames; entries are never edited.
         if (!last || last.part !== p || last.method !== meta.method || n - (last.frame ?? 0) >= 30) {
-          if (/valve/.test(p) && checklist.get('shutoff')) checklist.set('shutoff', 'clear', n, `Valve outlined by SAM at ${(top.score ?? 1).toFixed(2)}`);
-          evidence.add({ kind: 'outline', part: p, method: meta.method, claim: `"${p}" outlined by SAM 3.1 (${meta.method}, confidence ${(top.score ?? 1).toFixed(2)})`, frame: n, confidence: top.score ?? 1, geo: top.geo, support: 'SAM mask on this frame' });
+          if (/valve/.test(p) && checklist.get('shutoff'))
+            checklist.set('shutoff', 'clear', n, `Valve outlined by SAM at ${(top.score ?? 1).toFixed(2)}`);
+          evidence.add({
+            kind: 'outline',
+            part: p,
+            method: meta.method,
+            claim: `"${p}" outlined by SAM 3.1 (${meta.method}, confidence ${(top.score ?? 1).toFixed(2)})`,
+            frame: n,
+            confidence: top.score ?? 1,
+            geo: top.geo,
+            support: 'SAM mask on this frame',
+          });
         }
       }
-      events.push({ kind: 'sam', part: p, boxes: b.length, frameAt: at, frame: meta.frameN ?? null, method: meta.method ?? 'text', noun: meta.noun ?? p, score: b[0]?.score ?? null, tries: meta.tries ?? [] });
+      events.push({
+        kind: 'sam',
+        part: p,
+        boxes: b.length,
+        frameAt: at,
+        frame: meta.frameN ?? null,
+        method: meta.method ?? 'text',
+        noun: meta.noun ?? p,
+        score: b[0]?.score ?? null,
+        tries: meta.tries ?? [],
+      });
     },
     locateMeta: () => locateMeta,
     guidance: () => guidance,
-    setGuidance(g) { guidance = { ...g, at: now() }; },
+    // Recorded where guidance is made, never on a read of the call (red team #5 Q8).
+    setGuidance(g) {
+      guidance = { ...g, at: now() };
+      if (g?.words && guideWords.size < 200) guideWords.add(g.words);
+    },
+    /** Whether `text` is a guidance line this call showed, as written or as `translate` renders it. */
+    guidanceSaid: (text, translate = (w) => w) => [...guideWords].some((w) => w === text || translate(w) === text),
     boxes: () => boxes,
     lastPart: () => part,
-    heard(text) { const l = detectLang(text); if (l && l !== lang) { lang = l; events.push({ kind: 'lang', lang: l }); } lines.push(String(text).slice(0, 600)); events.push({ kind: 'caller', text: String(text).slice(0, 600) }); evidence.add({ kind: 'caller', claim: `Caller said: "${String(text).slice(0, 160)}"`, confidence: 1, support: 'caller words' }); },
+    heard(text) {
+      const l = detectLang(text);
+      if (l && l !== lang) {
+        lang = l;
+        events.push({ kind: 'lang', lang: l });
+      }
+      lines.push(String(text).slice(0, 600));
+      events.push({ kind: 'caller', text: String(text).slice(0, 600) });
+      evidence.add({
+        kind: 'caller',
+        claim: `Caller said: "${String(text).slice(0, 160)}"`,
+        confidence: 1,
+        support: 'caller words',
+      });
+    },
     callerText: () => lines.join('\n'),
-    setQuote(q) { quote = q; evidence.add({ kind: 'quote', claim: `${q.label}: $${(q.priceCents / 100).toFixed(2)}`, support: 'owner price list row', confidence: 1 }); },
+    quotedAt: () => quotedAt,
+    setQuote(q) {
+      quote = q;
+      quotedAt ??= now();
+      evidence.add({
+        kind: 'quote',
+        claim: `${q.label}: $${(q.priceCents / 100).toFixed(2)}`,
+        support: 'owner price list row',
+        confidence: 1,
+      });
+    },
     quote: () => quote,
-    setPendingBooking(b) { pending = b; events.push({ kind: 'booking_requested', slot: b.slot.id }); },
+    setPendingBooking(b) {
+      pending = b;
+      events.push({ kind: 'booking_requested', slot: b.slot.id });
+    },
     pendingBooking: () => pending,
-    log(e) { events.push(e); },
+    log(e) {
+      events.push(e);
+    },
     events: () => events,
   };
 }
@@ -126,7 +259,9 @@ export function createSession({ now = () => Date.now() } = {}) {
 /** One caller turn. Returns { say, status }. */
 export async function callerTurn(ctx, history, { signal = null } = {}) {
   const { client, session } = ctx;
-  let say = null; let status = 'running'; let track = null;
+  let say = null;
+  let status = 'running';
+  let track = null;
   const started = Date.now();
   for (let step = 0; step < MAX_STEPS && !say; step++) {
     // A turn that timed out stops here instead of spending on in the background (red team 10/31, finding 7).
@@ -134,12 +269,25 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     // The first step picks the plan at the configured effort; the steps after a tool result
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
-    const res = await client.respond({ instructions: instructionsFor(session), input: history, tools: DEFINITIONS, signal, ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}) });
+    const res = await client.respond({
+      instructions: instructionsFor(session),
+      input: history,
+      tools: DEFINITIONS,
+      signal,
+      ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
+    });
     history.push(...(res.output ?? []));
     const call = (res.output ?? []).find((o) => o.type === 'function_call');
-    if (!call) { history.push({ role: 'user', content: 'Plain text is not accepted. Call exactly one tool.' }); continue; }
+    if (!call) {
+      history.push({ role: 'user', content: 'Plain text is not accepted. Call exactly one tool.' });
+      continue;
+    }
     let args = {};
-    try { args = JSON.parse(call.arguments || '{}'); } catch { /* bad JSON is an empty call */ }
+    try {
+      args = JSON.parse(call.arguments || '{}');
+    } catch {
+      /* bad JSON is an empty call */
+    }
     // Latency (red team #4): a line the model gives with a looking tool is voiced now, before the tool
     // runs, through the same code gates as every spoken line.
     const now = typeof args.say_now === 'string' ? speakable(session, args.say_now.slice(0, 140)).trim() : '';
@@ -152,7 +300,10 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     if (r.track) track = r.track;
   }
   // Six steps without a line: ask again and keep the call going, rather than end it (red team 10/31).
-  if (!say) { say = 'Sorry, I missed part of that. Could you say it once more?'; status = 'keep'; }
+  if (!say) {
+    say = 'Sorry, I missed part of that. Could you say it once more?';
+    status = 'keep';
+  }
   session.log({ kind: 'say', text: say, status, ms: Date.now() - started });
   return { say, status, track };
 }

@@ -33,6 +33,8 @@ The camera is a sensor inside an agent that talks, decides, verifies and acts. M
 | **Muse Wonder 1.0** | The slower reasoning model, used for the one step where time is not short: after the owner approves, it reads the whole work order and evidence ledger and writes the technician's order of checks and what the call could not establish (`src/review.js`). Code keeps only steps that cite evidence ids that exist and drops any line with a price. It runs beside the booking (about 11 s, $0.04 measured Oct 31), so it never slows the caller. |
 | **Muse Image 1.0** | After approval, an illustration for the technician, labelled "not evidence". The evidence still is the real frame with the SAM outline drawn in code. |
 
+**Structured outputs.** Every JSON answer from Muse Spark and Muse Wonder (hazard scan, inspection, rating plate, tour step, grounding points, technician review) is requested with a strict JSON schema (`src/schemas.js`, Responses API `text.format`), checked against api.meta.ai on Nov 1. Code no longer fishes JSON out of free text; the old parser stays only as a fallback.
+
 **The voice is the only part that is not Meta.** Meta's catalogue has no text-to-speech model, so the agent's finished lines are read out by Deepgram Aura-2 (`src/tts.js`), with the browser's built-in speech synthesis as the fallback. Deepgram only turns the agent's own words into sound: all listening, seeing, deciding and answering is done by the Meta models above.
 
 ## How the camera part works
@@ -75,11 +77,23 @@ The caller's language is detected from their words. The model writes its lines i
 - **Prices come only from the owner's list.** `propose_quote` goes through `verifier.js`: a real row of the list, and a SAM outline with confidence 0.5 or more. Otherwise "the technician confirms on site".
 - **Hypotheses need evidence.** `record_hypothesis` is refused unless it cites ledger entries from a frame observation, an outline or the caller's words.
 - **Water shut-off steps are fixed text in code.** Anything about gas is refused in code.
-- **Nothing is booked by the model.** Only the owner's token approves, and never on a hazard call. The demo calendar is in memory; this repository does not book into Jobber.
+- **Nothing is booked by the model.** Only the owner's token approves, and never on a hazard call. The demo calendar is three weekday windows in the business's time zone; an approved visit becomes a calendar invite (`.ics`). This repository does not book into Jobber.
 - **Spend is capped in code.** Every request, including streamed audio, is priced before the next one: $0.25 per call ($0.60 for a guided tour); each session has a hard **session spend stop** (`SPEND_STOP_USD`, $5 by default) counted from the ledger when the session began and kept in the ledger, so a crash or restart does not reset it (`SESSION_RESET=1` starts a new one; the recording script does); the public demo switches to replays at $80 of the credit; everything stops at $100.
 - **Access code on every page and API.** A random code is made at each server start and written to `.data/access_code` (mode 600), never logged or committed. `/k/<code>` sets an HttpOnly, SameSite=Strict cookie and redirects, so the code leaves the address bar; without it, pages redirect to a code-entry page, APIs answer 401 and the voice WebSocket is closed before any model call. 20 wrong codes in 10 minutes lock that client out. This sits on top of the per-call tokens.
 - **Bounds for strangers:** frame and audio size and rate, one message at a time, 6 calls per IP per hour, 10 live calls at once, 15-minute calls, a WebSocket origin check, and voice tokens sent in the first message, never in a URL.
+- **Each call is private to its own links.** The live view, camera stills and evidence frames need that call's caller, owner or console link; the shared access code alone shows nothing, and the console's "latest call" only follows calls started from the same place. One person's model spend is capped per hour, so a shared code cannot drain the session stop for everyone else.
 - **Untrusted text stays text.** Text on equipment and caller words are data. Pages render with `textContent` under a strict CSP. Frames are kept in memory for the call only (up to 24 evidence frames); a recorded call keeps events and lines, never media.
+
+## Speed: what the caller hears, and when
+
+Measured as the wait for a useful answer, not for any sound (OpenAI's voice-agent guidance says the same).
+- **An instant acknowledgement.** "On it." plays 0.15 s after the caller stops talking, from a clip already on the phone; "Just a few moments longer." at 5 s and a third line at 11 s if the answer is still coming. A real line fades the waiting line out over 0.1 s; the two never overlap.
+- **A whole sentence at a time.** Each agent line is split into whole sentences in code (`sentences()` in `src/tts.js`): the first is voiced first and plays while the rest are made and fetched. A sentence is never cut in the middle. (We tested Spark's streaming on Nov 1: api.meta.ai accepts `stream: true` but delivers a tool call's arguments in one piece at the end, so token streaming would not start speech sooner; sentence-level voicing does.)
+- **Looking while thinking.** When the caller names a part ("my water heater…"), SAM 3.1 starts outlining it on the latest frame while Spark plans the turn (`speculate()` in `src/locate.js`); if Spark then asks for that part on that frame, the outline is already there.
+
+## Booked means booked
+
+After the owner approves, the visit is a calendar invite (`src/ics.js`, RFC 5545) the owner adds to Google, Apple or Outlook with one tap; the owner page also shows what the call did for them: how fast the quote was ready, what it was worth, and that it took one tap.
 
 ## Honest labels
 
@@ -89,7 +103,7 @@ The caller's language is detected from their words. The model writes its lines i
 ## Run it
 
 ```bash
-npm test                              # 152 tests: red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access code, faucet scenario
+npm run check                         # eslint + prettier + 194 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
 ```
@@ -102,7 +116,7 @@ The phone camera needs HTTPS. For a recording session, `scripts/record_session.s
 
 ## Deploy (one container, not used for the recordings)
 
-The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager. The spend ledger, access code and replays live in `DATA_DIR`, mounted from a Cloud Storage bucket so a restart or a new revision keeps the spend caps counting from the real total; `--min-instances 1` keeps the one instance warm, so a judge's first call does not wait for a cold start; `TRUST_PROXY=1` makes the per-person call limit use the caller's address (the last X-Forwarded-For entry, which Cloud Run appends) instead of Google's front end, so judges do not share one limit:
+The `Dockerfile` runs one instance (calls live in memory). Example for Google Cloud Run, with the key in Secret Manager. The spend ledger, access code and replays live in `DATA_DIR`, mounted from a Cloud Storage bucket so a restart or a new revision keeps the spend caps counting from the real total; `--min-instances 1` keeps the one instance warm, so a judge's first call does not wait for a cold start; `TRUST_PROXY=1` makes the per-person call limit use the caller's address (the last X-Forwarded-For entry, which Cloud Run appends) instead of Google's front end, so judges do not share one limit (the server logs once how many X-Forwarded-For entries arrive, a count only; set `PROXY_HOPS=2` if a load balancer adds its own):
 
 ```bash
 gcloud run deploy show-me-the-problem --source . --region us-east1 --allow-unauthenticated \

@@ -25,7 +25,10 @@ export const PER_RUN_USD = 0.25;
 export const MAX_RUN_USD = 0.75;
 
 export class BudgetExceeded extends Error {
-  constructor(message, code) { super(message); this.code = code; }
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+  }
 }
 
 /** Cost of one call from its usage report. Unknown models are refused, never guessed as free. */
@@ -49,43 +52,90 @@ export function costOf(model, usage = {}) {
  * the latest totals: a synchronous file write per model call cost up to a second on a mounted
  * bucket (red team 10/31, latency). A crash loses at most the last unsaved call's cents.
  */
-export function createLedger(file, { sessionStopUsd = Number(process.env.SPEND_STOP_USD) || null, reset = process.env.SESSION_RESET === '1' } = {}) {
+export function createLedger(
+  file,
+  {
+    sessionStopUsd = Number(process.env.SPEND_STOP_USD) || null,
+    reset = process.env.SESSION_RESET === '1',
+    onRecord = null,
+  } = {},
+) {
   // A fresh container has no ledger file: SPENT_BASELINE_USD starts it at the spend already on the
   // account, so the $80 and $100 lines still mean the account total, not this container's.
   const baseline = Math.max(0, Number(process.env.SPENT_BASELINE_USD) || 0);
   let s;
-  try { s = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { s = { spentUsd: baseline, calls: 0 }; }
-  let writing = false; let dirty = false;
+  try {
+    s = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    s = { spentUsd: baseline, calls: 0 };
+  }
+  let writing = false;
+  let dirty = false;
   const flush = () => {
-    if (writing) { dirty = true; return; }
-    writing = true; dirty = false;
-    fs.promises.writeFile(`${file}.tmp`, JSON.stringify(s)).then(() => fs.promises.rename(`${file}.tmp`, file))
+    if (writing) {
+      dirty = true;
+      return;
+    }
+    writing = true;
+    dirty = false;
+    fs.promises
+      .writeFile(`${file}.tmp`, JSON.stringify(s))
+      .then(() => fs.promises.rename(`${file}.tmp`, file))
       .catch((err) => console.error('ledger write failed', err?.message))
-      .finally(() => { writing = false; if (dirty) flush(); });
+      .finally(() => {
+        writing = false;
+        if (dirty) flush();
+      });
   };
-  if (reset || !s.session || s.session.stopUsd !== sessionStopUsd) { s.session = { startUsd: s.spentUsd, stopUsd: sessionStopUsd, at: new Date().toISOString() }; flush(); }
+  if (reset || !s.session || s.session.stopUsd !== sessionStopUsd) {
+    s.session = { startUsd: s.spentUsd, stopUsd: sessionStopUsd, at: new Date().toISOString() };
+    flush();
+  }
   const load = () => s;
   const startUsd = s.session.startUsd;
   const sessionSpent = () => s.spentUsd - startUsd;
   const sessionStopped = () => sessionStopUsd != null && sessionStopUsd >= 0 && sessionSpent() >= sessionStopUsd;
+  const session = () => ({
+    spentUsd: Math.round(sessionSpent() * 1e4) / 1e4,
+    stopUsd: sessionStopUsd,
+    stopped: sessionStopped(),
+  });
   return {
     state: load,
-    session: () => ({ spentUsd: Math.round(sessionSpent() * 1e4) / 1e4, stopUsd: sessionStopUsd, stopped: sessionStopped() }),
-    mode() { const s = load().spentUsd; return s >= HARD_STOP_USD || sessionStopped() ? 'stopped' : s >= READ_ONLY_USD ? 'read-only' : 'live'; },
+    session,
+    mode() {
+      const s = load().spentUsd;
+      return s >= HARD_STOP_USD || sessionStopped() ? 'stopped' : s >= READ_ONLY_USD ? 'read-only' : 'live';
+    },
     /** Call before every API request. `live` false = a public visitor, who is cut off earlier. */
     assertCanSpend({ live = true, runSpentUsd = 0, runCapUsd = PER_RUN_USD } = {}) {
-      if (sessionStopped()) throw new BudgetExceeded('This session reached its spending stop; no more model calls until a restart.', 'SESSION_STOP');
+      if (sessionStopped())
+        throw new BudgetExceeded(
+          'This session reached its spending stop; no more model calls until a restart.',
+          'SESSION_STOP',
+        );
       const m = this.mode();
       if (m === 'stopped') throw new BudgetExceeded('Credit budget reached; no more model calls.', 'HARD_STOP');
-      if (!live && m === 'read-only') throw new BudgetExceeded('Demo is in replay mode to protect the credit.', 'READ_ONLY');
-      if (runSpentUsd >= Math.min(MAX_RUN_USD, runCapUsd)) throw new BudgetExceeded('This run reached its spending limit.', 'RUN_CAP');
+      if (!live && m === 'read-only')
+        throw new BudgetExceeded('Demo is in replay mode to protect the credit.', 'READ_ONLY');
+      if (runSpentUsd >= Math.min(MAX_RUN_USD, runCapUsd))
+        throw new BudgetExceeded('This run reached its spending limit.', 'RUN_CAP');
     },
     record(model, usage) {
       const usd = costOf(model, usage);
-      s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6; s.calls += 1; flush();
+      s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6;
+      s.calls += 1;
+      flush();
+      try {
+        onRecord?.(session());
+      } catch {
+        /* an alert never fails a model call */
+      }
       return usd;
     },
     /** Waits for the background write (tests, shutdown). */
-    async saved() { while (writing) await new Promise((r) => setTimeout(r, 5)); },
+    async saved() {
+      while (writing) await new Promise((r) => setTimeout(r, 5));
+    },
   };
 }

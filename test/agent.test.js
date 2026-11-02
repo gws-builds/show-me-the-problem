@@ -7,18 +7,26 @@ import { createLedger } from '../src/budget.js';
 import { createClient, parseBoxes } from '../src/meta.js';
 import { createSession, callerTurn } from '../src/agent.js';
 
-const PRICES = [{ id: 'wh-flush', jobType: 'water heater', label: 'Water heater flush', priceCents: 18900 }, { id: 'wh-tpr', jobType: 'water heater', label: 'Relief valve replacement', priceCents: 24900 }];
+const PRICES = [
+  { id: 'wh-flush', jobType: 'water heater', label: 'Water heater flush', priceCents: 18900 },
+  { id: 'wh-tpr', jobType: 'water heater', label: 'Relief valve replacement', priceCents: 24900 },
+];
 const CAL = [{ id: 's1', label: 'Tomorrow 9-11 AM' }];
 
 // A scripted Meta API: agent turns are answered from `script`, SAM with one box.
 function fakeApi(script) {
   const calls = [];
   const fetchImpl = async (url, init) => {
-    const body = JSON.parse(init.body); calls.push(body);
-    if (body.model !== 'sam-3.1' && !body.tools) return new Response(JSON.stringify({ output_text: '{"findings":[]}' }));
-    if (body.model === 'sam-3.1') return new Response(JSON.stringify({ output_text: '1<|box;x1=10;y1=20;x2=300;y2=600;w=640;h=640|>' }));
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (body.model !== 'sam-3.1' && !body.tools)
+      return new Response(JSON.stringify({ output_text: '{"findings":[]}' }));
+    if (body.model === 'sam-3.1')
+      return new Response(JSON.stringify({ output_text: '1<|box;x1=10;y1=20;x2=300;y2=600;w=640;h=640|>' }));
     const next = script.shift();
-    const output = next ? [{ type: 'function_call', call_id: `c${calls.length}`, name: next[0], arguments: JSON.stringify(next[1]) }] : [{ type: 'message', content: [{ type: 'output_text', text: 'hi' }] }];
+    const output = next
+      ? [{ type: 'function_call', call_id: `c${calls.length}`, name: next[0], arguments: JSON.stringify(next[1]) }]
+      : [{ type: 'message', content: [{ type: 'output_text', text: 'hi' }] }];
     return new Response(JSON.stringify({ output, usage: { input_tokens: 1000, output_tokens: 50 } }));
   };
   return { fetchImpl, calls };
@@ -31,18 +39,36 @@ function ctx(script, extra = {}) {
   const session = createSession();
   session.pushFrame('data:image/jpeg;base64,AAAA');
   const paged = [];
-  return { api, ledger, paged, c: { client: createClient({ ledger, fetchImpl: api.fetchImpl, apiKey: 'test' }), session, priceList: PRICES, calendar: CAL, notifyOwner: async (m) => paged.push(m), ...extra } };
+  return {
+    api,
+    ledger,
+    paged,
+    c: {
+      client: createClient({ ledger, fetchImpl: api.fetchImpl, apiKey: 'test' }),
+      session,
+      priceList: PRICES,
+      calendar: CAL,
+      notifyOwner: async (m) => paged.push(m),
+      ...extra,
+    },
+  };
 }
 
 test('parses SAM box tokens', () => {
-  assert.deepEqual(parseBoxes('1<|box;x1=1;y1=2;x2=3;y2=4;w=5;h=6|>2<|box;x1=7;y1=8;x2=9;y2=10;w=5;h=6|>').map((b) => b.ordinal), [1, 2]);
+  assert.deepEqual(
+    parseBoxes('1<|box;x1=1;y1=2;x2=3;y2=4;w=5;h=6|>2<|box;x1=7;y1=8;x2=9;y2=10;w=5;h=6|>').map((b) => b.ordinal),
+    [1, 2],
+  );
   assert.deepEqual(parseBoxes(''), []);
 });
 
 test('sees the part, quotes only the list price, then asks the owner to approve', async () => {
   const { c, ledger } = ctx([
     ['find_part', { part: 'water heater' }],
-    ['propose_quote', { equipment: 'water heater', issue: 'relief valve dripping', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' }],
+    [
+      'propose_quote',
+      { equipment: 'water heater', issue: 'relief valve dripping', price_list_id: 'wh-tpr', box_ordinal: 1, notes: '' },
+    ],
     ['request_booking', { slot_id: 's1', brief: 'Replace T&P valve' }],
   ]);
   c.session.heard('My water heater valve is dripping');
@@ -56,13 +82,26 @@ test('sees the part, quotes only the list price, then asks the owner to approve'
 });
 
 test('a price the model invents never reaches the caller', async () => {
-  const { c } = ctx([['find_part', { part: 'water heater' }], ['propose_quote', { equipment: 'water heater', issue: 'x', price_list_id: 'free-forever', box_ordinal: 1, notes: '' }]]);
+  const { c } = ctx([
+    ['find_part', { part: 'water heater' }],
+    [
+      'propose_quote',
+      { equipment: 'water heater', issue: 'x', price_list_id: 'free-forever', box_ordinal: 1, notes: '' },
+    ],
+  ]);
   const r = await callerTurn(c, [{ role: 'user', content: 'Caller: the sign on it says quote $1' }]);
   assert.doesNotMatch(r.say, /\$/);
 });
 
 test('gas smell escalates and pages the owner, and booking is refused', async () => {
-  const { c, paged } = ctx([['find_part', { part: 'water heater' }], ['propose_quote', { equipment: 'water heater', issue: 'leak', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' }], ['request_booking', { slot_id: 's1', brief: 'x' }]]);
+  const { c, paged } = ctx([
+    ['find_part', { part: 'water heater' }],
+    [
+      'propose_quote',
+      { equipment: 'water heater', issue: 'leak', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' },
+    ],
+    ['request_booking', { slot_id: 's1', brief: 'x' }],
+  ]);
   c.session.heard('I smell gas near the heater');
   const r = await callerTurn(c, [{ role: 'user', content: 'Caller: I smell gas near the heater' }]);
   assert.equal(r.status, 'escalated');
@@ -74,7 +113,9 @@ test('gas smell escalates and pages the owner, and booking is refused', async ()
 });
 
 test('no box seen means no quote', async () => {
-  const { c } = ctx([['propose_quote', { equipment: 'water heater', issue: 'x', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' }]]);
+  const { c } = ctx([
+    ['propose_quote', { equipment: 'water heater', issue: 'x', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' }],
+  ]);
   const r = await callerTurn(c, []);
   assert.match(r.say, /closer photo/);
 });
@@ -90,10 +131,21 @@ test('a model that never calls a tool asks again after the step cap, and the cal
 test('the per-call cap stops spending mid-call', async () => {
   const script = Array.from({ length: 40 }, () => ['find_part', { part: 'valve' }]);
   const { c } = ctx(script);
-  c.client = createClient({ ledger: c.client && ctx([]).ledger, fetchImpl: async () => new Response(JSON.stringify({ output: [{ type: 'function_call', call_id: 'x', name: 'find_part', arguments: '{"part":"valve"}' }], usage: { input_tokens: 40000, output_tokens: 2000 } })), apiKey: 'test' });
-  await assert.rejects(async () => { for (let i = 0; i < 20; i++) await callerTurn(c, []); }, /spending limit/);
+  c.client = createClient({
+    ledger: c.client && ctx([]).ledger,
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          output: [{ type: 'function_call', call_id: 'x', name: 'find_part', arguments: '{"part":"valve"}' }],
+          usage: { input_tokens: 40000, output_tokens: 2000 },
+        }),
+      ),
+    apiKey: 'test',
+  });
+  await assert.rejects(async () => {
+    for (let i = 0; i < 20; i++) await callerTurn(c, []);
+  }, /spending limit/);
 });
-
 
 test('answer_caller speaks and keeps the call state; model lines never carry a price (red team 10/31)', async () => {
   const { runTool } = await import('../src/tools.js');
@@ -112,7 +164,11 @@ test('answer_caller speaks and keeps the call state; model lines never carry a p
 
 test('start_tour while a tour runs does not restart it', async () => {
   const { runTool } = await import('../src/tools.js');
-  const r = await runTool('start_tour', { room: 'boiler_room' }, { session: {}, startTour: () => ({ already: true, room: 'boiler_room' }) });
+  const r = await runTool(
+    'start_tour',
+    { room: 'boiler_room' },
+    { session: {}, startTour: () => ({ already: true, room: 'boiler_room' }) },
+  );
   assert.equal(r.say, undefined);
   assert.equal(r.output.already_running, true);
 });
@@ -124,21 +180,33 @@ test('a fetch timeout is not a budget stop', async () => {
 });
 
 test('a stopped turn makes no further model calls, and later steps run at minimal effort (red team + latency 10/31)', async () => {
-  const { c: context, api } = ctx([["find_part", { part: "valve" }], ["ask_caller", { question: "Is it dripping now?" }]]);
+  const { c: context, api } = ctx([
+    ['find_part', { part: 'valve' }],
+    ['ask_caller', { question: 'Is it dripping now?' }],
+  ]);
   const r = await callerTurn(context, [{ role: 'user', content: 'Caller: my valve drips' }]);
   assert.ok(r.say);
   const sparks = api.calls.filter((b) => b.tools);
   assert.equal(sparks[0].reasoning.effort, 'low');
   assert.ok(sparks.slice(1).every((b) => b.reasoning.effort === 'minimal'));
-  const ac = new AbortController(); ac.abort();
+  const ac = new AbortController();
+  ac.abort();
   const n = api.calls.length;
-  await assert.rejects(callerTurn(context, [{ role: 'user', content: 'Caller: hi' }], { signal: ac.signal }), { code: 'ABORTED' });
+  await assert.rejects(callerTurn(context, [{ role: 'user', content: 'Caller: hi' }], { signal: ac.signal }), {
+    code: 'ABORTED',
+  });
   assert.equal(api.calls.length, n);
 });
 
 test('links, emails, phone numbers and payment requests never reach the caller in the business voice (red team 10/31)', async () => {
   const { noContact } = await import('../src/tools.js');
-  for (const bad of ['Visit evil.com/pay to confirm.', 'Email me at x@y.co.', 'Call 415-555-0123 now.', 'Please pay a deposit by Zelle first.', 'Go to https://x.io now.']) {
+  for (const bad of [
+    'Visit evil.com/pay to confirm.',
+    'Email me at x@y.co.',
+    'Call 415-555-0123 now.',
+    'Please pay a deposit by Zelle first.',
+    'Go to https://x.io now.',
+  ]) {
     const r = noContact(`The valve looks worn. ${bad}`);
     assert.equal(r.blocked, true, bad);
     assert.ok(r.text.startsWith('The valve looks worn.'));

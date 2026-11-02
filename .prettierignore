@@ -1,0 +1,10 @@
+node_modules/
+recordings/
+.data/
+kb/
+eval/photos/
+eval/frames/
+public/footage/
+package-lock.json
+*.md
+*.json
