@@ -7,6 +7,7 @@
   "point": "The underside of the faucet and handle base, close up.",
   "say": ["\"It drips from under the handle, but it's dark down here.\"", "When it says it is too dark, tap Light (top of the camera view).", "\"Can you see it now?\""],
   "end": ["booked", "awaiting_owner"], "light": true},
+ {"id": "microwave", "title": "Microwave: turntable stopped spinning", "setup": "Microwave door open, light on. Empty plate inside. Do not open any cover.", "point": "The whole microwave from an arm's length, then the turntable and the hub under it.", "say": ["\"Hi. My microwave's turntable stopped spinning. It still heats.\"", "If it asks, lift the glass tray out and show the hub underneath.", "Answer its questions in a few words.", "When you hear a price: \"Okay, book it.\"", "When Owner step appears: open the owner page, tap Approve and book, show the work order for 5 seconds."], "owner": true, "end": ["booked", "awaiting_owner"]},
  {"id": "stove", "title": "Staged scene: spray can by the stove", "staged": true, "setup": "Stove OFF and cold. A spray can and paper towels right beside one burner.",
   "point": "The faucet first, then turn slowly until the stove, can and towels fill the screen.",
   "say": ["\"My faucet drips.\"", "Turn slowly to the stove. Say nothing about the can.", "Hold still on the stove for 20 seconds."],
