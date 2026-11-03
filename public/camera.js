@@ -552,7 +552,10 @@ $('mobileForm').addEventListener('submit', async (e) => {
     $('heard').textContent = '';
   } else {
     $('mobileForm').hidden = true;
+    $('mobileLabel').classList.remove('ask');
     $('mobileLabel').textContent = `Confirmed. The confirmation text goes to the number ending ${j.ending}.`;
+    mobileDone = true;
+    if (!$('ownerPanel').hidden) $('ownerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 });
 
@@ -753,12 +756,23 @@ $('tourGo').addEventListener('click', async () => {
 function cue(text) {
   Speech.say(text);
 }
-function checkTakeEnd(view) {
-  if (!take || takeEnded || !started) return;
-  if (ownerTok && view.status === 'awaiting_owner') {
-    $('ownerStep').hidden = false;
-    $('ownerLink').href = `/owner#${id}.${ownerTok}`;
+// Recording takes carry the owner link: once the booking waits for the owner, the caller's mobile comes first
+// (so the confirmation can be texted), then the owner's page shows inline (11/02: a separate tab was never seen).
+let mobileDone = false;
+function showOwner(view) {
+  if (!ownerTok || !['awaiting_owner', 'booked'].includes(view.status) || !$('ownerPanel').hidden) return;
+  $('ownerFrame').src = `/owner#${id}.${ownerTok}`;
+  $('ownerPanel').hidden = false;
+  if (mobileDone) $('ownerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  else {
+    $('mobileLabel').classList.add('ask');
+    if (!codeStep) $('mobileLabel').textContent = 'Text me the confirmation: enter your mobile';
+    $('mobile').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+}
+function checkTakeEnd(view) {
+  showOwner(view);
+  if (!take || takeEnded || !started) return;
   // A take with an owner step (the main take) ends only once the owner has approved (red team #7 M1).
   const end = (take.end ?? []).filter((x) => !(take.owner && x === 'awaiting_owner'));
   const done =
@@ -803,7 +817,8 @@ async function setupTake() {
   if (!take) return;
   $('consent').hidden = true;
   $('recStart').hidden = false;
-  $('takeTitle').textContent = `Take: ${take.title}. ${take.setup}`;
+  $('takeTitle').textContent =
+    `Take: ${take.title}. ${take.setup} Recording session: your voice is kept on this Mac for the demo edit.`;
   $('scriptTitle').textContent = take.title;
   $('scriptPoint').textContent = take.point;
   $('scriptSay').replaceChildren(

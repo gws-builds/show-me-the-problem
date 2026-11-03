@@ -181,7 +181,7 @@ test('a fetch timeout is not a budget stop', async () => {
   assert.equal(isStop({ code: 'RUN_CAP' }), true);
 });
 
-test('a stopped turn makes no further model calls, and later steps run at minimal effort (red team + latency 10/31)', async () => {
+test('a stopped turn makes no further model calls, and every step runs at minimal effort (red team + latency 10/31, 11/02)', async () => {
   const { c: context, api } = ctx([
     ['find_part', { part: 'valve' }],
     ['ask_caller', { question: 'Is it dripping now?' }],
@@ -189,7 +189,7 @@ test('a stopped turn makes no further model calls, and later steps run at minima
   const r = await callerTurn(context, [{ role: 'user', content: 'Caller: my valve drips' }]);
   assert.ok(r.say);
   const sparks = api.calls.filter((b) => b.tools);
-  assert.equal(sparks[0].reasoning.effort, 'low');
+  assert.equal(sparks[0].reasoning.effort, 'minimal');
   assert.ok(sparks.slice(1).every((b) => b.reasoning.effort === 'minimal'));
   const ac = new AbortController();
   ac.abort();

@@ -172,10 +172,11 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
     const parallel = [];
     for (const noun of nouns.slice(1, 3))
       parallel.push(attempt('alt noun', noun, () => client.segment(frame.dataUrl, noun)));
+    const stopGrounding = new AbortController();
     if (size) {
       parallel.push(
         attempt('grounded', nouns[0], async () => {
-          const pts = await client.ground(frame.dataUrl, nouns.slice(0, 2));
+          const pts = await client.ground(frame.dataUrl, nouns.slice(0, 2), { signal: stopGrounding.signal });
           tries.push({
             method: 'spark grounding',
             noun: nouns.slice(0, 2).join(' / '),
@@ -216,8 +217,11 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
     const grounding = size ? parallel.pop() : null;
     results.push(...(await Promise.all(parallel)));
     if (grounding) {
-      if (results.some((r) => ok(best(r.records)))) grounding.catch(() => undefined);
-      else results.push(await grounding);
+      // ...and is then stopped: left running it slowed the agent's next step by ~5 s (11/02 timing).
+      if (results.some((r) => ok(best(r.records)))) {
+        stopGrounding.abort();
+        grounding.catch(() => undefined);
+      } else results.push(await grounding);
     }
   }
   const winner = results

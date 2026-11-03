@@ -64,10 +64,19 @@ setImmediate(() => {
 
 // Open voice sockets by call, so a new line is pushed at once instead of waiting for the 0.7 s poll.
 const sockets = new Map();
+const glimmer = createGlimmer();
+// Recording session: Glimmer's GPU is kept up while the session runs (a ping every 90 s; Modal scales it down
+// 120 s after the last request). A cold start took 277 s (11/02), so the owner's confirmation text waited
+// minutes after Approve. About $2 an hour at the measured L40S price; it stops with the session.
+if (RECORDING && glimmer) {
+  glimmer.warm();
+  setInterval(() => glimmer.warm(), 90_000).unref();
+  console.log('Glimmer GPU kept warm during this recording session');
+}
 const calls = createCalls({
   ledger,
   priceList,
-  glimmer: createGlimmer(),
+  glimmer,
   sms: createSms(),
   guard: createPromptGuard(),
   onSay: (c, entry) => {
@@ -155,9 +164,10 @@ const OPEN = {
   '/app.css': ['app.css', 'text/css'],
 };
 const NEXT = { home: '/', go: '/go', console: '/console#latest' };
+// frame-ancestors 'self': the call page shows the owner page inline in recording takes (11/02); no other site may frame these pages.
 const HEADERS = {
   'Content-Security-Policy':
-    "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=()',
@@ -474,6 +484,10 @@ function voiceUpgrade(req, socket) {
   if (!ws) return;
   const callId = m[1];
   let session = null;
+  // Recording session only (RECORDING_SESSION=1), on the staff's own takes: the caller's microphone is kept
+  // on this Mac as raw 16 kHz PCM for the demo edit, because iOS screen recording drops the microphone while
+  // the browser uses it (11/02 takes). The file name carries the start time so the edit can line it up.
+  let tape = null;
   const toClient = (o) => ws.send(JSON.stringify(o));
   const authTimer = setTimeout(() => {
     if (!session) ws.close(1008);
@@ -481,8 +495,10 @@ function voiceUpgrade(req, socket) {
   ws.onMessage((data, isBinary) => {
     if (session) {
       try {
-        if (isBinary) session.audio(data);
-        else if (/"endStream"/.test(data)) session.finish();
+        if (isBinary) {
+          session.audio(data);
+          tape?.write(data);
+        } else if (/"endStream"/.test(data)) session.finish();
         else if (/"playback"/.test(data)) session.playback(/"playing"\s*:\s*true/.test(String(data)));
       } catch {
         try {
@@ -508,6 +524,11 @@ function voiceUpgrade(req, socket) {
       });
       calls.setVoice(callId, session);
       sockets.set(callId, toClient);
+      if (RECORDING && calls.staffCall(callId)) {
+        fs.mkdirSync(path.join(DATA, 'audio'), { recursive: true });
+        tape = fs.createWriteStream(path.join(DATA, 'audio', `${callId}-${Date.now()}.pcm`));
+        tape.on('error', () => (tape = null));
+      }
       clearTimeout(authTimer);
     } catch (err) {
       toClient({
@@ -519,6 +540,7 @@ function voiceUpgrade(req, socket) {
   });
   ws.onClose(() => {
     clearTimeout(authTimer);
+    tape?.end();
     if (sockets.get(callId) === toClient) sockets.delete(callId);
     if (session) {
       session.end();

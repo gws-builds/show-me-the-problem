@@ -48,6 +48,12 @@
         <div class="agent-line caption" id="line" aria-live="polite">…</div>
       </div>
       <div class="row small"><span id="luma"></span><span id="torchNote"></span></div>
+      <!-- Recording takes: the owner's page right here, so the take never leaves the call (founder 11/02). -->
+      <div class="card owner-inline" id="ownerPanel" hidden>
+        <h2>Owner's phone</h2>
+        <p class="small">You play the owner now: tap Approve and book, then Show on the customer's screen.</p>
+        <iframe id="ownerFrame" title="Owner approval"></iframe>
+      </div>
       <!-- Under the video, so the camera stays at the top of the screen recording. -->
       <div class="card script" id="script" hidden>
         <div class="row">
@@ -56,10 +62,6 @@
         <p class="small"><a href="/go">Back to all takes</a></p>
         <p class="small"><b>Point at:</b> <span id="scriptPoint"></span></p>
         <ol class="small" id="scriptSay"></ol>
-        <p class="small" id="ownerStep" hidden>
-          <b>Owner step:</b> you play the owner now.
-          <a id="ownerLink" href="#" target="_blank" rel="noopener">Open the owner page</a> and tap Approve and book.
-        </p>
       </div>
       <div class="card">
         <div class="row"><span class="pill" id="vstate">voice off</span><span class="small" id="partial"></span></div>

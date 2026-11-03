@@ -11,8 +11,20 @@ import { searchCorpus, corpusContext } from './corpus.js';
 import { detectLang } from './i18n.js';
 
 export const MAX_STEPS = 6; // tool steps per caller turn
-export const SPEAK_BY_MS = 8000; // after this, the turn's next step must talk to the caller
-const TALKING = ['answer_caller', 'ask_caller', 'direct_camera', 'shutoff_guide', 'propose_quote', 'request_booking', 'escalate'];
+export const SPEAK_BY_MS = 4000; // after this, the turn's next step must talk to the caller
+// price_list and check_calendar stay offered: they are instant lookups in code, and without them "How much?"
+// and "Book it" could never reach propose_quote or request_booking once the turn had to speak (11/02 replay).
+const TALKING = [
+  'answer_caller',
+  'ask_caller',
+  'direct_camera',
+  'shutoff_guide',
+  'propose_quote',
+  'request_booking',
+  'escalate',
+  'price_list',
+  'check_calendar',
+];
 export const SPEAKING_TOOLS = DEFINITIONS.filter((d) => TALKING.includes(d.name));
 const FOLLOW_EFFORT = process.env.AGENT_FOLLOW_EFFORT || 'minimal';
 export const MAX_TURNS = 12; // caller turns per call
@@ -302,13 +314,13 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
       nudged = true;
       history.push({
         role: 'user',
-        content:
-          'Speak to the caller now with what you already know: answer what they just said, in one or two short sentences.',
+        content: `Speak to the caller now with what you already know: answer what they just said, in one or two short sentences. If they asked for a price or a booking, go straight on with price_list, propose_quote, check_calendar or request_booking instead.`,
       });
     }
     // The first step picks the plan at the configured effort; the steps after a tool result
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
+    const stepAt = Date.now();
     const res = await client.respond({
       instructions: instructionsFor(session),
       input: history,
@@ -332,8 +344,19 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     // runs, through the same code gates as every spoken line.
     const now = typeof args.say_now === 'string' ? speakable(session, args.say_now.slice(0, 140)).trim() : '';
     if (now && ctx.sayNow) ctx.sayNow(now);
+    const toolAt = Date.now();
     const r = await runTool(call.name, args, ctx);
-    session.log({ kind: 'tool', name: call.name, args, output: r.output, spentUsd: client.spent() });
+    // Where the turn's time went: the model's step and the tool, in ms (latency work, 11/02).
+    session.log({
+      kind: 'tool',
+      name: call.name,
+      args,
+      output: r.output,
+      spentUsd: client.spent(),
+      stepMs: toolAt - stepAt,
+      inTokens: res.usage?.input_tokens ?? null,
+      toolMs: Date.now() - toolAt,
+    });
     history.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(r.output) });
     if (r.say) say = r.say;
     if (r.status) status = r.status;

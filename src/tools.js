@@ -410,7 +410,8 @@ export async function runTool(name, args, ctx) {
       const frame = session.latestFrame();
       if (!frame) return { output: { error: 'no camera frame yet' } };
       const q = String(args.question ?? '').slice(0, 200);
-      const j = await ctx.client.look(frame.dataUrl, INSPECT_PROMPT(q), 'low', 'inspect');
+      // Minimal effort: 2.4 s a look against 5 s at low (measured 11/02).
+      const j = await ctx.client.look(frame.dataUrl, INSPECT_PROMPT(q), 'minimal', 'inspect');
       const obs = String(j?.observation ?? '').slice(0, 200);
       const visible = j?.visible === true && obs.length > 0;
       const confidence = Math.max(0, Math.min(1, Number(j?.confidence) || 0));

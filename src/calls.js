@@ -522,7 +522,9 @@ export function createCalls({
         !['escalated', 'booked', 'declined', 'handoff'].includes(c.status) &&
         !c.scanning &&
         c.scans < LIMITS.hazardScans &&
-        (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs)
+        // While the agent answers, the next scan waits, up to twice the usual gap: a parallel scan made a 2 s
+        // agent step take 11 s (measured 11/02). The first scan of a call never waits.
+        (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs * (c.turnAbort ? 2 : 1))
       )
         c.scanP = scan(c);
       if (

@@ -5,7 +5,9 @@
 
 export const BASE = process.env.META_API_BASE || 'https://api.meta.ai/v1';
 const SAM_META = { include_confidence: 'true', mask_encoding: 'one_bit' };
-const AGENT_EFFORT = process.env.AGENT_EFFORT || 'low';
+// Minimal effort on every agent step: 1.3-3.1 s a plan against 3.6-5.8 s at low (measured 11/02 on the real
+// prompt; founder 11/02: turns of 12-27 s were far too slow).
+const AGENT_EFFORT = process.env.AGENT_EFFORT || 'minimal';
 export const MODELS = {
   agent: 'muse-spark-1.3',
   reviewer: 'muse-wonder-1.0',
@@ -180,7 +182,7 @@ export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.M
      * both on a 0-1000 grid, or [] when absent. The box lets SAM outline the WHOLE object when a point
      * would land on one of its parts (eval gd03: a point on a cut-away disposal outlined only its motor).
      */
-    ground: async (imageDataUrl, nouns) => {
+    ground: async (imageDataUrl, nouns, { signal = null } = {}) => {
       const list = nouns.map((n) => String(n).slice(0, 40)).join('; ');
       const d = await post(
         '/responses',
@@ -203,6 +205,7 @@ export function createClient({ ledger, fetchImpl = fetch, apiKey = process.env.M
           text: jsonFormat('ground'),
         },
         (x) => x.usage ?? {},
+        { signal },
       );
       const parsed = jsonOf(d);
       const j = Array.isArray(parsed) ? parsed : parsed?.points;
