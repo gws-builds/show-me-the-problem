@@ -19,7 +19,13 @@ const NOISE_WORDS =
 // The model sometimes names a row it never looked up ("microwave_turntable_repair", 11/02 take, when only
 // talking tools were left): the row sharing the most words with its id, equipment and issue stands in, only
 // when it is the single best match. The verifier still checks the row against the equipment seen.
-const words = (s) => new Set(String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+const words = (s) =>
+  new Set(
+    String(s ?? '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 3),
+  );
 export function rowFor(list, id, equipment, issue) {
   if (list.some((r) => r.id === id)) return id;
   const want = words(`${id} ${equipment} ${issue}`);
@@ -293,7 +299,9 @@ export async function runTool(name, args, ctx) {
       // mentioned a sound first.
       if (!NOISE_WORDS.test(session.callerText?.() ?? ''))
         return {
-          output: { error: 'The caller has not mentioned a noise. Do not ask them to run anything; answer them instead.' },
+          output: {
+            error: 'The caller has not mentioned a noise. Do not ask them to run anything; answer them instead.',
+          },
         };
       const kind = EQUIPMENT_KINDS.includes(args.equipment) ? args.equipment : 'motor';
       const started = ctx.requestListen?.(kind);

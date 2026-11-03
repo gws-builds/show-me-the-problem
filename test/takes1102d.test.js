@@ -12,12 +12,15 @@ const priceList = JSON.parse(fs.readFileSync(new URL('../data/demo-business.json
 const calendar = nextSlots(Date.parse('2026-11-02T20:00:00-05:00'));
 
 test('a made-up price id resolves to the one matching row; an unclear one stays as it was', () => {
-  assert.equal(rowFor(priceList, 'microwave_turntable_repair', 'microwave', 'turntable not turning, heats normally'), 'ap-mw-turn');
+  assert.equal(
+    rowFor(priceList, 'microwave_turntable_repair', 'microwave', 'turntable not turning, heats normally'),
+    'ap-mw-turn',
+  );
   assert.equal(rowFor(priceList, 'fc-cart', 'faucet', 'drip'), 'fc-cart'); // a real id is kept
   assert.equal(rowFor(priceList, 'something', 'thing', 'broken'), 'something'); // no guess when nothing fits
 });
 
-test('the caller\'s day picks the real slot; the right day at another time is offered, not booked', () => {
+test("the caller's day picks the real slot; the right day at another time is offered, not booked", () => {
   assert.equal(calendar[2].label.startsWith('Thursday'), true);
   assert.equal(slotFor(calendar, 'thursday-am Thursday morning', 'thursday-am').id, calendar[2].id);
   assert.equal(slotFor(calendar, 'thursday-pm afternoon.', 'thursday-pm').near.id, calendar[2].id);

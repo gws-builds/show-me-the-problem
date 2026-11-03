@@ -80,11 +80,15 @@ test('handling clicks at the start and end of a clip are not "sharp knocks"', ()
   b.write('data', 36, 'latin1');
   b.writeUInt32LE(n * 2, 40);
   const click = (s) => (s >= 4000 && s < 4400) || (s >= 121600 && s < 122000); // picked up at 0.25 s, put down at 7.6 s
-  for (let i = 0; i < n; i++) b.writeInt16LE(click(i) ? (i % 2 ? 20000 : -20000) : Math.round(Math.sin(i / 7) * 60), 44 + i * 2);
+  for (let i = 0; i < n; i++)
+    b.writeInt16LE(click(i) ? (i % 2 ? 20000 : -20000) : Math.round(Math.sin(i / 7) * 60), 44 + i * 2);
   const r = analyseSound(b, { fixture: 'motor' });
   assert.ok(!(r.findings ?? []).some((f) => f.sound === 'bang'), JSON.stringify(r.findings));
   for (let i = 16000 * 4; i < 16000 * 4 + 400; i++) b.writeInt16LE(i % 2 ? 20000 : -20000, 44 + i * 2); // a knock at 4 s
-  assert.ok(analyseSound(b, { fixture: 'motor' }).findings.some((f) => f.sound === 'bang'), 'a real knock mid-clip is still heard');
+  assert.ok(
+    analyseSound(b, { fixture: 'motor' }).findings.some((f) => f.sound === 'bang'),
+    'a real knock mid-clip is still heard',
+  );
 });
 
 test('the first waiting line is neutral: no "On it", no "Got it"', () => {
@@ -104,10 +108,23 @@ test('a quote with nothing outlined yet outlines the equipment in code first', a
       return [{ x1: 0, y1: 50, x2: 400, y2: 560, score: 0.82 }];
     },
   };
-  const priceList = [{ id: 'ap-mw-turn', label: 'Microwave turntable repair: hub and motor (parts included)', priceCents: 16900, jobType: 'microwave' }];
+  const priceList = [
+    {
+      id: 'ap-mw-turn',
+      label: 'Microwave turntable repair: hub and motor (parts included)',
+      priceCents: 16900,
+      jobType: 'microwave',
+    },
+  ];
   const r = await runTool(
     'propose_quote',
-    { equipment: 'microwave', issue: 'turntable does not turn', price_list_id: 'ap-mw-turn', box_ordinal: 1, notes: 'still heats' },
+    {
+      equipment: 'microwave',
+      issue: 'turntable does not turn',
+      price_list_id: 'ap-mw-turn',
+      box_ordinal: 1,
+      notes: 'still heats',
+    },
     { session, client, priceList, now: () => Date.now() },
   );
   assert.deepEqual(asked.slice(0, 1), ['microwave'], 'outlined the microwave first');
