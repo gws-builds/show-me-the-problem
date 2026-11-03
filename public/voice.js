@@ -21,7 +21,7 @@ window.Voice = (() => {
   // line twice in a row; any real line cuts a filler off (Speech.say stops whatever is playing).
   const FILLERS = {
     en: [
-      [150, ['On it.', 'Got it.', 'Okay, one sec.', 'Let me look.', 'Sure, checking.']],
+      [150, ['On it.', 'Okay, one sec.', 'Let me look.', 'Sure, checking.']],
       [
         5000,
         ['Just a few moments longer.', 'Almost there, a few more seconds.', 'Still checking, just a moment longer.'],

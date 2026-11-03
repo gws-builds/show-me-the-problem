@@ -8,7 +8,6 @@ import { TOUR } from '../tour.js';
 // in the natural voice instead of the browser's.
 export const WAITING_LINES = [
   'On it.',
-  'Got it.',
   'Okay, one sec.',
   'Let me look.',
   'Sure, checking.',
@@ -30,7 +29,7 @@ export const WAITING_LINES = [
 export const SPOKEN_CUES = new Set([
   'Start your screen recording now.',
   'You can stop recording now.',
-  'Got it. Hold still.',
+  'Hold still there.',
   ...WAITING_LINES,
 ]);
 

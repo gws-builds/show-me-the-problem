@@ -98,7 +98,7 @@ const EXACT = new Map([
   ['Move closer.', 'Acérquese.'],
   ['Back up a little.', 'Aléjese un poco.'],
   ['Hold still.', 'Quédese quieto.'],
-  ['Got it. Hold still.', 'Listo. Quédese quieto.'],
+  ['Hold still there.', 'Quédese quieto ahí.'],
 ]);
 
 const MONTHS_ES = {

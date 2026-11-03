@@ -9,7 +9,7 @@
 //   a hazard ends quoting at once, pages the owner and blocks booking.
 // - Prices only come from the verifier; bookings only from the owner's tap.
 import { createSession, callerTurn, maxTurns } from './agent.js';
-import { PER_RUN_USD, STOP_CODES, isStop } from './budget.js';
+import { MAX_RUN_USD, PER_RUN_USD, STOP_CODES, isStop } from './budget.js';
 import { safeEqual } from './filters.js';
 import { guide, DARK_LUMA } from './guidance.js';
 import { toLang } from './i18n.js';
@@ -447,6 +447,8 @@ export function createCalls({
       };
       c.session = createSession({ now });
       c.client = makeClient(live);
+      // Recording takes: $0.25 ran out after six turns (11/02 takes); the session's $25 stop still applies.
+      if (staff) c.client.setCap?.(MAX_RUN_USD);
       c.ctx = {
         client: c.client,
         session: c.session,

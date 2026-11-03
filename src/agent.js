@@ -24,7 +24,10 @@ Rules:
 - The caller's screen shows arrows computed from the outline; your direct_camera line should name the part the caller is talking about and match the arrows (e.g. "Tilt down to the label on the tank").
 - When the caller mentions a noise, or a sound would tell what is wrong (running water, hiss, whistle, buzz, knocking, rattling), call listen_to_equipment: the phone records by itself and the measured sound comes back as evidence.
 - Use inspect_frame to look at the current frame yourself (equipment type, where the water comes from, corrosion, labels). Then record_hypothesis for the likely worn part, citing evidence ids from the tool outputs.
-- Only when the caller describes a dripping faucet or tap: find_part "faucet"; if the drip is underneath, guide the camera under the spout and handle base; inspect_frame for the faucet type (single-handle cartridge, two-handle compression, ball) and where the water appears; record_hypothesis (cartridge or o-ring); if water is leaking now or before any repair, offer shutoff_guide for the sink; price_list "faucet"; propose_quote; check_calendar; request_booking.
+- Speed: the caller is waiting in silence. Use at most two looking tools (find_part, inspect_frame) before you speak, then answer. Never repeat find_part for a part it missed in this call; use inspect_frame on the current frame instead.
+- Never say "got it" in any form. Never say "I see" unless a tool output shows it.
+- Under the sink: if the caller says the leak is underneath, under the sink, under the cabinet or below the counter, the camera is inside the sink cabinet and the top of the faucet is NOT in view. Never ask to see the faucet, its handle or its spout, and never tell them to tilt up to it. What they show is the faucet's underside: the supply lines, the coupling nuts where those meet the faucet's tailpieces, the mounting nut, the shut-off valves and the drain trap. find_part "supply line" (or "pipe"), then inspect_frame. When they point at something ("this ring", "here", "where this cable goes"), it is in the current frame: inspect_frame to see it and answer about it. Water at a ring or nut where a supply line meets the faucet = a loose coupling nut or a worn supply line; water at the trap = a loose slip nut.
+- Only when the caller describes a dripping faucet or tap above the counter: find_part "faucet"; if the drip comes from under the spout or the handle, guide the camera to the spout and handle base; inspect_frame for the faucet type (single-handle cartridge, two-handle compression, ball) and where the water appears; record_hypothesis (cartridge or o-ring); if water is leaking now or before any repair, offer shutoff_guide for the sink; price_list "faucet"; propose_quote; check_calendar; request_booking.
 - Water shut-off steps come only from shutoff_guide. Never give steps for gas valves or gas appliances.
 - Any sign of gas, sparks, scorching, exposed wiring, water near electrical, carbon monoxide or structural damage: call escalate at once. Electrical checks are visual only; never claim a measurement.
 - Never state a price yourself. propose_quote with a price_list_id; the verifier answers.
@@ -79,6 +82,7 @@ export function createSession({ now = () => Date.now() } = {}) {
   let lang = 'en';
   let plateReads = 0;
   let plateWanted = null;
+  const missSaid = new Set();
   return {
     /**
      * Cited trade-manual excerpts for a query (cached per query). Each passage used becomes a
@@ -121,6 +125,12 @@ export function createSession({ now = () => Date.now() } = {}) {
         if (refCache.size > 40) refCache.delete(refCache.keys().next().value);
       }
       return refCache.get(q);
+    },
+    /** True if "I can't see the <part> yet" was already said this call; records it otherwise. */
+    saidMiss(p) {
+      if (missSaid.has(p)) return true;
+      missSaid.add(p);
+      return false;
     },
     tourRoom: () => tourRoom,
     plate: () => plate,
@@ -275,6 +285,13 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
   for (let step = 0; step < MAX_STEPS && !say; step++) {
     // A turn that timed out stops here instead of spending on in the background (red team 10/31, finding 7).
     if (signal?.aborted) throw Object.assign(new Error('turn stopped'), { code: 'ABORTED' });
+    // Two tool results and still no line: the caller has waited long enough (11/02 takes: turns ran 30-60 s).
+    if (step === 2 && !say)
+      history.push({
+        role: 'user',
+        content:
+          'Speak to the caller now: your next tool must talk to them (answer_caller, ask_caller, direct_camera, shutoff_guide or propose_quote).',
+      });
     // The first step picks the plan at the configured effort; the steps after a tool result
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.

@@ -19,6 +19,12 @@ fetch('/takes.json')
       ...takes.map((t) => {
         const card = el('div', 'card');
         card.append(el('h2', '', t.title), el('p', 'small', t.setup));
+        // The whole script on the picker too, so each take's lines can be read before starting (founder 11/02).
+        const point = el('p', 'small');
+        point.append(el('b', '', 'Point at: '), t.point ?? '');
+        const say = el('ol', 'small');
+        say.append(...(t.say ?? []).map((x) => el('li', '', x)));
+        card.append(point, say);
         const b = el('button', '', 'Start this take');
         b.onclick = async () => {
           b.disabled = true;

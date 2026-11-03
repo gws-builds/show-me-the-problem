@@ -80,7 +80,7 @@ test('M5: carbon-monoxide symptoms and water through a ceiling light escalate; o
     assert.ok(!hazardIn(said), said);
 });
 
-test('L7: a short echo right after the phone starts talking is dropped; the same words later are a barge-in', async () => {
+test("L7 (rule changed 11/02): while the phone talks, its own words are echo at any point; the caller's own words are a barge-in; after it stops, the same words reach the agent", async () => {
   let t = 0;
   const said = [];
   const calls = {
@@ -120,7 +120,20 @@ test('L7: a short echo right after the phone starts talking is dropped; the same
   );
   t = 3000;
   await utter('the water heater');
-  assert.deepEqual(said, ['the water heater'], 'the same words 3 s into playback reach the agent');
+  assert.ok(
+    out.filter((m) => m.type === 'ignored').length === 2,
+    'its own words 3 s into playback are still echo (11/02 takes)',
+  );
+  await utter('wait which heater is mine');
+  assert.deepEqual(said, ['wait which heater is mine'], "words of the caller's own cut in");
+  s.playback(false);
+  t = 9000;
+  await utter('the water heater');
+  assert.deepEqual(
+    said,
+    ['wait which heater is mine', 'the water heater'],
+    'after playback the same words reach the agent',
+  );
 });
 
 test('red team #9: trade sentences with numbers are not prices (durations, slots, dials, model numbers, gauges)', () => {

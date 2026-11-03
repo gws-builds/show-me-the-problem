@@ -55,7 +55,7 @@ export function guide(geo, { prev = null, luma = null } = {}) {
     (prev.state === 'hold' || prev.state === 'locked') &&
     Math.hypot((prev.cx ?? 9) - cx, (prev.cy ?? 9) - cy) < STEADY;
   return steady
-    ? { ...base, state: 'locked', arrow: null, words: 'Got it. Hold still.' }
+    ? { ...base, state: 'locked', arrow: null, words: 'Hold still there.' }
     : { ...base, state: 'hold', arrow: null, words: 'Hold still.' };
 }
 

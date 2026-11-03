@@ -131,8 +131,15 @@ export const DEFINITIONS = [
 ];
 
 /** A model-written line made safe to speak: no panel-opening steps, no prices (both replaced in code and logged). */
+// Founder 11/02: never "Got it" in any form; removed in code wherever the model puts it.
+export const noGotIt = (line) =>
+  String(line ?? '')
+    .replace(/\b(?:okay,?\s+|ok,?\s+|alright,?\s+)?got it\b[,.!:;\s—-]*/gi, '')
+    .replace(/^\s+/, '')
+    .replace(/^[a-z]/, (c) => c.toUpperCase());
+
 export function speakable(session, line) {
-  const panel = safeLine(line);
+  const panel = safeLine(noGotIt(line));
   if (panel.blocked)
     session.log({
       kind: 'code_gate',
@@ -240,7 +247,8 @@ export async function runTool(name, args, ctx) {
       let line = String(args.instruction ?? '').slice(0, 200);
       const part = session.lastPart();
       const seen = session.boxes().some((b) => (b.score ?? 1) >= 0.5);
-      if (part && !seen && !/can'?t see|cannot see|can not see/i.test(line))
+      // Once per part: repeated on every turn it sounded stuck (11/02 takes: "I can't see the faucet yet" x3).
+      if (part && !seen && !/can'?t see|cannot see|can not see/i.test(line) && !session.saidMiss?.(part))
         line = `I can't see the ${part} yet. ${line}`;
       const safe = speakable(session, line);
       return { output: { said: safe }, say: safe, status: 'waiting_camera' };

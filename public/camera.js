@@ -477,7 +477,7 @@ function renderFound(t) {
 function speakGuidance(g, tracking) {
   // Code-computed guidance is spoken without a model call, at most every 3 s, only while tracking.
   if (!g || !tracking || g.state === 'searching') return;
-  const words = g.state === 'locked' ? 'Got it. Hold still.' : g.words;
+  const words = g.state === 'locked' ? 'Hold still there.' : g.words;
   if (words === lastSaidGuide && Date.now() - lastGuideAt < 6000) return;
   if (Date.now() - lastGuideAt < 3000 || Speech.speaking) return;
   lastSaidGuide = words;
@@ -805,10 +805,10 @@ async function setupTake() {
       return li;
     }),
   );
+  $('script').hidden = false; // what to say is readable before and during the take (founder 11/02)
   cue('Start your screen recording now.'); // spoken where the browser allows it before a tap; the banner is the cue
   $('recording').onclick = async () => {
     $('recStart').hidden = true;
-    $('script').hidden = false;
     try {
       await start();
     } catch (err) {

@@ -38,6 +38,19 @@ export function isEcho(heard, agentLines) {
   });
 }
 
+/** True when every heard word appears in the agent's line, in the line's order. */
+export function inOrder(heard, line) {
+  const w = words(heard);
+  const lw = words(line);
+  let i = 0;
+  for (const x of w) {
+    const j = lw.indexOf(x, i);
+    if (j < 0) return false;
+    i = j + 1;
+  }
+  return w.length > 0;
+}
+
 export function handshake(apiKey) {
   return {
     authorization: { accessToken: `Bearer ${apiKey}` },
@@ -70,6 +83,7 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
   // A short phrase is echo only when it starts right after the phone starts or stops talking. Later, a
   // caller cutting in with the agent's own words ("the water heater") is a barge-in (red team #7 L14).
   let echoOnset = true;
+  let playingAtStart = false;
   let playStartedAt = 0;
   const ECHO_ONSET_MS = 1500;
   let reported = false;
@@ -114,6 +128,7 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
     if (m.type === 'speechStart') {
       const t = now();
       echoPossible = !reported || playing || t - playedUntil < ECHO_TAIL_MS;
+      playingAtStart = reported && playing;
       echoOnset = !reported || (playing ? t - playStartedAt < ECHO_ONSET_MS : t - playedUntil < ECHO_TAIL_MS);
       return send({ type: 'speechStart' });
     }
@@ -134,7 +149,10 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       // multi-word match counts, so a caller's own one-word "okay" is never dropped.
       const fillerEcho = text.split(/\s+/).length >= 2 && isEcho(text, WAITING_LINES);
       const short = text.split(/\s+/).length < 4;
-      if (echoPossible && (!short || echoOnset) && (isEcho(text, agentLines) || fillerEcho)) {
+      // While the phone is talking, a short phrase made only of its own line's words, in order, is that line
+      // coming back (11/02 takes: "The faucet" from "...at the faucet base" became a caller turn).
+      const ownWords = playingAtStart && short && agentLines.some((l) => inOrder(text, l));
+      if (echoPossible && (!short || echoOnset || ownWords) && (isEcho(text, agentLines) || fillerEcho)) {
         calls.logEvent(callId, { kind: 'echo_dropped', text });
         return send({ type: 'ignored', text });
       }

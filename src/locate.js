@@ -29,7 +29,7 @@ const STATE_WORDS =
   /\b(leak(s|ing|y)?|drip(s|ping|py)?|broken|old|rusty|rusted|corroded|bad|worn|faulty|underside|bottom|base|of|the|a|an|my|under|below|beneath)\b/gi;
 
 export const ALT_NOUNS = {
-  faucet: ['spout', 'tap'],
+  faucet: ['spout', 'supply line'], // under the sink only the underside shows (11/02 takes)
   spout: ['faucet'],
   cartridge: ['faucet handle', 'faucet'],
   'faucet handle': ['faucet'],
@@ -211,7 +211,14 @@ export async function locate(client, frame, part, { tap = null, now = Date.now()
         }),
       );
     }
+    // An alt noun that finds the part answers at once; the slower grounding (4-6 s) is waited on only when
+    // none did (11/02 takes: every find_part waited for it, about 6 s a turn).
+    const grounding = size ? parallel.pop() : null;
     results.push(...(await Promise.all(parallel)));
+    if (grounding) {
+      if (results.some((r) => ok(best(r.records)))) grounding.catch(() => undefined);
+      else results.push(await grounding);
+    }
   }
   const winner = results
     .map((r) => ({ ...r, top: best(r.records) }))
