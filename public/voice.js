@@ -15,22 +15,22 @@ window.Voice = (() => {
   let rec = null; // { chunks: [] } while listening to the equipment
   let micTrack = null; // the live mic, so Listen can switch its voice filters off while recording
   let micSource = null; // its node in the audio graph, swapped if the filters do not come back
-  // Founder 11/01: an acknowledgement the instant the caller stops talking ("On it"), then "just a few
+  // Founder 11/01: an acknowledgement the instant the caller stops talking (11/02: a neutral "One sec.", since "On it" did not fit questions), then "just a few
   // moments longer" if the answer is still coming at ~5 s, and reassurances after 11 s and 19 s. The lines
   // are made once when the call starts and kept on the phone, so they play with no wait. Never the same
   // line twice in a row; any real line cuts a filler off (Speech.say stops whatever is playing).
   const FILLERS = {
     en: [
-      [150, ['On it.', 'Okay, one sec.', 'Let me look.', 'Sure, checking.']],
+      [150, ['One sec.', 'One moment.']],
       [
         5000,
         ['Just a few moments longer.', 'Almost there, a few more seconds.', 'Still checking, just a moment longer.'],
       ],
-      [11000, ['Nearly done, thanks for waiting.', 'Still on it, almost there.']],
+      [11000, ['Nearly done, thanks for waiting.', 'Almost there.']],
       [19000, ['Thanks for bearing with me, I am just about done.']],
     ],
     es: [
-      [150, ['Enseguida.', 'Entendido.', 'Déjame ver.', 'Ya voy.']],
+      [150, ['Un momento.', 'Un segundo.']],
       [5000, ['Unos momentos más.', 'Casi listo, unos segundos más.']],
       [11000, ['Ya casi, gracias por esperar.']],
       [19000, ['Gracias por la paciencia, ya casi termino.']],
@@ -71,7 +71,9 @@ window.Voice = (() => {
       const buf = e.data;
       if (ptt) ptt.chunks.push(new Int16Array(buf));
       if (rec) rec.chunks.push(new Int16Array(buf));
-      if (ws?.readyState === 1 && ws.ready && !ptt && !rec) ws.send(buf);
+      // While Listen records (or hold-to-talk), send silence instead of nothing: a paused stream makes Meta's
+      // realtime service fail ("Ingress audio slower than real-time") and every later word was lost (11/02).
+      if (ws?.readyState === 1 && ws.ready) ws.send(ptt || rec ? new ArrayBuffer(buf.byteLength) : buf);
     };
     // The worklet must be pulled by the graph; a silent gain keeps it running without echo.
     const mute = ctx.createGain();
@@ -81,7 +83,7 @@ window.Voice = (() => {
     enablePtt();
     enableListen();
     connect();
-    // The acknowledgements are made once and kept on the phone (camera.js), so "On it" has no wait.
+    // The acknowledgements are made once and kept on the phone (camera.js), so the first line has no wait.
     window.Speech?.prefetch?.(FILLERS[window.Speech?.lang === 'es' ? 'es' : 'en'].flatMap(([, lines]) => lines));
   }
 
@@ -151,9 +153,11 @@ window.Voice = (() => {
       else if (m.type === 'error') {
         $('heard').textContent = m.message;
         fillerTimers.forEach(clearTimeout);
-        window.Speech?.later(m.message || 'Sorry, I lost that. Could you say it again?');
+        window.Speech?.later(m.message || 'Sorry, I did not catch that. Say it once more?');
       } else if (m.type === 'closed') {
-        state('voice off: hold to talk');
+        // The speech service ended: close this socket so onclose reconnects at once with a fresh one.
+        state('reconnecting voice…');
+        ws.close();
       }
       // The agent's line, pushed the moment it exists (camera.js speaks it; the poll is the fallback).
       else if (m.type === 'say') {

@@ -330,7 +330,11 @@ export function analyseSound(wav, { fixture = 'motor' } = {}) {
     found.push({ sound: 'gurgle', share: share(low.filter(Boolean).length), detail: `${bursts} low bubbling bursts` });
   // Bang: one frame far above the clip's median and its neighbours; many of them is a rattle.
   let bangs = 0;
-  for (let i = 1; i < f.length - 1; i++) if (f[i].db - median > 20 && f[i].db - f[i - 1].db > 12) bangs++;
+  // The first and last 0.75 s are skipped: that is the phone being picked up and put down (11/02 microwave
+  // takes: "2 sharp knocks" in every clip, reported to the caller as a fault).
+  const EDGE = 15;
+  for (let i = Math.max(1, EDGE); i < f.length - Math.max(1, EDGE); i++)
+    if (f[i].db - median > 20 && f[i].db - f[i - 1].db > 12) bangs++;
   if (bangs >= 1 && bangs <= 6)
     found.push({ sound: 'bang', share: share(bangs), detail: `${bangs} sharp knock${bangs === 1 ? '' : 's'}` });
   if (bangs > 6) found.push({ sound: 'rattle', share: share(bangs), detail: `${bangs} rapid knocks (rattling)` });

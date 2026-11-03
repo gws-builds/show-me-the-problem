@@ -165,9 +165,14 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       }
       return;
     }
+    // A realtime error ends that stream (11/02: "Ingress audio slower than real-time", then silence). Tell the
+    // phone it closed, so it reconnects at once, instead of speaking an error line.
     if (m.type === 'error') {
-      send({ type: 'error', message: 'Voice service error. Use hold-to-talk.' });
       calls.logEvent(callId, { kind: 'error', text: `realtime: ${String(m.message).slice(0, 120)}` });
+      if (!closed) {
+        send({ type: 'closed', code: 1011 });
+        end();
+      }
     }
   };
   up.onclose = (ev) => {

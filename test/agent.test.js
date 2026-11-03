@@ -112,10 +112,12 @@ test('gas smell escalates and pages the owner, and booking is refused', async ()
   assert.equal(r2.status, 'escalated');
 });
 
+// No camera frame, so code cannot outline the equipment either (11/02: propose_quote outlines it when it can).
 test('no box seen means no quote', async () => {
-  const { c } = ctx([
-    ['propose_quote', { equipment: 'water heater', issue: 'x', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' }],
-  ]);
+  const { c } = ctx(
+    [['propose_quote', { equipment: 'water heater', issue: 'x', price_list_id: 'wh-flush', box_ordinal: 1, notes: '' }]],
+    { session: createSession() },
+  );
   const r = await callerTurn(c, []);
   assert.match(r.say, /closer photo/);
 });

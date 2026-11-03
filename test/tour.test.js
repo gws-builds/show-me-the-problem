@@ -394,7 +394,7 @@ test('a caller turn that hangs is answered with a retry line, and its late resul
     });
     const c = calls.create({ ip: 'h', live: true });
     await calls.voiceTurn(c.id, 'My faucet drips');
-    assert.match(calls.view(c.id).says.at(-1).text, /Sorry, I lost that/);
+    assert.match(calls.view(c.id).says.at(-1).text, /took me too long/);
     await calls.voiceTurn(c.id, 'Hello?'); // the line is never refused as "still thinking"
     release();
     await new Promise((r) => setTimeout(r, 30));

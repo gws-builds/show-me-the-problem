@@ -11,6 +11,9 @@ import { searchCorpus, corpusContext } from './corpus.js';
 import { detectLang } from './i18n.js';
 
 export const MAX_STEPS = 6; // tool steps per caller turn
+export const SPEAK_BY_MS = 8000; // after this, the turn's next step must talk to the caller
+const TALKING = ['answer_caller', 'ask_caller', 'direct_camera', 'shutoff_guide', 'propose_quote', 'request_booking', 'escalate'];
+export const SPEAKING_TOOLS = DEFINITIONS.filter((d) => TALKING.includes(d.name));
 const FOLLOW_EFFORT = process.env.AGENT_FOLLOW_EFFORT || 'minimal';
 export const MAX_TURNS = 12; // caller turns per call
 export const TOUR_TURNS = 10; // more for a call with a guided tour: the caller asks about each part (11/02 takes)
@@ -22,10 +25,14 @@ Rules:
 - Call exactly one tool per step. Speak to the caller only through answer_caller (for any direct question, also during a tour), direct_camera, ask_caller, shutoff_guide, or the verifier's answer to propose_quote.
 - Use find_part with a plain object noun before claiming anything about equipment ("faucet", "spout", "shut-off valve", "water heater"). Code retries with other nouns and a grounding point; if it still finds nothing, use direct_camera. The caller can also tap the part on screen.
 - The caller's screen shows arrows computed from the outline; your direct_camera line should name the part the caller is talking about and match the arrows (e.g. "Tilt down to the label on the tank").
-- When the caller mentions a noise, or a sound would tell what is wrong (running water, hiss, whistle, buzz, knocking, rattling), call listen_to_equipment: the phone records by itself and the measured sound comes back as evidence.
+- Only when the caller mentions a noise (hiss, whistle, buzz, hum, knocking, rattling, grinding), call listen_to_equipment: the phone records by itself and the measured sound comes back as evidence. Report only what it measured, in plain words, and never call it a fault on its own.
 - Use inspect_frame to look at the current frame yourself (equipment type, where the water comes from, corrosion, labels). Then record_hypothesis for the likely worn part, citing evidence ids from the tool outputs.
 - Speed: the caller is waiting in silence. Use at most two looking tools (find_part, inspect_frame) before you speak, then answer. Never repeat find_part for a part it missed in this call; use inspect_frame on the current frame instead.
-- Never say "got it" in any form. Never say "I see" unless a tool output shows it.
+- Listen first: answer what the caller just said before anything else. A question gets a direct answer. A yes or no answers only your last line.
+- Never invent a symptom or a fault. Say, note or quote only what the caller said or a tool output showed. Never put a symptom in notes or a hypothesis that the caller did not say.
+- Never ask the caller to switch on or run equipment just so you can see or hear it. Never ask anyone to run a microwave (running it empty damages it).
+- Microwave turntable that does not turn but still heats: ask them to lift out the glass tray and show the roller ring and the hub (coupler) under it; inspect_frame; then price_list "microwave" and propose_quote with the turntable repair row.
+- Never say "got it" or "on it" in any form. Never say "I see" unless a tool output shows it.
 - Under the sink: if the caller says the leak is underneath, under the sink, under the cabinet or below the counter, the camera is inside the sink cabinet and the top of the faucet is NOT in view. Never ask to see the faucet, its handle or its spout, and never tell them to tilt up to it. What they show is the faucet's underside: the supply lines, the coupling nuts where those meet the faucet's tailpieces, the mounting nut, the shut-off valves and the drain trap. find_part "supply line" (or "pipe"), then inspect_frame. When they point at something ("this ring", "here", "where this cable goes"), it is in the current frame: inspect_frame to see it and answer about it. Water at a ring or nut where a supply line meets the faucet = a loose coupling nut or a worn supply line; water at the trap = a loose slip nut.
 - Only when the caller describes a dripping faucet or tap above the counter: find_part "faucet"; if the drip comes from under the spout or the handle, guide the camera to the spout and handle base; inspect_frame for the faucet type (single-handle cartridge, two-handle compression, ball) and where the water appears; record_hypothesis (cartridge or o-ring); if water is leaking now or before any repair, offer shutoff_guide for the sink; price_list "faucet"; propose_quote; check_calendar; request_booking.
 - Water shut-off steps come only from shutoff_guide. Never give steps for gas valves or gas appliances.
@@ -282,23 +289,29 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
   let status = 'running';
   let track = null;
   const started = Date.now();
+  let nudged = false;
   for (let step = 0; step < MAX_STEPS && !say; step++) {
     // A turn that timed out stops here instead of spending on in the background (red team 10/31, finding 7).
     if (signal?.aborted) throw Object.assign(new Error('turn stopped'), { code: 'ABORTED' });
-    // Two tool results and still no line: the caller has waited long enough (11/02 takes: turns ran 30-60 s).
-    if (step === 2 && !say)
+    // Two tool results, or 8 s, and still no line: the caller has waited long enough (11/02 takes: turns ran
+    // 27-60 s and the 30 s stop said "Sorry, I lost that"). From here the model is offered only the tools
+    // that talk, so the next step is the answer.
+    const mustSpeak = step >= 2 || (step >= 1 && Date.now() - started > SPEAK_BY_MS);
+    if (mustSpeak && !nudged) {
+      nudged = true;
       history.push({
         role: 'user',
         content:
-          'Speak to the caller now: your next tool must talk to them (answer_caller, ask_caller, direct_camera, shutoff_guide or propose_quote).',
+          'Speak to the caller now with what you already know: answer what they just said, in one or two short sentences.',
       });
+    }
     // The first step picks the plan at the configured effort; the steps after a tool result
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
     const res = await client.respond({
       instructions: instructionsFor(session),
       input: history,
-      tools: DEFINITIONS,
+      tools: mustSpeak ? SPEAKING_TOOLS : DEFINITIONS,
       signal,
       ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
     });

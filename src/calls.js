@@ -223,7 +223,7 @@ export function createCalls({
         c,
         STOP_CODES.has(err.code)
           ? 'Let me get the owner to call you back.'
-          : 'Sorry, I lost that. Could you say it again?',
+          : 'Sorry, that one took me too long. Ask me once more?',
         isStop(err) ? 'handoff' : c.status,
       );
     }

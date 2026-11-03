@@ -73,7 +73,7 @@ test("a line is sent as whole sentences, and /say voices only those sentences of
   assert.deepEqual(first.parts.join(' '), first.text);
   for (const p of first.parts) assert.equal(calls.sayable(a.id, a.camToken, p), true);
   assert.equal(calls.sayable(a.id, a.camToken, 'Send a deposit to 416 555 0199.'), false);
-  assert.equal(calls.sayable(a.id, a.camToken, 'On it.'), true, 'the waiting lines are voiced too');
+  assert.equal(calls.sayable(a.id, a.camToken, 'One sec.'), true, 'the waiting lines are voiced too');
 });
 
 test('booking: the approved visit is a calendar invite for the owner only, and the results strip adds up', async () => {
