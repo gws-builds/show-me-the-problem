@@ -133,7 +133,7 @@ test('describePlate: an estimated date says so, and the Bradford White cycle is 
   const unknown = describePlate(cleanPlate({ visible: true, brand: 'Acme', serial: 'Z99999' }), { now: NOW });
   assert.equal(unknown.when, null);
   assert.match(unknown.summary, /No date rule/);
-  assert.match(plateLine(unknown), /Got the label/);
+  assert.match(plateLine(unknown), /I read the label/);
   assert.doesNotMatch(plateLine(unknown), /years old/);
 });
 

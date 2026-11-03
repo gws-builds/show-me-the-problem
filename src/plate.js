@@ -212,6 +212,6 @@ export function plateLine(p) {
   if (!p) return "I can't read the label from here. Move closer to the sticker on the side of the unit and hold still.";
   const who = [p.brand, p.equipment !== 'other' ? p.equipment : 'unit'].filter(Boolean).join(' ');
   if (p.when)
-    return `Got the label: a ${who}, made around ${p.when}${p.date?.basis === 'printed' ? '' : ' going by the serial number'}, so about ${Math.round(p.age)} years old. I've added the model and serial for the technician.`;
-  return `Got the label: a ${who}${p.model ? `, model ${p.model}` : ''}. I've added it for the technician.`;
+    return `I read the label: a ${who}, made around ${p.when}${p.date?.basis === 'printed' ? '' : ' going by the serial number'}, so about ${Math.round(p.age)} years old. I've added the model and serial for the technician.`;
+  return `I read the label: a ${who}${p.model ? `, model ${p.model}` : ''}. I've added it for the technician.`;
 }

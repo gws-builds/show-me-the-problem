@@ -30,6 +30,10 @@ const EXACT = new Map([
     'Ya avisamos al dueño y le va a llamar. Si huele a gas o ve humo o fuego, salga de la casa ahora y llame al 911.',
   ],
   [
+    'I am getting the owner on this right now. They will call you back shortly.',
+    'Estoy avisando al dueño ahora mismo. Le va a devolver la llamada en breve.',
+  ],
+  [
     'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.',
     'Estoy avisando al dueño ahora mismo. Si huele a gas o ve humo o fuego, salga de la casa y llame al 911.',
   ],
@@ -153,12 +157,12 @@ const PATTERNS = [
     (m, slot) => `Quedó agendado para ${slot}. El técnico traerá lo indicado.`,
   ],
   [
-    /^Got the label: a (.+?), made around (.+?)( going by the serial number)?, so about (\d+) years old\. I've added the model and serial for the technician\.$/,
+    /^I read the label: a (.+?), made around (.+?)( going by the serial number)?, so about (\d+) years old\. I've added the model and serial for the technician\.$/,
     (m, who, when, serial, age) =>
       `Ya leí la etiqueta: ${equipEs(who)}, fabricado alrededor de ${monthEs(when)}${serial ? ' según el número de serie' : ''}, o sea unos ${age} años. Agregué el modelo y la serie para el técnico.`,
   ],
   [
-    /^Got the label: a (.+?)\. I've added it for the technician\.$/,
+    /^I read the label: a (.+?)\. I've added it for the technician\.$/,
     (m, who) => `Ya leí la etiqueta: ${equipEs(who)}. La agregué para el técnico.`,
   ],
 ];

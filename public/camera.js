@@ -173,7 +173,7 @@ const Speech = {
         /* fall through */
       }
     }
-    if (Speech.natural) {
+    if (Speech.natural && Date.now() >= Speech.pausedUntil) {
       try {
         // Never more than 9 s waiting for the natural voice; the browser voice takes over (red team 10/30).
         const r = await api('/say', {
@@ -206,8 +206,15 @@ const Speech = {
           await player.play();
           return;
         }
+        // Only a server with no voice ends the natural voice. Misses pause it for 15 s, then it is tried
+        // again: the browser voice is near silent on iPhones while the mic is open (11/02 under-sink take:
+        // three misses switched the call to it for good, and the caller heard only the waiting lines).
         const why = (await r.json().catch(() => ({}))).code;
-        if (why === 'NO_TTS_KEY' || ++Speech.misses >= 3) Speech.natural = false;
+        if (why === 'NO_TTS_KEY') Speech.natural = false;
+        else if (why !== 'NOT_SAYABLE' && ++Speech.misses >= 3) {
+          Speech.misses = 0;
+          Speech.pausedUntil = Date.now() + 15000;
+        }
       } catch {
         /* fall through to the browser voice */
       }
@@ -268,8 +275,9 @@ const Speech = {
     if (!on && !Speech.speaking) Speech.next();
   },
   held: false,
-  // The natural voice is given up only when the server has none, or after three misses in a row.
+  // The natural voice is given up only when the server has none; three misses in a row pause it for 15 s.
   misses: 0,
+  pausedUntil: 0,
 };
 document.addEventListener('click', unlockAudio, { once: true, capture: true });
 window.Speech = Speech;

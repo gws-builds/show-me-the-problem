@@ -258,6 +258,7 @@ export function createSession({ now = () => Date.now() } = {}) {
       });
     },
     callerText: () => lines.join('\n'),
+    lastCallerLine: () => lines.at(-1) ?? '',
     quotedAt: () => quotedAt,
     setQuote(q) {
       quote = q;

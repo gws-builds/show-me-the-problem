@@ -70,11 +70,13 @@ const priced = (sentence) =>
   (STRONG.test(sentence) && ANY_NUMBER.test(sentence)) ||
   (SOFT.test(sentence) && !EQUIPMENT_TALK.test(sentence) && AMOUNT_LIKE.test(sentence));
 export const NO_PRICE_LINE = "The price comes only from the owner's list, once I have seen the problem.";
-export function noPrice(text) {
+// note: false once the verified price was said on this call; the model's own restatement is then dropped
+// without the "price comes only from the list" line (11/02 replay: it followed the $169 quote).
+export function noPrice(text, { note = true } = {}) {
   const parts = String(text ?? '').split(/(?<=[.!?])\s+/);
   const kept = parts.filter((p) => !priced(p));
   if (kept.length === parts.length) return { text: String(text ?? ''), blocked: false };
-  return { text: [...kept, NO_PRICE_LINE].join(' ').trim(), blocked: true };
+  return { text: [...kept, ...(note || !kept.length ? [NO_PRICE_LINE] : [])].join(' ').trim(), blocked: true };
 }
 
 /** True when the text carries an amount of money (used to blank model-written fields). */

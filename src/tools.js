@@ -16,6 +16,38 @@ const INSPECT_PROMPT = (q) =>
 
 const NOISE_WORDS =
   /\b(nois\w*|sound\w*|hum\w*|buzz\w*|knock\w*|bang\w*|rattl\w*|hiss\w*|whistl\w*|grind\w*|click\w*|squeal\w*|squeak\w*|gurgl\w*|roar\w*|loud|ruido\w*|zumb\w*|golpe\w*|silb\w*)\b/i;
+// The model sometimes names a row it never looked up ("microwave_turntable_repair", 11/02 take, when only
+// talking tools were left): the row sharing the most words with its id, equipment and issue stands in, only
+// when it is the single best match. The verifier still checks the row against the equipment seen.
+const words = (s) => new Set(String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+export function rowFor(list, id, equipment, issue) {
+  if (list.some((r) => r.id === id)) return id;
+  const want = words(`${id} ${equipment} ${issue}`);
+  const scored = list
+    .map((r) => ({ id: r.id, n: [...words(`${r.id} ${r.label} ${r.jobType}`)].filter((w) => want.has(w)).length }))
+    .sort((a, b) => b.n - a.n);
+  return scored[0]?.n >= 2 && scored[0].n > (scored[1]?.n ?? 0) ? scored[0].id : id;
+}
+
+// The quote result carries the real open slots, so the next question offers them (no check_calendar step).
+const openSlots = (ctx) => (ctx.calendar ?? []).slice(0, 3).map(({ id, label }) => ({ id, label }));
+
+// A slot the model named without checking the calendar ("thursday-pm", 11/02 take): the caller's day and
+// part of day pick the real slot. Returns the slot, { near } for the right day at another time, or null.
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+export function slotFor(slots, text, id) {
+  const exact = slots.find((s) => s.id === id);
+  if (exact) return exact;
+  const t = String(text ?? '').toLowerCase();
+  const day = DAYS.find((d) => t.includes(d) || t.includes(d.slice(0, 3)));
+  const pm = /\b(pm|afternoon|tarde)\b/.test(t);
+  const am = /\b(am|morning|ma[nñ]ana)\b/.test(t);
+  const onDay = day ? slots.filter((s) => s.label.toLowerCase().startsWith(day)) : [];
+  const fit = onDay.find((s) => (pm ? s.startHour >= 12 : am ? s.startHour < 12 : true));
+  if (fit) return fit;
+  return onDay.length ? { near: onDay[0] } : null;
+}
+
 const fn = (name, description, properties, required = Object.keys(properties)) => ({
   type: 'function',
   name,
@@ -148,7 +180,7 @@ export function speakable(session, line) {
       name: 'no panel opening',
       text: 'A line asking to open an electrical cover or touch inside was replaced in code.',
     });
-  const price = noPrice(panel.text);
+  const price = noPrice(panel.text, { note: !session.quote?.() });
   if (price.blocked)
     session.log({
       kind: 'code_gate',
@@ -342,7 +374,7 @@ export async function runTool(name, args, ctx) {
         {
           equipment: args.equipment,
           issue: args.issue,
-          priceListId: args.price_list_id,
+          priceListId: rowFor(ctx.priceList, args.price_list_id, args.equipment, args.issue),
           boxId: String(args.box_ordinal),
           notes: args.notes,
         },
@@ -368,11 +400,11 @@ export async function runTool(name, args, ctx) {
           ? ` Your ${plate.equipment !== 'other' ? plate.equipment : 'unit'} is about ${Math.round(plate.age)} years old by its label, and the technician will bring the model details.`
           : '';
         return {
-          output: v,
+          output: { ...v, slots: openSlots(ctx) },
           say: `For ${v.label} the price is $${(v.priceCents / 100).toFixed(2)}. The technician confirms on site.${age}`,
         };
       }
-      return { output: v, say: v.reason };
+      return { output: v.action === 'tech_confirms' ? { ...v, slots: openSlots(ctx) } : v, say: v.reason };
     }
     case 'inspect_frame': {
       const frame = session.latestFrame();
@@ -503,9 +535,14 @@ export async function runTool(name, args, ctx) {
     }
     case 'escalate':
       await ctx.notifyOwner?.({ urgent: true, reason: args.reason, transcript: session.callerText() });
+      // The gas and 911 line only when something on the call is a hazard (11/02 microwave take: a time the
+      // calendar lacked was handed to the owner with a gas warning).
       return {
         output: { escalated: true },
-        say: 'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.',
+        say:
+          hazardIn(session.callerText()) || session.checklist?.foundEscalating()
+            ? 'I am getting the owner on this right now. If you smell gas or see smoke or fire, leave the house and call 911.'
+            : 'I am getting the owner on this right now. They will call you back shortly.',
         status: 'escalated',
       };
     case 'request_booking': {
@@ -518,8 +555,16 @@ export async function runTool(name, args, ctx) {
       // A visit is requested only after the price check ran: a list price, or "the technician confirms" (red team 10/31, eval pp03).
       if (!session.quote() && session.lastVerify !== 'tech_confirms')
         return { output: { refused: 'no price decision yet: call propose_quote first' } };
-      const slot = ctx.calendar.find((s) => s.id === args.slot_id);
-      if (!slot) return { output: { error: 'unknown slot' } };
+      const slot = slotFor(ctx.calendar, `${args.slot_id ?? ''} ${session.lastCallerLine?.() ?? ''}`, args.slot_id);
+      if (!slot?.id) {
+        // A day the calendar has at another time, or no match at all: offer real slots, never hand it off.
+        const offer = slot?.near ? [slot.near] : ctx.calendar.slice(0, 2);
+        return {
+          output: { error: 'unknown slot', slots: ctx.calendar.slice(0, 3).map(({ id, label }) => ({ id, label })) },
+          say: `I have ${offer.map((s) => s.label).join(' or ')}. Does that work?`,
+          status: 'waiting_caller',
+        };
+      }
       const plate = session.plate?.();
       session.setPendingBooking({
         slot,

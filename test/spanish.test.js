@@ -65,7 +65,7 @@ test('lines with values: quote, booking, plate and "can\'t see yet" come out in 
   );
   assert.match(
     toLang(
-      "Got the label: a Rheem water heater, made around June 2014 going by the serial number, so about 12 years old. I've added the model and serial for the technician.",
+      "I read the label: a Rheem water heater, made around June 2014 going by the serial number, so about 12 years old. I've added the model and serial for the technician.",
       'es',
     ),
     /Rheem calentador de agua, fabricado alrededor de junio 2014 según el número de serie, o sea unos 12 años/,
