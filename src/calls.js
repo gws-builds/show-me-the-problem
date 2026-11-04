@@ -210,7 +210,10 @@ export function createCalls({
       (c.session.lang?.() ?? 'en') === 'en'
         ? `Let me look at the ${named}.`
         : null;
+    // Every turn is acknowledged at once, so the caller never sits in silence (founder 11/03 take: 20 s of nothing).
     if (ack) say(c, ack, c.status);
+    else if ((c.session.lang?.() ?? 'en') === 'en') say(c, 'One moment.', c.status);
+    else say(c, 'Un momento.', c.status);
     c.history.push({
       role: 'user',
       content: `Caller: ${line}${ack ? `\n(Code already said to the caller: "${ack}" Leave say_now empty this turn.)` : ''}`,
@@ -219,6 +222,23 @@ export function createCalls({
       await runTurn(c);
     } catch (err) {
       if (err.code === 'STALE') return;
+      // A slow turn keeps what it found and answers with it, instead of asking the caller to start over.
+      if (err.code === 'TURN_SLOW') {
+        c.history.push({
+          role: 'user',
+          content: 'The caller is waiting. Answer them now with what you already found.',
+        });
+        c.ctx.forceSpeak = true;
+        try {
+          await runTurn(c, 12_000);
+          return;
+        } catch (again) {
+          if (again.code === 'STALE') return;
+          err = again;
+        } finally {
+          c.ctx.forceSpeak = false;
+        }
+      }
       say(
         c,
         STOP_CODES.has(err.code)
@@ -239,7 +259,7 @@ export function createCalls({
     else c.history.push({ role: 'user', content });
   }
 
-  async function runTurn(c) {
+  async function runTurn(c, limitMs = LIMITS.turnMs) {
     const seq = (c.turnSeq = (c.turnSeq ?? 0) + 1);
     c.turnAbort?.abort();
     const ac = (c.turnAbort = new AbortController());
@@ -263,8 +283,8 @@ export function createCalls({
         new Promise((_, no) => {
           timer = setTimeout(() => {
             ac.abort();
-            no(new Error(`turn took over ${LIMITS.turnMs / 1000} s`));
-          }, LIMITS.turnMs);
+            no(Object.assign(new Error(`turn took over ${limitMs / 1000} s`), { code: 'TURN_SLOW' }));
+          }, limitMs);
         }),
       ]);
       if (seq !== c.turnSeq) throw Object.assign(new Error('a newer turn replaced this one'), { code: 'STALE' });
@@ -272,6 +292,12 @@ export function createCalls({
       afterAgent(c, r);
     } catch (err) {
       c.session.log({ kind: 'error', text: String(err.message ?? err).slice(0, 200) });
+      // What the slow turn already found (an outline, a look) stays in the call; a tool call cut off before
+      // its result is dropped so the history stays well formed.
+      if (err.code === 'TURN_SLOW' && seq === c.turnSeq) {
+        const done = new Set(history.filter((h) => h.type === 'function_call_output').map((h) => h.call_id));
+        c.history = history.filter((h) => h.type !== 'function_call' || done.has(h.call_id));
+      }
       throw err;
     } finally {
       clearTimeout(timer);
@@ -524,7 +550,9 @@ export function createCalls({
         c.scans < LIMITS.hazardScans &&
         // While the agent answers, the next scan waits, up to twice the usual gap: a parallel scan made a 2 s
         // agent step take 11 s (measured 11/02). The first scan of a call never waits.
-        (!c.lastScanAt || now() - c.lastScanAt >= LIMITS.scanEveryMs * (c.turnAbort ? 2 : 1))
+        // While the agent answers, no scan: a parallel scan slowed its steps on the same key (11/02: 2 s -> 11 s,
+        // 11/03 take: a 21 s first step). The first scan of a call still runs.
+        (!c.lastScanAt || (!c.turnAbort && now() - c.lastScanAt >= LIMITS.scanEveryMs))
       )
         c.scanP = scan(c);
       if (
@@ -540,7 +568,7 @@ export function createCalls({
       )
         c.tourP = tourTick(c);
       await track(c).catch(() => {});
-      if (!dark && !['escalated', 'booked', 'declined', 'handoff'].includes(c.status))
+      if (!dark && !c.turnAbort && !['escalated', 'booked', 'declined', 'handoff'].includes(c.status))
         c.plateP = plateWatch(c).catch(() => {}); // a model read: never holds up the frame reply
       return { ok: true };
     },

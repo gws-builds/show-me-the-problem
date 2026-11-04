@@ -14,7 +14,8 @@ export function createCameraLoops({ now, say, note, autoTurn, exclusive }) {
   // part on new frames; as soon as it is in view the agent continues by itself.
   async function track(c) {
     const t = c.tracking;
-    if (!t?.part || c.busy || t.checks >= LIMITS.trackChecks || now() - t.lastAt < LIMITS.trackEveryMs) return;
+    if (!t?.part || c.busy || c.turnAbort || t.checks >= LIMITS.trackChecks || now() - t.lastAt < LIMITS.trackEveryMs)
+      return;
     t.checks++;
     t.lastAt = now();
     await exclusive(c, async () => {

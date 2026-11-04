@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('hazard scans wait while the agent answers, but never past twice the usual gap', async () => {
+test('hazard scans wait while the agent answers and run again once it has answered', async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
@@ -54,7 +54,11 @@ test('hazard scans wait while the agent answers, but never past twice the usual 
   t += LIMITS.scanEveryMs;
   await frame();
   await calls.scanDone(c.id);
-  assert.ok(scans > first, 'past twice the gap, the scan runs anyway');
+  assert.equal(scans, first, 'still none while the turn runs (11/03: a parallel read made a step take 21 s)');
   release();
   await turn.catch(() => {});
+  t += LIMITS.scanEveryMs;
+  await frame();
+  await calls.scanDone(c.id);
+  assert.ok(scans > first, 'the scan runs again once the agent has answered');
 });

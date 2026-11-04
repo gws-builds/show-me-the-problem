@@ -12,6 +12,9 @@ import { detectLang } from './i18n.js';
 
 export const MAX_STEPS = 6; // tool steps per caller turn
 export const SPEAK_BY_MS = 4000; // after this, the turn's next step must talk to the caller
+// One model step that has not answered in this long is stopped and asked again, once, for the answer only
+// (founder 11/03 take: a first step took 21 s while other reads queued on the same key, and the turn died).
+export const STEP_MS = Number(process.env.AGENT_STEP_MS) || 7000;
 // price_list and check_calendar stay offered: they are instant lookups in code, and without them "How much?"
 // and "Book it" could never reach propose_quote or request_booking once the turn had to speak (11/02 replay).
 const TALKING = [
@@ -319,6 +322,31 @@ export function createSession({ now = () => Date.now() } = {}) {
   };
 }
 
+/** client.respond, stopped after STEP_MS (code STEP_SLOW) so a stuck step can be asked again. */
+export async function respondWithin(client, req, ms = STEP_MS) {
+  const ac = new AbortController();
+  const outer = req.signal;
+  const stop = () => ac.abort();
+  outer?.addEventListener?.('abort', stop, { once: true });
+  let timer;
+  try {
+    return await Promise.race([
+      client.respond({ ...req, signal: ac.signal }),
+      new Promise((_, no) => {
+        timer = setTimeout(() => {
+          if (outer?.aborted) return;
+          // Reject first: aborting rejects the request at once, and the race must report the slow step.
+          no(Object.assign(new Error(`model step over ${ms} ms`), { code: 'STEP_SLOW' }));
+          ac.abort();
+        }, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener?.('abort', stop);
+  }
+}
+
 /** One caller turn. Returns { say, status }. */
 export async function callerTurn(ctx, history, { signal = null } = {}) {
   const { client, session } = ctx;
@@ -333,7 +361,7 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     // Two tool results, or 8 s, and still no line: the caller has waited long enough (11/02 takes: turns ran
     // 27-60 s and the 30 s stop said "Sorry, I lost that"). From here the model is offered only the tools
     // that talk, so the next step is the answer.
-    const mustSpeak = step >= 2 || (step >= 1 && Date.now() - started > SPEAK_BY_MS);
+    const mustSpeak = ctx.forceSpeak || step >= 2 || (step >= 1 && Date.now() - started > SPEAK_BY_MS);
     if (mustSpeak && !nudged) {
       nudged = true;
       history.push({
@@ -345,13 +373,29 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
     const stepAt = Date.now();
-    const res = await client.respond({
-      instructions: instructionsFor(session, ctx),
-      input: history,
-      tools: mustSpeak || (step === 0 && straightToAnswer(session)) ? SPEAKING_TOOLS : DEFINITIONS,
-      signal,
-      ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
-    });
+    const ask = (speakOnly) =>
+      respondWithin(client, {
+        instructions: instructionsFor(session, ctx),
+        input: history,
+        tools: speakOnly || (step === 0 && straightToAnswer(session)) ? SPEAKING_TOOLS : DEFINITIONS,
+        signal,
+        ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
+      });
+    let res;
+    try {
+      res = await ask(mustSpeak);
+    } catch (err) {
+      if (err.code !== 'STEP_SLOW') throw err;
+      session.log({ kind: 'step_retry', step, ms: Date.now() - stepAt });
+      if (!nudged) {
+        nudged = true;
+        history.push({
+          role: 'user',
+          content: `Speak to the caller now with what you already know: answer what they just said, in one or two short sentences. If they asked for a price or a booking, go straight on with propose_quote or request_booking, using the rows and slots in your instructions.`,
+        });
+      }
+      res = await ask(true);
+    }
     history.push(...(res.output ?? []));
     const call = (res.output ?? []).find((o) => o.type === 'function_call');
     if (!call) {
