@@ -65,6 +65,16 @@ setImmediate(() => {
 // Open voice sockets by call, so a new line is pushed at once instead of waiting for the 0.7 s poll.
 const sockets = new Map();
 const glimmer = createGlimmer();
+// Every GPU start or draft pushes a Modal-spend line (founder 11/04); the alert throttles itself.
+if (glimmer) {
+  for (const m of ['warm', 'draft']) {
+    const fn = glimmer[m];
+    glimmer[m] = (...a) => {
+      alerts.gpuUsed();
+      return fn.apply(glimmer, a);
+    };
+  }
+}
 // Glimmer's GPU is never kept up on a timer (11/03: a 90 s keep-warm ping ran all day with the recording
 // session, about 21 L40S hours, $42). A recorded take warms it when its voice starts instead; a booking
 // that waits for the owner warms it too (calls.js). Modal scales it down 120 s after the last request.

@@ -37,3 +37,13 @@ test('judge-link alerts: one push per new visitor, none for a returning one, no 
   ]);
   assert.ok(sent.every((t) => !t.includes('203.0') && !t.includes('198.51')));
 });
+
+test('GPU alerts: one push per use, at most one per 5 minutes', async () => {
+  const sent = [];
+  const a = createAlerts({ topic: 't', fetchImpl: async (url, init) => (sent.push(String(init.body)), { ok: true }) });
+  await a.gpuUsed(0);
+  await a.gpuUsed(60e3);
+  await a.gpuUsed(6 * 60e3);
+  assert.equal(sent.length, 2);
+  assert.match(sent[1], /use 2 this run/);
+});

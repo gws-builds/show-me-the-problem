@@ -10,6 +10,8 @@ export function createAlerts({
 } = {}) {
   let calls = 0;
   let step = 0;
+  let gpu = 0;
+  let lastGpu = -Infinity;
   // Who opened the link, by network address, held in memory only and never sent: the push says "visitor 2",
   // so the founder can tell one judge returning from a new person. shortcut: resets when the container
   // scales to zero; persist it if the counts must span runs.
@@ -39,6 +41,16 @@ export function createAlerts({
       calls += 1;
       return push(
         `Judge link: call ${calls} started${footage ? ' (recorded footage)' : ' (live camera)'}. Spent this run ${usd(spentUsd)}${stopUsd ? ` of ${usd(stopUsd)}` : ''}.`,
+      );
+    },
+    // Founder 11/04: Modal spend on the phone too. One push per GPU use, at most one per 5 minutes (a
+    // booking warms the GPU, then drafts on it). Modal bills the L40S at $0.000542/s ($1.95/h).
+    gpuUsed(now = Date.now()) {
+      if (now - lastGpu < 5 * 60e3) return Promise.resolve(false);
+      lastGpu = now;
+      gpu += 1;
+      return push(
+        `Modal GPU (Glimmer, L40S, $1.95/h) started for a booking, use ${gpu} this run. It stops 2 min after its last request; one booking with a cold start is roughly $0.15-0.30.`,
       );
     },
     spend({ spentUsd = 0, stopUsd = null } = {}) {
