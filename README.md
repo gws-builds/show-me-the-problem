@@ -1,8 +1,24 @@
 # Show Me the Problem
 
-*Built for the "Build for Your World" theme: the trade businesses that keep homes running.*
+**A live call that sees, for plumbing, HVAC, electrical and appliance repair businesses.** The homeowner points their phone at what is broken. Meta's models outline the part on the live camera, an agent asks the one question that changes the price, quotes from the owner's own price list, and books the visit once the owner taps approve. Built for the Meta Global AI Developer Hackathon, Startup track, "Build for Your World" (building period Oct 27 – Nov 4, 2026). Everything in this repository is new.
 
-**A live call that sees.** A homeowner calls a plumbing, HVAC, electrical or appliance repair business and points their phone at what is broken. An agent built on Meta's models:
+**Demo video (2:53):** VIDEO_LINK
+
+[![A live call: the microwave hub is outlined by SAM 3.1 and priced from the owner's list](docs/demo.jpg)](VIDEO_LINK)
+
+## For judges (2 minutes)
+
+| | |
+|---|---|
+| **What is new** | All of it: the agent loop, tools, SAM grounding, guidance, realtime voice relay, safety gates, evidence ledger, owner page, eval and tests (first commit Oct 27). Our existing product, Unmanually, is not in this repository; the demo uses a fictional business. |
+| **Meta models (7)** | Muse Spark 1.3 (the agent, 10+ tools), SAM 3.1 (live outlines; must confirm every camera hazard), Muse Voice Transcribe 1.0 (realtime ASR, English and Spanish), Muse Wonder 1.0 (technician's plan after approval), Muse Image 1.0 (illustration, labelled "not evidence"), Muse Glimmer 30B open weights on the business's own GPU (truck list and confirmation text), Llama Prompt Guard 2 86M (screens every caller line on the hosted copy). The voice output (Deepgram Aura-2) is the only non-Meta model: Meta has no text-to-speech. |
+| **What code decides, not the model** | Prices only from the owner's list and only when SAM saw the part; spoken hazards stop quoting before any model call; camera hazards need Spark and SAM to agree; nothing is booked until the owner approves; every claim on the work order cites evidence. |
+| **Measured (eval, 61 cases on public photos, Nov 2)** | 60 of 61 passed; 10 of 10 spoken hazards and 3 of 3 camera hazards escalated; 0 false escalations; 5 of 5 prompt-injection attempts (spoken, a printed sign on a panel, a fake rating plate) changed nothing. |
+| **The four recorded calls (Nov 3, `data/replays`)** | $0.13–0.26 of model spend per call (capped in code at $0.25, $0.60 for a guided tour). Time to a useful answer after the caller stops talking: median 6.0 s, p90 10.9 s across 24 turns; the phone says a short holding line within 0.15 s so the caller never waits in silence. Three of the four calls were booked by the owner. |
+| **Run it in 3 commands** | `npm ci && npm run check` (lint, format and 262 tests) · `npm start` with no key replays the four recorded calls · `META_API_KEY=... npm start` runs live on http://127.0.0.1:8642 |
+| **Where to look** | `src/agent.js` + `src/tools.js` (agent and tools), `src/verifier.js` + `src/hazards.js` + `src/filters.js` (gates), `src/locate.js` (SAM + Spark grounding), `eval/` (cases and results), `test/` (red-team tests). |
+
+## What it does
 
 - outlines the part on the live camera and steers the phone with arrows and voice ("tilt up, closer, hold still") until the view is usable;
 - leads a **guided tour** for someone who has never been in the room (boiler room, under a sink, an electrical panel): it names every part on screen with a label on its outline and a status (looks normal, needs attention, safety issue, can't tell from this angle), and keeps a "found in this room" list;
@@ -16,8 +32,6 @@
 - reads the equipment's rating plate and dates it from the serial number with published rules (code, not the model);
 - explains parts from a library of 16 public-domain trade manuals (US Navy, US Army, HUD, OSHA, EPA), cited to the page;
 - covers kitchen appliances (microwave, including the over-the-range fan; oven and range; range hood; fridge, freezer and wine cooler), commercial equipment (rooftop units, plant rooms, switchgear) and whole calls in Spanish.
-
-Built for the Meta Global AI Developer Hackathon (building period Oct 27 – Nov 4, 2026).
 
 ## Why it is not an image analyzer
 
@@ -125,7 +139,7 @@ On the start page, **Start a call** gives three links: the camera page (the call
 
 Every page needs the access code: open `http://127.0.0.1:8642/k/<code from .data/access_code>`.
 
-The phone camera needs HTTPS. For a recording session, `scripts/record_session.sh` starts the server on 127.0.0.1, a Cloudflare quick tunnel to it (temporary https URL, no account), prints the phone link with the code as text and a terminal QR (`scripts/qr.mjs`, no dependencies), opens the Agent Console in its own window (`/console#latest` follows the newest call) and records the Mac screen into `recordings/`; Ctrl-C stops all of it. `--no-tunnel` runs it locally. In this private session (`RECORDING_SESSION=1`) the founder's takes are not held to the per-place limits (the session spend stop still applies), only the Mac's own console recorder follows the newest call, and the Muse Glimmer GPU is kept warm so the owner step never waits for a cold start. The phone opens **Pick a take** (`/go`): each take starts a call with a script card, a "start your screen recording now" cue that waits for "I'm recording", and a "you can stop recording now" cue at the end (`public/takes.json`).
+The phone camera needs HTTPS. For a recording session, `scripts/record_session.sh` starts the server on 127.0.0.1, a Cloudflare quick tunnel to it (temporary https URL, no account), prints the phone link with the code as text and a terminal QR (`scripts/qr.mjs`, no dependencies), opens the Agent Console in its own window (`/console#latest` follows the newest call) and records the Mac screen into `recordings/`; Ctrl-C stops all of it. `--no-tunnel` runs it locally. In this private session (`RECORDING_SESSION=1`) the founder's takes are not held to the per-place limits (the session spend stop still applies), only the Mac's own console recorder follows the newest call, and each take starts the Muse Glimmer GPU when it begins, so the owner step rarely waits for a cold start (no keep-warm timer: the GPU scales to zero after use). The phone opens **Pick a take** (`/go`): each take starts a call with a script card, a "start your screen recording now" cue that waits for "I'm recording", and a "you can stop recording now" cue at the end (`public/takes.json`).
 
 ## Code layout
 
