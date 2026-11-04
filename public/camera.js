@@ -418,6 +418,10 @@ async function sendFrame() {
       n++;
     }
   const luma = Math.round(sum / n);
+  // A pure black picture is iOS cutting the page's camera and microphone (founder 11/03 take: from then on
+  // nothing he said was heard). Real darkness is never exactly 0: open them again.
+  blackFrames = luma === 0 ? blackFrames + 1 : 0;
+  if (blackFrames >= 2 && !FOOTAGE) void reopen('black picture');
   $('luma').textContent = `light ${luma}/255${luma < 45 ? ' (too dark)' : ''}`;
   await api('/frame', {
     method: 'POST',
@@ -699,6 +703,51 @@ $('typed').addEventListener('submit', async (e) => {
   $('heard').textContent = j.heard ? `You said: "${j.heard}"` : j.error || '';
 });
 
+// ---- recovery: iOS can cut the camera and microphone mid-call (another app's audio, a notification,
+// the screen dimming). Watch the tracks and the picture, and open both again without the caller doing anything.
+let blackFrames = 0;
+let reopening = false;
+let lastReopen = 0;
+function watchTracks(s) {
+  for (const t of s.getTracks()) {
+    t.addEventListener('ended', () => void reopen(`${t.kind} ended`));
+    t.addEventListener('mute', () => setTimeout(() => t.muted && void reopen(`${t.kind} muted`), 1500));
+  }
+}
+async function reopen(why) {
+  if (reopening || !started || Date.now() - lastReopen < 3000) return;
+  reopening = true;
+  lastReopen = Date.now();
+  try {
+    const fresh = await openCamera();
+    for (const t of stream?.getVideoTracks() ?? []) t.stop();
+    stream = fresh;
+    media().srcObject = new MediaStream(stream.getVideoTracks());
+    await media()
+      .play()
+      .catch(() => {});
+    setupTorch(stream.getVideoTracks()[0]);
+    setupZoom(stream.getVideoTracks()[0]);
+    window.Voice?.swapMic(stream.getAudioTracks()[0]);
+    watchTracks(stream);
+    blackFrames = 0;
+    console.info('camera and microphone reopened:', why);
+  } catch (err) {
+    $('heard').textContent = 'The camera or microphone was turned off. Tap the screen to turn them back on.';
+  } finally {
+    reopening = false;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !started || FOOTAGE) return;
+  if (stream?.getTracks().some((t) => t.readyState === 'ended' || t.muted)) void reopen('back to the page');
+});
+// A tap is a user gesture: iOS allows reopening then even when it refused in the background.
+document.addEventListener('touchend', () => {
+  if (started && !FOOTAGE && (blackFrames || stream?.getTracks().some((t) => t.readyState === 'ended' || t.muted)))
+    void reopen('tap');
+});
+
 // ---- start ----
 async function start() {
   if (FOOTAGE) {
@@ -729,6 +778,7 @@ async function start() {
     setupTorch(stream.getVideoTracks()[0]);
     setupZoom(stream.getVideoTracks()[0]);
     window.Voice?.startFromStream(stream, id, cam);
+    watchTracks(stream);
   }
   started = true;
   $('consent').hidden = true;

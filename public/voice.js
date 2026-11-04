@@ -351,6 +351,17 @@ window.Voice = (() => {
   }
 
   return {
+    /** A fresh microphone track after iOS cut the old one (camera.js reopen): swapped into the same graph. */
+    swapMic(fresh) {
+      if (!ctx || !node || !fresh) return;
+      ctx.resume?.().catch(() => {});
+      const src = ctx.createMediaStreamSource(new MediaStream([fresh]));
+      src.connect(node);
+      micSource?.disconnect();
+      micTrack?.stop();
+      micTrack = fresh;
+      micSource = src;
+    },
     async startFromStream(stream, id, token) {
       callId = id;
       camToken = token;

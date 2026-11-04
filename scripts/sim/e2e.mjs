@@ -153,8 +153,8 @@ const fakeArgs = (video, audio) => [
 ];
 const view = (page) =>
   page.evaluate(async () => {
-    const id = location.hash.slice(1).split('.')[0];
-    const r = await fetch(`/api/calls/${id}`);
+    const [id, cam] = location.hash.slice(1).split('.');
+    const r = await fetch(`/api/calls/${id}`, { headers: { 'x-cam-token': cam ?? '' } });
     return r.ok ? r.json() : null;
   });
 
