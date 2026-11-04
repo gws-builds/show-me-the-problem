@@ -114,11 +114,11 @@ After the owner approves, the visit is a calendar invite (`src/ics.js`, RFC 5545
 ## Run it
 
 ```bash
-npm run check                         # eslint + prettier + 221 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
+npm run check                         # eslint + prettier + 262 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 node eval/fetch_photos.mjs            # once: downloads the eval photos (freely licensed, not committed)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models
-npm start                             # no key: "Recorded calls" replays the demo takes in data/replays (added with the demo video)
+npm start                             # no key: "Recorded calls" replays the four Nov 3 demo calls in data/replays (events and lines only; phone digits masked)
 ```
 
 On the start page, **Start a call** gives three links: the camera page (the caller), the owner page (approve), and the Agent Console (every step, check, evidence entry, cost and latency, live). **Recorded calls** lists replays.

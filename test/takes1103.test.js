@@ -64,3 +64,11 @@ test('a tour with nothing flagged does not point at "everything else" (red team 
   const s = summary({ room: 'electrical_panel', found });
   assert.match(s, /Nothing that needs attention was visible\.$/);
 });
+
+test('a work order with no worn-part hypothesis never lists a faucet kit (red team #11: a microwave job did)', async () => {
+  const { workOrder } = await import('../src/evidence.js');
+  const session = { evidence: { list: () => [] }, checklist: { list: () => [] } };
+  const wo = workOrder(session, {});
+  assert.doesNotMatch(wo.partsToBring, /faucet/i);
+  assert.match(wo.partsToBring, /confirm parts on site/i);
+});

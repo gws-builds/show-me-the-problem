@@ -112,7 +112,7 @@ export function workOrder(session, { slot = null, quote = null } = {}) {
     tour: ev.filter((e) => e.kind === 'tour').map((e) => ({ claim: e.claim, evidence: e.id, frame: e.frame })),
     sounds: ev.filter((e) => e.kind === 'sound').map((e) => ({ claim: e.claim, evidence: e.id })),
     hypothesis: hyp ? { claim: hyp.claim, evidence: hyp.id, cites: hyp.cites } : null,
-    partsToBring: hyp ? PARTS[hyp.part] : 'Standard faucet repair kit; confirm on site',
+    partsToBring: hyp ? PARTS[hyp.part] : 'Not known from the call; confirm parts on site', // a faucet kit was listed for a microwave (red team #11)
     hazards: checks
       .filter((c) => c.status === 'found' || c.status === 'unconfirmed')
       .map((c) => ({ label: c.label, status: c.status, detail: c.detail, frame: c.frame })),
