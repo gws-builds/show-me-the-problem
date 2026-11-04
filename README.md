@@ -4,7 +4,7 @@
 
 **Demo video (2:53):** VIDEO_LINK
 
-[![A live call: the microwave hub is outlined by SAM 3.1 and priced from the owner's list](docs/demo.jpg)](VIDEO_LINK)
+[![A live call: SAM 3.1 outlines the supply line under a sink as the caller points](docs/demo.jpg)](VIDEO_LINK)
 
 ## For judges (2 minutes)
 
