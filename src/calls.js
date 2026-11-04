@@ -220,7 +220,8 @@ export function createCalls({
     });
     try {
       await runTurn(c);
-    } catch (err) {
+    } catch (first) {
+      let err = first;
       if (err.code === 'STALE') return;
       // A slow turn keeps what it found and answers with it, instead of asking the caller to start over.
       if (err.code === 'TURN_SLOW') {

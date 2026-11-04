@@ -18,6 +18,8 @@ const words = (s) =>
     .toLowerCase()
     .match(/[a-z0-9áéíóúñü']+/g) ?? [];
 
+const REPLY_START = new Set(['yes', 'yeah', 'yep', 'no', 'nope', 'nah', 'sí', 'si', 'not', 'only', 'both', 'neither']);
+
 /** True when a heard line is mostly the agent's own last line (its voice came back through the mic). */
 export function isEcho(heard, agentLines) {
   const w = words(heard);
@@ -25,6 +27,9 @@ export function isEcho(heard, agentLines) {
   // In the agent's word order, not just the same words: an echo replays the line, a caller rewords it.
   return agentLines.some((line) => {
     const lw = words(line);
+    // A reply to the agent's question picks one of its options ("No, just a slow drip"): it opens with an
+    // answer word the line does not open with (11/03 take: dropped as an echo, 28 s of silence).
+    if (REPLY_START.has(w[0]) && lw[0] !== w[0] && /\?\s*$/.test(String(line).trim())) return false;
     let i = 0;
     let hit = 0;
     for (const x of w) {
