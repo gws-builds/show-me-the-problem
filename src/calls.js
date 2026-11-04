@@ -25,6 +25,9 @@ import { createListen } from './calls/listen.js';
 import { LIMITS, SPOKEN_CUES, CallError, speakMs, newId, nextSlots } from './calls/shared.js';
 import { viewOf } from './calls/view.js';
 
+// A plain yes to an offer the call just made (English and Spanish).
+const ACCEPTS = /^\s*(yes|yeah|yep|sure|please|ok(ay)?|go ahead|s[ií]|claro|por favor)(?=[^a-zà-ÿ]|$)/i;
+
 export { WAITING_LINES, SPOKEN_CUES, LIMITS, speakMs, CallError } from './calls/shared.js';
 
 /**
@@ -180,6 +183,15 @@ export function createCalls({
     }
     if (guard && !g) c.session.log({ kind: 'guard_unavailable', text: 'Prompt Guard did not answer; turn continued.' });
     c.session.heard(line);
+    if (c.pendingOffer === 'price') {
+      c.pendingOffer = null;
+      if (ACCEPTS.test(line))
+        c.history.push({
+          role: 'user',
+          content:
+            'The caller said yes to your offer of a price for a visit. Call propose_quote now, with the price list row that fits what they described.',
+        });
+    }
     const cl = c.session.checklist;
     cl.set('words', 'clear', null, `No hazard words in ${c.turns} caller turn(s); last: "${line.slice(0, 80)}"`);
     // Mid-tour questions ("what's that pipe?", "is that normal?") are answered from what the tour has seen so far.

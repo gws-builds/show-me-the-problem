@@ -46,7 +46,7 @@ export function createTts({
       {
         method: 'POST',
         headers: { Authorization: `Token ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: t }),
+        body: JSON.stringify({ text: spoken(t) }),
         // A slow voice never holds up the call: after 8 s the browser voice says it instead.
         signal: AbortSignal.timeout(8000),
       },
@@ -85,4 +85,17 @@ export function sentences(text, { minChars = 25, maxParts = 4 } = {}) {
   if (parts.length > 1 && parts[parts.length - 1].length < minChars) parts[parts.length - 2] += ` ${parts.pop()}`;
   while (parts.length > maxParts) parts[maxParts - 1] += ` ${parts.splice(maxParts).join(' ')}`;
   return parts;
+}
+
+/**
+ * The line as it should sound; the screen keeps the written form (red team #10 M4: "9-11 AM" was heard as
+ * "nine eleven", "$169.00" with its cents, brackets read out, "NAVIEN" spelled in capitals).
+ */
+export function spoken(text) {
+  return String(text)
+    .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(AM|PM)\b/gi, '$1 to $2 $3')
+    .replace(/\$(\d[\d,]*)\.00\b/g, '$$$1')
+    .replace(/\s*\(([^)]{1,60})\)/g, ', $1,')
+    .replace(/,\s*([.!?:])/g, '$1')
+    .replace(/\b([A-Z])([A-Z]{4,})\b/g, (_m, a, b) => a + b.toLowerCase());
 }

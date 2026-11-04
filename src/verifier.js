@@ -98,7 +98,23 @@ const JOB_PARTS = {
   'water heater': ['water heater', 'heater', 'tank', 'relief', 'valve', 'pipe', 'anode'],
   'breaker panel': ['panel', 'breaker'],
   'air conditioner': ['air conditioner', 'condenser', 'unit', 'fan', 'disconnect'],
-  pipe: ['pipe', 'valve', 'fitting', 'joint'],
+  // Under a sink SAM finds the lines as "hose" or "supply line", the leak at a "nut" (11/03 take, red team #10 H1).
+  pipe: [
+    'pipe',
+    'valve',
+    'fitting',
+    'joint',
+    'supply line',
+    'hose',
+    'line',
+    'nut',
+    'coupling',
+    'connector',
+    'trap',
+    'drain',
+    'tailpiece',
+    'shut-off',
+  ],
   'sump pump': ['sump', 'pump', 'pit'],
   'garbage disposal': ['disposal', 'sink'],
   thermostat: ['thermostat'],
@@ -108,7 +124,7 @@ const JOB_PARTS = {
   toilet: ['toilet', 'tank', 'flapper', 'fill valve', 'valve'],
   furnace: ['furnace', 'filter', 'vent'],
   'heat pump': ['heat pump', 'air conditioner', 'condenser', 'unit', 'filter'],
-  lights: ['lamp', 'light', 'fixture', 'switch', 'dimmer'],
+  lights: ['lamp', 'light', 'fixture', 'switch', 'dimmer', 'panel', 'breaker'], // flicker is checked at the panel
   'smoke alarm': ['smoke', 'detector', 'alarm'],
   // Commercial and industrial (red team #5: no commercial row could ever be quoted).
   'rooftop unit': ['rooftop', 'rtu', 'unit', 'condenser', 'air handler', 'fan', 'hvac'],

@@ -157,7 +157,16 @@ export function createVoiceSession({ calls, callId, client, apiKey, openUpstream
       // While the phone is talking, a short phrase made only of its own line's words, in order, is that line
       // coming back (11/02 takes: "The faucet" from "...at the faucet base" became a caller turn).
       const ownWords = playingAtStart && short && agentLines.some((l) => inOrder(text, l));
-      if (echoPossible && (!short || echoOnset || ownWords) && (isEcho(text, agentLines) || fillerEcho)) {
+      // An answer to the agent's question that starts after the question finished playing is the caller: echo
+      // comes back while the line plays, and callers answer option questions quickly with its own words
+      // ("Just a slow drip", "wall hung"; red team #10 M2).
+      const answersQuestion = reported && !playingAtStart && /\?\s*$/.test(String(agentLines.at(-1) ?? '').trim());
+      if (
+        echoPossible &&
+        !answersQuestion &&
+        (!short || echoOnset || ownWords) &&
+        (isEcho(text, agentLines) || fillerEcho)
+      ) {
         calls.logEvent(callId, { kind: 'echo_dropped', text });
         return send({ type: 'ignored', text });
       }

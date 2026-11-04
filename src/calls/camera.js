@@ -216,7 +216,12 @@ export function createCameraLoops({ now, say, note, autoTurn, exclusive }) {
       }
       if (r.done) {
         note(c, tourMemo(c.tour));
-        say(c, 'Would you like a price for a visit to look at any of this?', 'waiting_caller');
+        // The agent must know what code just asked, or the caller's "Yes" answers a question it never saw
+        // (11/03 panel take: "Yes" got another question instead of a price; red team #10 H2).
+        const offer = 'Would you like a price for a visit to look at any of this?';
+        note(c, `(You just said to the caller: "${offer}")`);
+        c.pendingOffer = 'price';
+        say(c, offer, 'waiting_caller');
         c.session.log({
           kind: 'tour_done',
           text: `Tour of the ${c.tour.room.replace('_', ' ')} finished after ${c.tour.step} steps.`,

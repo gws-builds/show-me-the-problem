@@ -15,6 +15,11 @@ export const SPEAK_BY_MS = 4000; // after this, the turn's next step must talk t
 // One model step that has not answered in this long is stopped and asked again, once, for the answer only
 // (founder 11/03 take: a first step took 21 s while other reads queued on the same key, and the turn died).
 export const STEP_MS = Number(process.env.AGENT_STEP_MS) || 7000;
+// A step still out at this point gets a second, quick speak-only request beside it; whichever answers first
+// is used (red team #10 H3: aborting at 7 s and starting over made 4 turns 8.4-10.9 s on 11/03).
+export const HEDGE_MS = Number(process.env.AGENT_HEDGE_MS) || 4000;
+const SPEAK_NOW =
+  'Speak to the caller now with what you already know: answer what they just said, in one or two short sentences. If they asked for a price or a booking, go straight on with propose_quote or request_booking, using the rows and slots in your instructions.';
 // price_list and check_calendar stay offered: they are instant lookups in code, and without them "How much?"
 // and "Book it" could never reach propose_quote or request_booking once the turn had to speak (11/02 replay).
 const TALKING = [
@@ -56,7 +61,7 @@ Rules:
 - Never ask the caller to switch on or run equipment just so you can see or hear it. Never ask anyone to run a microwave (running it empty damages it).
 - Microwave turntable that does not turn but still heats: ask them to lift out the glass tray and show the roller ring and the hub (coupler) under it; inspect_frame; then propose_quote with the turntable repair row.
 - Never say "got it" or "on it" in any form. Never say "I see" unless a tool output shows it.
-- Under the sink: if the caller says the leak is underneath, under the sink, under the cabinet or below the counter, the camera is inside the sink cabinet and the top of the faucet is NOT in view. Never ask to see the faucet, its handle or its spout, and never tell them to tilt up to it. What they show is the faucet's underside: the supply lines, the coupling nuts where those meet the faucet's tailpieces, the mounting nut, the shut-off valves and the drain trap. find_part "supply line" (or "pipe"), then inspect_frame. When they point at something ("this ring", "here", "where this cable goes"), it is in the current frame: inspect_frame to see it and answer about it. Water at a ring or nut where a supply line meets the faucet = a loose coupling nut or a worn supply line; water at the trap = a loose slip nut.
+- Under the sink: if the caller says the leak is underneath, under the sink, under the cabinet or below the counter, the camera is inside the sink cabinet and the top of the faucet is NOT in view. Never ask to see the faucet, its handle or its spout, and never tell them to tilt up to it. What they show is the faucet's underside: the supply lines, the coupling nuts where those meet the faucet's tailpieces, the mounting nut, the shut-off valves and the drain trap. find_part "supply line" (or "pipe"), then inspect_frame. When they point at something ("this ring", "here", "where this cable goes"), it is in the current frame: inspect_frame to see it and answer about it. Water at a ring or nut where a supply line meets the faucet = a loose coupling nut or a worn supply line; water at the trap = a loose slip nut. Once the caller has shown or tapped where the water comes from, believe them: a slow drip rarely shows in one frame, so never tell them you see no water there. Say "I can't catch the drip in this frame, but water at that nut usually means..." and go on: record_hypothesis, offer shutoff_guide for the sink if it is leaking now, then propose_quote with the leak row (11/03 take: the agent said "no water" three times to a caller pointing at the leak).
 - Only when the caller describes a dripping faucet or tap above the counter: find_part "faucet"; if the drip comes from under the spout or the handle, guide the camera to the spout and handle base; inspect_frame for the faucet type (single-handle cartridge, two-handle compression, ball) and where the water appears; record_hypothesis (cartridge or o-ring); if water is leaking now or before any repair, offer shutoff_guide for the sink; propose_quote; request_booking.
 - Water shut-off steps come only from shutoff_guide. Never give steps for gas valves or gas appliances.
 - Any sign of gas, sparks, scorching, exposed wiring, water near electrical, carbon monoxide or structural damage: call escalate at once. Electrical checks are visual only; never claim a measurement.
@@ -347,6 +352,54 @@ export async function respondWithin(client, req, ms = STEP_MS) {
   }
 }
 
+/**
+ * client.respond for `req`; if it has not answered after `hedgeMs`, `hedge` is sent beside it and the first
+ * answer wins (the other is stopped). An answer from the hedge carries `hedged: true`. After `ms` with no
+ * answer it rejects with code STEP_SLOW. A failure before the hedge starts is reported at once.
+ */
+export function respondHedged(client, req, hedge, { hedgeMs = HEDGE_MS, ms = STEP_MS, onHedge = () => {} } = {}) {
+  const outer = req.signal;
+  const controllers = [];
+  const stopAll = () => controllers.forEach((a) => a.abort());
+  outer?.addEventListener?.('abort', stopAll, { once: true });
+  let settled = false;
+  let pending = 0;
+  let hedgeTimer;
+  let slowTimer;
+  return new Promise((resolve, reject) => {
+    const done = (fn, v) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hedgeTimer);
+      clearTimeout(slowTimer);
+      outer?.removeEventListener?.('abort', stopAll);
+      fn(v); // settle first: stopping the loser rejects it at once
+      stopAll();
+    };
+    const launch = (r, mark) => {
+      const ac = new AbortController();
+      controllers.push(ac);
+      pending++;
+      client.respond({ ...r, signal: ac.signal }).then(
+        (res) => done(resolve, mark ? Object.assign(res ?? {}, { hedged: true }) : res),
+        (err) => {
+          if (--pending === 0) done(reject, err);
+        },
+      );
+    };
+    hedgeTimer = setTimeout(() => {
+      if (outer?.aborted || settled) return;
+      onHedge();
+      launch(hedge, true);
+    }, hedgeMs);
+    slowTimer = setTimeout(() => {
+      if (outer?.aborted) return;
+      done(reject, Object.assign(new Error(`model step over ${ms} ms`), { code: 'STEP_SLOW' }));
+    }, ms);
+    launch(req, false);
+  });
+}
+
 /** One caller turn. Returns { say, status }. */
 export async function callerTurn(ctx, history, { signal = null } = {}) {
   const { client, session } = ctx;
@@ -373,14 +426,26 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
     // mostly turn that result into the next call or the line, so they run at minimal effort
     // (1.6 s a step against 3.4 s at default, measured Oct 29). Founder 10/31: latency.
     const stepAt = Date.now();
+    const instructions = instructionsFor(session, ctx);
     const ask = (speakOnly) =>
-      respondWithin(client, {
-        instructions: instructionsFor(session, ctx),
-        input: history,
-        tools: speakOnly || (step === 0 && straightToAnswer(session)) ? SPEAKING_TOOLS : DEFINITIONS,
-        signal,
-        ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
-      });
+      respondHedged(
+        client,
+        {
+          instructions,
+          input: history,
+          tools: speakOnly || (step === 0 && straightToAnswer(session)) ? SPEAKING_TOOLS : DEFINITIONS,
+          signal,
+          ...(step > 0 ? { effort: FOLLOW_EFFORT } : {}),
+        },
+        {
+          instructions,
+          input: nudged ? [...history] : [...history, { role: 'user', content: SPEAK_NOW }],
+          tools: SPEAKING_TOOLS,
+          signal,
+          effort: FOLLOW_EFFORT,
+        },
+        { onHedge: () => session.log({ kind: 'step_hedge', step, ms: Date.now() - stepAt }) },
+      );
     let res;
     try {
       res = await ask(mustSpeak);
@@ -395,6 +460,11 @@ export async function callerTurn(ctx, history, { signal = null } = {}) {
         });
       }
       res = await ask(true);
+    }
+    // The quick answer was asked with the "speak now" line; the history keeps it so the next step matches.
+    if (res?.hedged && !nudged) {
+      nudged = true;
+      history.push({ role: 'user', content: SPEAK_NOW });
     }
     history.push(...(res.output ?? []));
     const call = (res.output ?? []).find((o) => o.type === 'function_call');

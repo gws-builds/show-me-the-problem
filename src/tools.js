@@ -375,9 +375,13 @@ export async function runTool(name, args, ctx) {
         await runTool('find_part', { part: String(args.equipment), say_now: '' }, ctx);
         args = { ...args, box_ordinal: 0 };
       }
-      const boxes = session
-        .boxes()
-        .map((b) => ({ id: String(b.ordinal), label: session.lastPart(), score: b.score ?? 1 }));
+      const boxes = session.boxes().map((b) => ({
+        // The noun SAM matched as well as the name the model asked for: "supply line" was found as "hose",
+        // and the pipe row never matched (11/03 under-sink take, red team #10 H1).
+        id: String(b.ordinal),
+        label: `${session.lastPart()} ${session.locateMeta?.()?.noun ?? ''}`.trim(),
+        score: b.score ?? 1,
+      }));
       const v = verify(
         {
           equipment: args.equipment,
@@ -409,7 +413,7 @@ export async function runTool(name, args, ctx) {
           : '';
         return {
           output: { ...v, slots: openSlots(ctx) },
-          say: `For ${v.label} the price is $${(v.priceCents / 100).toFixed(2)}. The technician confirms on site.${age}`,
+          say: `For ${v.label.replace(/^[A-Z](?=[a-z])/, (x) => x.toLowerCase())} the price is $${(v.priceCents / 100).toFixed(2)}. The technician confirms on site.${age}`,
         };
       }
       return { output: v.action === 'tech_confirms' ? { ...v, slots: openSlots(ctx) } : v, say: v.reason };

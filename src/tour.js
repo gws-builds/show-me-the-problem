@@ -298,13 +298,19 @@ export async function tourStep(client, tour, frame) {
   const names = news.map((e) => `${e.label}: ${STATUS_WORDS[e.status]}${e.evidence ? `, ${e.evidence}` : ''}.`);
   const unsure = items.find((x) => x.status === 'cant_tell' && x.better && !tour.said.has(`${x.id}:better`));
   const checkpoints = tour.cards[0]?.tour?.checkpoints ?? [];
-  const missing = checkpoints.find((c) => !tour.found.has(c.part));
+  // A checkpoint gets two hints, then the tour moves on without it; a hint is never said twice
+  // (11/03 panel take: 11 steps, "Move a little closer to the top of the panel" twice; red team #10 M1).
+  tour.hinted ??= {};
+  const missing = checkpoints.find((c) => !tour.found.has(c.part) && (tour.hinted[c.part] ?? 0) < 2);
   let direction;
   if (unsure) {
     tour.said.add(`${unsure.id}:better`);
     direction = `I can't tell the condition of the ${unsure.label.toLowerCase()} from here. ${sentence(unsure.better)}`;
-  } else if (missing) direction = missing.hint;
-  else direction = MOVES[j?.move] ?? MOVES.pan_right;
+  } else if (missing) {
+    tour.hinted[missing.part] = (tour.hinted[missing.part] ?? 0) + 1;
+    direction = tour.said.has(`hint:${missing.hint}`) ? (MOVES[j?.move] ?? MOVES.pan_right) : missing.hint;
+    tour.said.add(`hint:${missing.hint}`);
+  } else direction = MOVES[j?.move] ?? MOVES.pan_right;
   tour.done = tour.step >= TOUR.steps || (checkpoints.length > 0 && !missing && tour.step >= 3);
   let say = tour.done ? summary(tour) : [...names, direction].join(' ');
   if (!tour.done && !names.length && direction === tour.lastDirection) say = null; // nothing new: stay quiet
@@ -335,7 +341,7 @@ export function summary(tour) {
       (e) =>
         `${e.label} ${e.status === 'safety' ? 'is a safety issue' : 'needs attention'}${e.evidence ? ` (${e.evidence})` : ''}`,
     );
-  return `That's the ${roomLabel(tour.room)}. I named ${list.length} part${list.length === 1 ? '' : 's'}. ${parts.length ? `${parts.join('; ')}.` : 'Nothing that needs attention was visible.'} Everything else looked normal or I could not tell from these angles.`;
+  return `That's the ${roomLabel(tour.room)}. I named ${list.length} part${list.length === 1 ? '' : 's'}. ${parts.length ? `${parts.join('; ')}. Everything else looked normal or I could not tell from these angles.` : 'Nothing that needs attention was visible.'}`;
 }
 
 /** The found list for the pages (tokens and frames never included). */
