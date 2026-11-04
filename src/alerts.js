@@ -10,7 +10,12 @@ export function createAlerts({
 } = {}) {
   let calls = 0;
   let step = 0;
+  // Who opened the link, by network address, held in memory only and never sent: the push says "visitor 2",
+  // so the founder can tell one judge returning from a new person. shortcut: resets when the container
+  // scales to zero; persist it if the counts must span runs.
+  const visitors = new Set();
   const push = (text) => {
+    console.log(`[usage] ${text}`); // also in the host's logs (modal app logs snap-hosted), topic or not
     if (!topic) return Promise.resolve(false);
     return fetchImpl(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
       method: 'POST',
@@ -25,6 +30,11 @@ export function createAlerts({
   const usd = (n) => `$${n.toFixed(2)}`;
   return {
     on: Boolean(topic),
+    linkOpened(key) {
+      if (visitors.has(key) || visitors.size >= 10_000) return Promise.resolve(false);
+      visitors.add(key);
+      return push(`Judge link opened by visitor ${visitors.size} this run (a new network address).`);
+    },
     callStarted({ spentUsd = 0, stopUsd = null, footage = false } = {}) {
       calls += 1;
       return push(

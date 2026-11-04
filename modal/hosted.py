@@ -65,6 +65,8 @@ def serve():
         "NODE_ENV": "production",
         "SPEND_STOP_USD": os.environ.get("SPEND_STOP_USD", "10"),
         "PROMPT_GUARD_URL": "http://127.0.0.1:8090",
+        # Not a secret (the endpoint needs Modal proxy auth); set here so a workspace rename needs no secret edit.
+        "GLIMMER_URL": "https://gwsbuilds--snap-glimmer-serve.us-east.modal.run",
     }
     subprocess.Popen(["python", "/app/guard_server.py"], cwd="/app")
     subprocess.Popen(["node", "src/server.mjs"], cwd="/app", env=env)

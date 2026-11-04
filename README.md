@@ -15,7 +15,7 @@
 | **What code decides, not the model** | Prices only from the owner's list and only when SAM saw the part; spoken hazards stop quoting before any model call; camera hazards need Spark and SAM to agree; nothing is booked until the owner approves; every claim on the work order cites evidence. |
 | **Measured (eval, 61 cases on public photos, Nov 2)** | 60 of 61 passed; 10 of 10 spoken hazards and 3 of 3 camera hazards escalated; 0 false escalations; 5 of 5 prompt-injection attempts (spoken, a printed sign on a panel, a fake rating plate) changed nothing. |
 | **The four recorded calls (Nov 3, `data/replays`)** | $0.13–0.26 of model spend per call (capped in code at $0.25, $0.60 for a guided tour). Time to a useful answer after the caller stops talking: median 6.0 s, p90 10.9 s across 24 turns; the phone says a short holding line within 0.15 s so the caller never waits in silence. Three of the four calls were booked by the owner. |
-| **Run it in 3 commands** | `npm ci && npm run check` (lint, format and 262 tests) · `npm start` with no key replays the four recorded calls · `META_API_KEY=... npm start` runs live on http://127.0.0.1:8642 |
+| **Run it in 3 commands** | `npm ci && npm run check` (lint, format and 263 tests) · `npm start` with no key replays the four recorded calls · `META_API_KEY=... npm start` runs live on http://127.0.0.1:8642 |
 | **Where to look** | `src/agent.js` + `src/tools.js` (agent and tools), `src/verifier.js` + `src/hazards.js` + `src/filters.js` (gates), `src/locate.js` (SAM + Spark grounding), `eval/` (cases and results), `test/` (red-team tests). |
 
 ## What it does
@@ -128,7 +128,7 @@ After the owner approves, the visit is a calendar invite (`src/ics.js`, RFC 5545
 ## Run it
 
 ```bash
-npm run check                         # eslint + prettier + 262 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
+npm run check                         # eslint + prettier + 263 tests (red team, voice relay, hazards, tour, KB, trade library, plate, Spanish, access, booking)
 META_API_KEY=... npm start            # http://127.0.0.1:8642 (binds to localhost)
 node eval/fetch_photos.mjs            # once: downloads the eval photos (freely licensed, not committed)
 META_API_KEY=... node eval/run.mjs    # the eval against the live models

@@ -241,6 +241,7 @@ async function route(req, res) {
       res.writeHead(gate.locked(key) ? 429 : 302, { ...HEADERS, Location: '/gate?bad=1' });
       return res.end();
     }
+    alerts.linkOpened(key).catch(() => undefined);
     const secure = String(req.headers['x-forwarded-proto'] ?? '') === 'https';
     res.writeHead(302, {
       ...HEADERS,

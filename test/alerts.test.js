@@ -24,3 +24,16 @@ test('judge-link alerts: one per call, one per spend step, nothing without a top
   ]);
   assert.equal(await createAlerts({ topic: '' }).callStarted(), false);
 });
+
+test('judge-link alerts: one push per new visitor, none for a returning one, no address sent', async () => {
+  const sent = [];
+  const a = createAlerts({ topic: 't', fetchImpl: async (url, init) => (sent.push(String(init.body)), { ok: true }) });
+  await a.linkOpened('203.0.113.7');
+  await a.linkOpened('203.0.113.7');
+  await a.linkOpened('198.51.100.2');
+  assert.deepEqual(sent, [
+    'Build: Judge link opened by visitor 1 this run (a new network address).',
+    'Build: Judge link opened by visitor 2 this run (a new network address).',
+  ]);
+  assert.ok(sent.every((t) => !t.includes('203.0') && !t.includes('198.51')));
+});
