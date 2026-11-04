@@ -78,12 +78,7 @@ if [[ -z "${GLIMMER_API_KEY:-}" && -f "$GL_FILE" ]]; then
   set -a; . "$GL_FILE"; set +a
 fi
 if [[ -n "${GLIMMER_API_KEY:-}" && -n "${GLIMMER_URL:-}" ]]; then
-  echo "Glimmer follow-up: on (GPU kept warm during this session, so no owner step waits for a cold start)"
-  # The GPU scales down after 2 idle minutes and a cold start takes up to ~5: a health ping every 90 s keeps
-  # it up for the session only (about 2 USD of GPU an hour); cleanup stops the pings.
-  ( while :; do curl -s -o /dev/null -m 600 -H "Authorization: Bearer $GLIMMER_API_KEY" -H "Modal-Key: ${GLIMMER_PROXY_KEY:-}" \
-      -H "Modal-Secret: ${GLIMMER_PROXY_SECRET:-}" "${GLIMMER_URL%/v1*}/health" > /dev/null 2>&1; sleep 90; done ) &
-  WARM_PID=$!
+  echo "Glimmer follow-up: on (the GPU wakes when a take starts; never kept up on a timer)"
 else
   echo "Glimmer follow-up: off"
 fi

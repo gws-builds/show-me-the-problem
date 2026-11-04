@@ -65,14 +65,9 @@ setImmediate(() => {
 // Open voice sockets by call, so a new line is pushed at once instead of waiting for the 0.7 s poll.
 const sockets = new Map();
 const glimmer = createGlimmer();
-// Recording session: Glimmer's GPU is kept up while the session runs (a ping every 90 s; Modal scales it down
-// 120 s after the last request). A cold start took 277 s (11/02), so the owner's confirmation text waited
-// minutes after Approve. About $2 an hour at the measured L40S price; it stops with the session.
-if (RECORDING && glimmer) {
-  glimmer.warm();
-  setInterval(() => glimmer.warm(), 90_000).unref();
-  console.log('Glimmer GPU kept warm during this recording session');
-}
+// Glimmer's GPU is never kept up on a timer (11/03: a 90 s keep-warm ping ran all day with the recording
+// session, about 21 L40S hours, $42). A recorded take warms it when its voice starts instead; a booking
+// that waits for the owner warms it too (calls.js). Modal scales it down 120 s after the last request.
 const calls = createCalls({
   ledger,
   priceList,
@@ -525,6 +520,7 @@ function voiceUpgrade(req, socket) {
       calls.setVoice(callId, session);
       sockets.set(callId, toClient);
       if (RECORDING && calls.staffCall(callId)) {
+        glimmer?.warm?.(); // the owner step comes 1-2 minutes in; a cold start takes up to ~5
         fs.mkdirSync(path.join(DATA, 'audio'), { recursive: true });
         tape = fs.createWriteStream(path.join(DATA, 'audio', `${callId}-${Date.now()}.pcm`));
         tape.on('error', () => (tape = null));
