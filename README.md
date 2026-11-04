@@ -2,9 +2,9 @@
 
 **A live call that sees, for plumbing, HVAC, electrical and appliance repair businesses.** The homeowner points their phone at what is broken. Meta's models outline the part on the live camera, an agent asks the one question that changes the price, quotes from the owner's own price list, and books the visit once the owner taps approve. Built for the Meta Global AI Developer Hackathon, Startup track, "Build for Your World" (building period Oct 27 – Nov 4, 2026). Everything in this repository is new.
 
-**Demo video (2:53):** VIDEO_LINK
+**Demo video (2:53):** https://youtu.be/WFk0nOupw6c · **Live hosted copy:** the link is in the submission form (it carries an access code, so it is not in this repository).
 
-[![A live call: SAM 3.1 outlines the supply line under a sink as the caller points](docs/demo.jpg)](VIDEO_LINK)
+[![A live call: SAM 3.1 outlines the supply line under a sink as the caller points](docs/demo.jpg)](https://youtu.be/WFk0nOupw6c)
 
 ## For judges (2 minutes)
 
